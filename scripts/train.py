@@ -1,4 +1,6 @@
 from spotipy_torch import datasets
+from spotipy_torch import utils
+
 from spotipy_torch.model import Spotipy
 
 from pathlib import Path
@@ -18,7 +20,7 @@ parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--pos-weight", type=float, default=10.0)
 parser.add_argument("--backbone", type=str, default="resnet")
 parser.add_argument("--levels", type=int, default=3)
-parser.add_argument("--crop-size", type=int, default=512)
+parser.add_argument("--crop-size", type=int, default=256)
 parser.add_argument("--sigma", type=float, default=1.)
 parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="fpn")
 parser.add_argument("--initial-fmaps", type=int, default=32)
@@ -26,8 +28,12 @@ parser.add_argument("--wandb-user", type=str, default="albertdm99")
 parser.add_argument("--wandb-project", type=str, default="spotipy")
 parser.add_argument("--skip-logging", action="store_true", default=False)
 parser.add_argument("--run-name", type=str, required=False, default="synthetic_clean_test")
+parser.add_argument("--kernel-size", type=int, default=3)
+parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
 
+
+torch.manual_seed(args.seed)
 
 # Load data
 train_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"train",
@@ -56,7 +62,7 @@ model = Spotipy(
         "in_channels": 1,
         "initial_fmaps": args.initial_fmaps,
         "downsample_factors": tuple([1]+[2 for _ in range(args.levels-1)]),
-        "kernel_sizes": tuple(3 for _ in range(args.levels)),
+        "kernel_sizes": tuple(args.kernel_size for _ in range(args.levels)),
     },
     levels=args.levels,
     mode=args.mode,
@@ -71,3 +77,28 @@ model.fit(
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     params=vars(args),
 )
+
+# Get test metrics
+test_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"test",
+                                       downsample_factors=[2**lv for lv in range(args.levels)],
+                                       sigma=args.sigma, 
+                                       mode="max",
+                                       augment_probability=0,
+                                       use_gpu=False,
+                                       size=None,
+                                       norm_percentiles=(1, 99.8))
+
+preds = model.predict_dataset(
+    test_ds,
+    batch_size=args.batch_size,
+    device="cuda" if torch.cuda.is_available() else "cpu",
+)
+
+stat = utils.points_matching_dataset(
+    test_ds.get_centers(),
+    preds,
+    args.cutoff_distance,
+    by_image=True
+)
+
+print(stat)
