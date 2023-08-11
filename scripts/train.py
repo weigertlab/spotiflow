@@ -30,6 +30,8 @@ parser.add_argument("--skip-logging", action="store_true", default=False)
 parser.add_argument("--run-name", type=str, required=False, default="synthetic_clean_test")
 parser.add_argument("--kernel-size", type=int, default=3)
 parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--convs-per-level", type=int, default=5)
+parser.add_argument("--dropout", type=float, default=0)
 args = parser.parse_args()
 
 
@@ -62,7 +64,7 @@ model = Spotipy(
         "in_channels": 1,
         "initial_fmaps": args.initial_fmaps,
         "downsample_factors": tuple([1]+[2 for _ in range(args.levels-1)]),
-        "kernel_sizes": tuple(args.kernel_size for _ in range(args.levels)),
+        "kernel_sizes": tuple(args.kernel_size for _ in range(args.convs_per_level)),
     },
     levels=args.levels,
     mode=args.mode,
@@ -97,7 +99,7 @@ preds = model.predict_dataset(
 stat = utils.points_matching_dataset(
     test_ds.get_centers(),
     preds,
-    args.cutoff_distance,
+    cutoff_distance=3,
     by_image=True
 )
 

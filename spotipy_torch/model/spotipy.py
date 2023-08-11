@@ -1,4 +1,5 @@
 from pathlib import Path
+from PIL import Image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -6,6 +7,7 @@ from typing import Literal, Optional, Tuple
 
 import json
 import logging
+import matplotlib.cm as cm
 import torch
 import torch.nn as nn
 import wandb
@@ -49,7 +51,7 @@ class Spotipy(nn.Module):
             self._sigmoid = nn.Sigmoid()
             self.to(torch.device(device))
 
-            self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad))
+            self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), amsgrad=True)
             self._prob_thresh = 0.5
 
     def _backbone_switcher(self) -> nn.Module:
@@ -115,7 +117,7 @@ class Spotipy(nn.Module):
         scheduler = ReduceLROnPlateau(self._optimizer, factor=0.1, patience=10, threshold=1e-4, min_lr=3e-7, cooldown=5, verbose=True)
 
         history = {"train_loss": [], "valid_loss": []}
-        best_val_loss = 999999999
+        best_val_loss = float("inf")
         log.info("Training...")
         log.info(f"Number of trainable parameters: {sum(p.numel() for p in self.parameters() if p.requires_grad)}")
         for epoch in tqdm(range(num_epochs)):
@@ -177,9 +179,12 @@ class Spotipy(nn.Module):
                     # Log validation image and GT heatmap only in first epoch
                     img4wandb_img = wandb.Image(val_ds[0]["img"].numpy(), caption="Raw image (normalized)")
                     wandb.log({"Validation image": img4wandb_img}, step=epoch)
-                    img4wandb_gt = wandb.Image(val_ds[0]["heatmap_lv0"].numpy(), caption="Ground truth heatmap")
+                    img4wandb_gt = Image.fromarray((255*cm.magma(val_ds[0]["heatmap_lv0"].numpy()[0])).astype(np.uint8))
+                    img4wandb_gt = wandb.Image(img4wandb_gt, caption="Ground truth heatmap")
                     wandb.log({"Ground truth": img4wandb_gt}, step=epoch)
-                img4wandb_hm = wandb.Image(val_preds[0], caption="Prediction (full resolution)")
+                img4wandb_hm = wandb.Image(
+                    Image.fromarray((255*cm.magma(val_preds[0])).astype(np.uint8)),
+                    caption="Prediction (full resolution)")
                 wandb.log({"Prediction": img4wandb_hm}, step=epoch)
 
             if (last_val_loss := history["valid_loss"][-1]) < best_val_loss:

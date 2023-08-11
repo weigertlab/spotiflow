@@ -189,47 +189,6 @@ def multiscale_decimate(y, decimate = (4,4), sigma = 1):
     y = np.clip(y,0,1)
     return y
 
-
-def optimize_threshold(Y, Yhat, measure='f1', bracket=(0.3, 0.7), tol=1e-4, maxiter=80, verbose=1):
-    values = dict()
-
-    if bracket is None:
-        bracket = .1, .9
-    print("bracket =", bracket)
-    values = dict()
-
-    p_gt = tuple(prob_to_points(y, prob_thresh=0.95, min_distance=1) for y in Y)
-
-    with tqdm(total=maxiter, disable=(verbose!=1)) as progress:
-
-        def fn(thr):
-            prob_thresh = np.clip(thr, *bracket)
-            value = values.get(prob_thresh)
-            if value is None:
-                p_pred = tuple(prob_to_points(y, prob_thresh=prob_thresh) for y in Yhat)
-
-                # value = np.mean(tuple(points_matching(p1,p2)._asdict()[measure] for p1,p2 in zip(p_gt, p_pred)))
-
-                value = np.mean(tuple(vars(points_matching(p1,p2))[measure] for p1,p2 in zip(p_gt, p_pred)))
-
-                values[prob_thresh]=value
-            if verbose > 1:
-                print("{now}   thresh: {prob_thresh:f}   {measure}: {value:f}".format(
-                    now = datetime.datetime.now().strftime('%H:%M:%S'),
-                    prob_thresh = prob_thresh,
-                    measure = measure,
-                    value = value,
-                ), flush=True)
-            else:
-                progress.update()
-                progress.set_postfix_str("{prob_thresh:.3f} -> {value:.3f}".format(prob_thresh=prob_thresh, value=value))
-                progress.refresh()
-            return -value
-
-        opt = minimize_scalar(fn, method='golden', bracket=bracket, tol=tol, options={'maxiter': maxiter})
-
-    verbose > 1 and print('\n',opt, flush=True)
-    return opt.x, -opt.fun
     
 def center_pad(x, shape, mode = "reflect"):
     """ pads x to shape , inverse of center_crop"""

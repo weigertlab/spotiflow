@@ -63,10 +63,11 @@ class ResidualBlock(nn.Module):
         kernel_sizes=(3, 3),
         downsample_factor=2,
         activation=nn.LeakyReLU,
-        batch_norm=False,
+        batch_norm=True,
         group_norm=False,
         padding=1,
         padding_mode="replicate",
+        dropout=0,
     ):
 
         super().__init__()
@@ -133,6 +134,7 @@ class ResidualBlock(nn.Module):
                 )
             )
         self.shortcut = nn.Sequential(*shortcut)
+        self.dropout = nn.Dropout2d(p=dropout) if dropout > 0 else nn.Identity()
 
         try:
             self.final_activation = activation(inplace=True)
@@ -141,7 +143,7 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
 
-        return self.final_activation(self.conv_block(x) + self.shortcut(x))
+        return self.dropout(self.final_activation(self.conv_block(x) + self.shortcut(x)))
 
 
 class Resnet(nn.Module):
@@ -215,6 +217,7 @@ class Resnet(nn.Module):
         group_norm=False,
         padding=1,
         padding_mode="replicate",
+        dropout=0,
     ):
 
         super().__init__()
@@ -277,6 +280,7 @@ class Resnet(nn.Module):
                     group_norm=group_norm,
                     padding=padding,
                     padding_mode=padding_mode,
+                    dropout=dropout,
                 )
                 for level in range(self.levels)
             ]
