@@ -1,0 +1,21 @@
+data-dir: /data/spots/datasets/telomeres
+save-dir: /data/spotipy_torch_v2_experiments/telomeres
+batch-size: 4
+num-epochs: 200
+lr: 1e-4
+pos-weight: 10
+backbone: resnet
+levels: 3
+crop-size: 256
+sigma: 1
+mode: fpn
+initial-fmaps: 32
+run-name: telomeres_3lv
+kernel-size: 3
+convs-per-level: 5
+dropout: 0
+augment-prob: 0.5
+seed: 42
+wandb-user: albertdm99
+wandb-project: spotipy
+skip-logging: false # Set to True to avoid writing to wandb

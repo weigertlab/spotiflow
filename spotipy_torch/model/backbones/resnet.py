@@ -60,13 +60,13 @@ class ResidualBlock(nn.Module):
         self,
         in_channels,
         out_channels,
-        kernel_sizes=(3, 3),
+        kernel_sizes=[(3, 3)],
         downsample_factor=2,
         activation=nn.LeakyReLU,
         batch_norm=True,
         group_norm=False,
         padding=1,
-        padding_mode="replicate",
+        padding_mode="zeros",
         dropout=0,
     ):
 
@@ -216,7 +216,7 @@ class Resnet(nn.Module):
         batch_norm=True,
         group_norm=False,
         padding=1,
-        padding_mode="replicate",
+        padding_mode="zeros",
         dropout=0,
     ):
 

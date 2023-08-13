@@ -4,17 +4,17 @@ from spotipy_torch import utils
 from spotipy_torch.model import Spotipy
 
 from pathlib import Path
-import argparse
+import configargparse
 import torch
 
-
-
-
-
-parser = argparse.ArgumentParser()
+parser = configargparse.ArgumentParser(
+    description="Train Spotipy model",
+    config_file_parser_class=configargparse.YAMLConfigFileParser,
+)
+parser.add("-c", "--config", required=False, is_config_file=True, help="Config file path")
 parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/synthetic_clean")
 parser.add_argument("--save-dir", type=str, default="/data/spots/results/synthetic_clean/spotipy_torch_v2")
-parser.add_argument("--batch-size", type=int, default=2)
+parser.add_argument("--batch-size", type=int, default=4)
 parser.add_argument("--num-epochs", type=int, default=200)
 parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--pos-weight", type=float, default=10.0)
@@ -32,8 +32,9 @@ parser.add_argument("--kernel-size", type=int, default=3)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--convs-per-level", type=int, default=5)
 parser.add_argument("--dropout", type=float, default=0)
+parser.add_argument("--augment-prob", type=float, default=0.5)
+parser.add_argument("--debug", action="store_true", default=False)
 args = parser.parse_args()
-
 
 torch.manual_seed(args.seed)
 
@@ -42,7 +43,7 @@ train_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"train",
                                        downsample_factors=[2**lv for lv in range(args.levels)],
                                        sigma=args.sigma, 
                                        mode="max",
-                                       augment_probability=.5,
+                                       augment_probability=args.augment_prob,
                                        use_gpu=False,
                                        size=2*[args.crop_size],
                                        should_center_crop=False,
