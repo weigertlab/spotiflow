@@ -10,7 +10,7 @@ class MultiHeadProcessor(nn.Module):
                        kernel_sizes: Tuple[Tuple[int, int]],
                        initial_fmaps: int,
                        fmap_inc_factor: int=2,
-                       activation: nn.Module=nn.LeakyReLU,
+                       activation: nn.Module=nn.ReLU,
                        padding: Union[str, int]="same",
                        padding_mode: str="zeros",
                        dropout: int=0,

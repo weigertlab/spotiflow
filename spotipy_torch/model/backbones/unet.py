@@ -4,7 +4,7 @@ import torch.nn as nn
 from typing import Iterable, Tuple, Union
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: Tuple[int]=(3, 3), activation: nn.Module=nn.LeakyReLU,
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: Tuple[int]=(3, 3), activation: nn.Module=nn.ReLU,
         batch_norm: bool=False, padding: Union[str, int]="same", padding_mode: str="zeros", dropout: float=0):
         super().__init__()
         
@@ -27,7 +27,7 @@ class UNetBackbone(nn.Module):
         downsample_factors: Iterable[Tuple[int, int]]=((2, 2), (2, 2)),
         fmap_inc_factor: int=2,
         kernel_sizes: Tuple[Tuple[int, int]]=((3, 3), (3, 3), (3 ,3), (3, 3)),
-        activation: nn.Module=nn.LeakyReLU,
+        activation: nn.Module=nn.ReLU,
         batch_norm: bool=False,
         padding: Union[str, int]=1,
         padding_mode: str="zeros",
