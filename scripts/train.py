@@ -64,8 +64,9 @@ model = Spotipy(
     backbone_params={
         "in_channels": 1,
         "initial_fmaps": args.initial_fmaps,
-        "downsample_factors": tuple([1]+[2 for _ in range(args.levels-1)]),
-        "kernel_sizes": tuple(args.kernel_size for _ in range(args.convs_per_level)),
+        "downsample_factors": tuple((2, 2) for _ in range(args.levels)),
+        "kernel_sizes": tuple((args.kernel_size, args.kernel_size) for _ in range(args.convs_per_level)),
+        "padding": "same",
     },
     levels=args.levels,
     mode=args.mode,

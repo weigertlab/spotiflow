@@ -331,3 +331,16 @@ class ResNetBackbone(Resnet):
         kwargs["kernel_sizes"] = (tuple(
             (k, k) for k in kwargs["kernel_sizes"]),)
         super().__init__(*args, **kwargs)
+
+
+if __name__ == "__main__":
+    import sys
+    import torch
+    t = torch.randn(2, 1, 256, 256)
+    model = ResNetBackbone(in_channels=1, initial_fmaps=16, downsample_factors=[2 for _ in range(2)], kernel_sizes=[3 for _ in range(2)])
+    print(f"Resolution levels: {model.levels}")
+    print(f"Number of ResNet parameters: {sum(p.numel() for p in model.parameters())}")
+    pred = model(t)
+    for i, p in enumerate(pred):
+        print(f"Level {i}: {p.shape}") 
+    sys.exit(0)

@@ -45,13 +45,12 @@ class AnnotatedSpotsDataset(BaseDataset):
             return None
         aug = augmend.Augmend()
         axes = (-2, -1)
-        aug.add([augmend.FlipRot90(axis=axes), augmend.FlipRot90(axis=axes)], probability=augment_probability)
+        aug.add([augmend.FlipRot90(axis=axes), augmend.FlipRot90(axis=axes)])
         aug.add([augmend.Rotate(order=1, axis=axes, mode="reflect"), augmend.Rotate(order=1, axis=axes, mode="reflect")], probability=augment_probability)
-        # aug.add(2*[augmend.Elastic(axis=axes, amount=5, grid=5, order=0, use_gpu=use_gpu)], probability=augment_probability)        
         aug.add([augmend.IsotropicScale(amount=(.5, 2.), axis=axes), augmend.IsotropicScale(amount=(.5, 2.), axis=axes)], probability=augment_probability)
-        # aug.add([augmend.GaussianBlur(axis=axes, amount=(0, 1.5)), augmend.Identity()], probability=augment_probability)
         aug.add([augmend.AdditiveNoise(sigma=(0, 0.05)), augmend.Identity()], probability=augment_probability)
-        aug.add([augmend.IntensityScaleShift(scale=(0.5, 2.), shift=(-0.2, 0.2), axis=axes), augmend.Identity()], probability=augment_probability)
+        aug.add([augmend.IntensityScaleShift(scale=(0.5, 2.), shift=(-0.2, 0.2), axis=axes), augmend.Identity()])
+        aug.add([augmend.DropEdgePlanes(width=16), augmend.DropEdgePlanes(width=16)], probability=0.1)
 
         return aug
     

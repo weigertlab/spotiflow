@@ -27,8 +27,8 @@ class Spotipy(nn.Module):
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
        module to allow loss computation and optimization at different resolution levels.
     """
-    def __init__(self, backbone_str: str=None, backbone_params: dict=None, levels: int=3, pretrained_path: Optional[str]=None,
-                 mode: Literal["direct", "fpn"]="fpn", background_remover: bool=True, device: str="cuda", which: str="best", inference_mode: bool=True, **kwargs: dict):
+    def __init__(self, backbone_str: str="resnet", backbone_params: dict={}, levels: int=3, pretrained_path: Optional[str]=None,
+                 mode: Literal["direct", "fpn"]="fpn", background_remover: bool=True, device: str="cpu", which: str="best", inference_mode: bool=True, **kwargs: dict):
         super().__init__()
         assert mode in {"direct", "fpn"}, "Mode must be either 'direct' or 'fpn'."
         if pretrained_path is not None:
@@ -37,6 +37,12 @@ class Spotipy(nn.Module):
         else:
             self._backbone_str = backbone_str
             self._backbone_params = backbone_params
+            self._backbone_params.update(
+                {"in_channels": self._backbone_params.get("in_channels", 1),
+                 "initial_fmaps": self._backbone_params.get("initial_fmaps", 32),
+                 "downsample_factors": self._backbone_params.get("downsample_factors", tuple((2, 2) for _ in range(levels))),
+                 "kernel_sizes": self._backbone_params.get("kernel_sizes", tuple((3, 3) for _ in range(levels))),
+                 })
             self._levels = levels
             self._pretrained_path = pretrained_path
             self._mode = mode
@@ -104,6 +110,7 @@ class Spotipy(nn.Module):
         pos_weight = params["pos_weight"]
         loss_funcs = tuple(self._wrap_loss(_loss_f, pos_weight if level==0 else 0) for level in range(self._levels))
         batch_size = params["batch_size"]
+
         save_dir = Path(params["save_dir"])
         save_dir.mkdir(exist_ok=True, parents=True)
 
@@ -111,9 +118,10 @@ class Spotipy(nn.Module):
         for g in self._optimizer.param_groups:
             g['lr'] = learning_rate
 
-        dataloader_kwargs = {"num_workers": 1, "pin_memory": True}
+        dataloader_kwargs = {"num_workers": 0, "pin_memory": True} # Avoid MP for now
         train_dataloader = DataLoader(dataset=train_ds, batch_size=batch_size, shuffle=True, **dataloader_kwargs)
         valid_dataloader = DataLoader(dataset=val_ds, batch_size=1, shuffle=False, **dataloader_kwargs)
+
         scheduler = ReduceLROnPlateau(self._optimizer, factor=0.1, patience=10, threshold=1e-4, min_lr=3e-7, cooldown=5, verbose=True)
 
         history = {"train_loss": [], "valid_loss": []}
@@ -214,12 +222,13 @@ class Spotipy(nn.Module):
     
 
     def _load_model(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
+        # ! TODO: add device mapping
         config_path = Path(path)/"config.json"
         with open(config_path, "r") as fb:
             config = json.load(fb)
         self.__init__(**config, pretrained_path=None) # To avoid infinite recursion in __init__
         states_path = Path(path)/f"{which}.pt"
-        checkpoint = torch.load(states_path)
+        checkpoint = torch.load(states_path, map_location=torch.device("cpu"))
         self.load_state_dict(checkpoint["model_state"])
         self._prob_thresh = config.get("prob_thresh", 0.5)
         if inference_mode:
@@ -238,7 +247,7 @@ class Spotipy(nn.Module):
         pts = utils.prob_to_points(high_lv_hm, prob_thresh=prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
         return pts, high_lv_hm
 
-    def predict_dataset(self, ds: torch.utils.data.Dataset, device="cuda", min_distance=2, exclude_border=False, batch_size=2, prob_thresh=None):
+    def predict_dataset(self, ds: torch.utils.data.Dataset, device="cuda", min_distance=2, exclude_border=False, batch_size=2, prob_thresh=None, return_heatmaps=False):
         preds = []
         dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
         self.eval()
@@ -250,6 +259,8 @@ class Spotipy(nn.Module):
                 for batch_elem in range(high_lv_preds.shape[0]):
                     preds += [high_lv_preds[batch_elem]]
                 del out, imgs, batch
+        if return_heatmaps:
+            return preds
         p = [utils.prob_to_points(pred, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance) for pred in preds]
         return p
 
