@@ -17,6 +17,7 @@ import numpy as np
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .fpn import FeaturePyramidNetwork
+from .multihead import MultiHeadProcessor
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
@@ -48,16 +49,27 @@ class Spotipy(nn.Module):
             self._mode = mode
             self._background_remover = background_remover
 
+            # Build background remover
+            self._bg_remover = BackgroundRemover(device=device) if background_remover else None
+
             # Build backbone
             self._backbone = self._backbone_switcher()
-            self._bg_remover = BackgroundRemover(device=device) if background_remover else None
-            # Build FPN
-            self._fpn = FeaturePyramidNetwork(in_channels_list=self._backbone.out_channels_list, out_channels=1) if mode=="fpn" else None
+
+            # Build postprocessing modules
+            if mode == "direct":
+                self._post = MultiHeadProcessor(in_channels_list=self._backbone.out_channels_list,
+                                                out_channels=1,
+                                                kernel_sizes=self._backbone_params["kernel_sizes"],
+                                                initial_fmaps=self._backbone_params["initial_fmaps"])
+            elif mode == "fpn":
+                self._post = FeaturePyramidNetwork(in_channels_list=self._backbone.out_channels_list, out_channels=1)
+            else:
+                raise NotImplementedError(f"Mode {mode} not implemented.")
 
             self._sigmoid = nn.Sigmoid()
             self.to(torch.device(device))
 
-            self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), amsgrad=True)
+            self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad))
             self._prob_thresh = 0.5
 
     def _backbone_switcher(self) -> nn.Module:
@@ -82,31 +94,32 @@ class Spotipy(nn.Module):
         if self._bg_remover is not None:
             x = self._bg_remover(x)
         res = self._backbone(x)
-        if self._fpn is not None:
-            res = self._fpn(res)
-        res = tuple(self._sigmoid(res) for res in res)
-        return res
-    
+        res = self._post(res)
+        # res = tuple(self._sigmoid(res) for res in res)
+        return tuple(res)
+
     @staticmethod
-    def _wrap_loss(func: callable, pos_weight: float=1.0, positive_threshold: float=1e-3) -> callable:
+    def _wrap_loss(func: callable, pos_weight: float=1.0, positive_threshold: float=0.01) -> callable:
         """Wrap a loss function to add a weight to positive pixels."""
         def _loss(y, target):
             loss = func(y, target)
             if pos_weight == 0:
-                return loss.sum()/y[0, ...].numel()
-            mask_pos = target>positive_threshold
-            loss = loss*(1+pos_weight*mask_pos)
-            return loss.sum()/y[0, ...].numel()
+                return loss.sum()/y.numel()
+            mask_pos_tgt = target>positive_threshold
+            mask_pos_y = y>positive_threshold
+            mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
+            wloss = (1+pos_weight*mask_pos)*loss
+            return wloss.sum()/y.numel()
         return _loss
 
     def fit(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, device: torch.device, params: dict) -> dict:
         if len(params["wandb_user"])>0 and not params["skip_logging"]:
             utils.initialize_wandb(params, train_ds, val_ds)
             if wandb.run is not None:
-                wandb.watch([self._backbone, self._fpn], log_freq=50, log_graph=True)
+                wandb.watch(self, log_freq=50, log_graph=True)
         num_epochs = params["num_epochs"]
         learning_rate = params["lr"]
-        _loss_f = nn.BCELoss(reduction="none")
+        _loss_f = nn.BCEWithLogitsLoss(reduction="none")
         pos_weight = params["pos_weight"]
         loss_funcs = tuple(self._wrap_loss(_loss_f, pos_weight if level==0 else 0) for level in range(self._levels))
         batch_size = params["batch_size"]
@@ -117,12 +130,18 @@ class Spotipy(nn.Module):
         # Set LR
         for g in self._optimizer.param_groups:
             g['lr'] = learning_rate
-
+        
         dataloader_kwargs = {"num_workers": 0, "pin_memory": True} # Avoid MP for now
         train_dataloader = DataLoader(dataset=train_ds, batch_size=batch_size, shuffle=True, **dataloader_kwargs)
         valid_dataloader = DataLoader(dataset=val_ds, batch_size=1, shuffle=False, **dataloader_kwargs)
 
-        scheduler = ReduceLROnPlateau(self._optimizer, factor=0.1, patience=10, threshold=1e-4, min_lr=3e-7, cooldown=5, verbose=True)
+        scheduler = ReduceLROnPlateau(self._optimizer,
+                                      factor=0.5,
+                                      patience=10,
+                                      threshold=1e-4,
+                                      min_lr=3e-6,
+                                      cooldown=5,
+                                      verbose=True)
 
         history = {"train_loss": [], "valid_loss": []}
         best_val_loss = float("inf")
@@ -157,7 +176,7 @@ class Spotipy(nn.Module):
                     losses = tuple(loss_f(out[lv], heatmap_lvs[lv].to(device))/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs))
                     loss = sum(losses)
                     val_epoch_loss += loss.item()
-                    high_lv_preds = out[0].squeeze(1).detach().cpu().numpy()
+                    high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
                     # TODO: code properly
                     for batch_elem in range(high_lv_preds.shape[0]):
                         val_preds += [high_lv_preds[batch_elem]]
@@ -228,7 +247,7 @@ class Spotipy(nn.Module):
             config = json.load(fb)
         self.__init__(**config, pretrained_path=None) # To avoid infinite recursion in __init__
         states_path = Path(path)/f"{which}.pt"
-        checkpoint = torch.load(states_path, map_location=torch.device("cpu"))
+        checkpoint = torch.load(states_path)
         self.load_state_dict(checkpoint["model_state"])
         self._prob_thresh = config.get("prob_thresh", 0.5)
         if inference_mode:
@@ -243,7 +262,7 @@ class Spotipy(nn.Module):
         img_t = torch.from_numpy(img.numpy()).to(torch.device(device)).unsqueeze(0).unsqueeze(0)
         self.eval()
         with torch.inference_mode():
-            high_lv_hm = self(img_t)[0].squeeze(0).squeeze(0).detach().cpu().numpy()
+            high_lv_hm = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0).detach().cpu().numpy())
         pts = utils.prob_to_points(high_lv_hm, prob_thresh=prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
         return pts, high_lv_hm
 
@@ -255,7 +274,7 @@ class Spotipy(nn.Module):
             for batch in tqdm(dataloader, desc="Predicting"):
                 imgs = batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = out[0].squeeze(1).detach().cpu().numpy()
+                high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
                 for batch_elem in range(high_lv_preds.shape[0]):
                     preds += [high_lv_preds[batch_elem]]
                 del out, imgs, batch
@@ -272,7 +291,7 @@ class Spotipy(nn.Module):
             for val_batch in val_dataloader:
                 imgs = val_batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = out[0].squeeze(1).detach().cpu().numpy()
+                high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
                 for batch_elem in range(high_lv_preds.shape[0]):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
