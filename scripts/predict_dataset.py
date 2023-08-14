@@ -15,13 +15,15 @@ parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/telome
 parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotipy_torch_v2")
 parser.add_argument("--batch-size", type=int, default=4)
 parser.add_argument("--cutoff-distance", type=float, default=3.)
+parser.add_argument("--which", type=str, choices=["best", "last"], default="best")
+parser.add_argument("--threshold", type=float, required=False, default=None)
 args = parser.parse_args()
 
 
 model = Spotipy(pretrained_path=args.model_dir,
                 inference_mode=True,
-                which="best",
-                device="cuda" if torch.cuda.is_available() else "cpu")
+                which=args.which,
+                device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
 print("Loading data...")
 ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir),
@@ -38,6 +40,8 @@ print("Predicting...")
 preds = model.predict_dataset(
     ds,
     batch_size=args.batch_size,
+    prob_thresh=args.threshold,
+    min_distance=1,
 )
 
 stat = utils.points_matching_dataset(

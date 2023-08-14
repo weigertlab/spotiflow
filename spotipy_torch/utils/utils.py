@@ -149,7 +149,7 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
     by_image is True -> metrics are computed by image and then averaged
     by_image is False -> TP/FP/FN are aggregated and only then are metrics computed
     """
-    stats = tuple(points_matching(p1,p2,cutoff_distance=cutoff_distance, eps=eps) for p1,p2 in tqdm(zip(p1s, p2s), desc=f'matching cutoff {cutoff_distance}', total=len(p1s), leave=False))
+    stats = tuple(points_matching(p1,p2,cutoff_distance=cutoff_distance, eps=eps) for p1,p2 in zip(p1s,p2s))
 
 
     if by_image:

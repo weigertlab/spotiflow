@@ -32,6 +32,7 @@ class Spotipy(nn.Module):
                  mode: Literal["direct", "fpn"]="fpn", background_remover: bool=True, device: str="cpu", which: str="best", inference_mode: bool=True, **kwargs: dict):
         super().__init__()
         assert mode in {"direct", "fpn"}, "Mode must be either 'direct' or 'fpn'."
+        self._device = device
         if pretrained_path is not None:
             print("Pretrained path given. Loading model...")
             self._load_model(pretrained_path, which, inference_mode)
@@ -50,7 +51,7 @@ class Spotipy(nn.Module):
             self._background_remover = background_remover
 
             # Build background remover
-            self._bg_remover = BackgroundRemover(device=device) if background_remover else None
+            self._bg_remover = BackgroundRemover(device=self._device) if background_remover else None
 
             # Build backbone
             self._backbone = self._backbone_switcher()
@@ -67,7 +68,7 @@ class Spotipy(nn.Module):
                 raise NotImplementedError(f"Mode {mode} not implemented.")
 
             self._sigmoid = nn.Sigmoid()
-            self.to(torch.device(device))
+            self.to(torch.device(self._device))
 
             self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad))
             self._prob_thresh = 0.5
@@ -112,7 +113,7 @@ class Spotipy(nn.Module):
             return wloss.sum()/y.numel()
         return _loss
 
-    def fit(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, device: torch.device, params: dict) -> dict:
+    def fit(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, params: dict) -> dict:
         if len(params["wandb_user"])>0 and not params["skip_logging"]:
             utils.initialize_wandb(params, train_ds, val_ds)
             if wandb.run is not None:
@@ -126,6 +127,8 @@ class Spotipy(nn.Module):
 
         save_dir = Path(params["save_dir"])
         save_dir.mkdir(exist_ok=True, parents=True)
+
+        device = torch.device(self._device)
 
         # Set LR
         for g in self._optimizer.param_groups:
@@ -164,7 +167,8 @@ class Spotipy(nn.Module):
                 progbar.set_description(f'epoch: {epoch+1} | loss: {loss.item():.8f} | {losses_str}')
                 del out, loss, losses, imgs, tr_batch
             history["train_loss"].append(tr_epoch_loss/len(train_ds))
-            torch.cuda.empty_cache()
+            if self._device == "cuda":
+                torch.cuda.empty_cache()
 
             self.eval()
             val_preds = []
@@ -181,13 +185,14 @@ class Spotipy(nn.Module):
                     for batch_elem in range(high_lv_preds.shape[0]):
                         val_preds += [high_lv_preds[batch_elem]]
                     del out, loss, losses, imgs, val_batch
-            torch.cuda.empty_cache()
+            if self._device == "cuda":
+                torch.cuda.empty_cache()
             avg_val_loss = val_epoch_loss/len(val_ds)
             scheduler.step(avg_val_loss)
             history["valid_loss"].append(avg_val_loss)
 
             val_gt_centers = val_ds.get_centers()
-            val_pred_centers = [utils.prob_to_points(p, exclude_border=False) for p in val_preds]
+            val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in val_preds]
             stats = utils.points_matching_dataset(val_gt_centers, val_pred_centers, cutoff_distance=3, by_image=True)
 
             val_f1, val_acc = stats.f1, stats.accuracy
@@ -218,7 +223,7 @@ class Spotipy(nn.Module):
                 best_val_loss = last_val_loss
                 self._save_model(save_dir, epoch=epoch, which="best")
 
-        self.optimize_threshold(val_ds, device=device)
+        self.optimize_threshold(val_ds)
         self._save_model(save_dir, epoch=epoch, which="last")
         return history
         
@@ -245,9 +250,9 @@ class Spotipy(nn.Module):
         config_path = Path(path)/"config.json"
         with open(config_path, "r") as fb:
             config = json.load(fb)
-        self.__init__(**config, pretrained_path=None) # To avoid infinite recursion in __init__
+        self.__init__(**config, device=self._device, pretrained_path=None) # To avoid infinite recursion in __init__
         states_path = Path(path)/f"{which}.pt"
-        checkpoint = torch.load(states_path)
+        checkpoint = torch.load(states_path, map_location=self._device)
         self.load_state_dict(checkpoint["model_state"])
         self._prob_thresh = config.get("prob_thresh", 0.5)
         if inference_mode:
@@ -256,8 +261,9 @@ class Spotipy(nn.Module):
         self._optimizer.load_state_dict(checkpoint["optimizer_state"])
         return
 
-    def predict(self, img: np.ndarray, device="cuda", prob_thresh=.5, min_distance=2, exclude_border=False):
+    def predict(self, img: np.ndarray, prob_thresh=.5, min_distance=1, exclude_border=False):
         assert img.ndim == 2, "Image must be 2D (Y,X)"
+        device = torch.device(self._device)
         # Add B and C dimensions
         img_t = torch.from_numpy(img.numpy()).to(torch.device(device)).unsqueeze(0).unsqueeze(0)
         self.eval()
@@ -266,9 +272,11 @@ class Spotipy(nn.Module):
         pts = utils.prob_to_points(high_lv_hm, prob_thresh=prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
         return pts, high_lv_hm
 
-    def predict_dataset(self, ds: torch.utils.data.Dataset, device="cuda", min_distance=2, exclude_border=False, batch_size=2, prob_thresh=None, return_heatmaps=False):
+    def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False):
         preds = []
-        dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+        dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+        device = torch.device(self._device)
+        log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}")
         self.eval()
         with torch.inference_mode():
             for batch in tqdm(dataloader, desc="Predicting"):
@@ -283,9 +291,10 @@ class Spotipy(nn.Module):
         p = [utils.prob_to_points(pred, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance) for pred in preds]
         return p
 
-    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, device="cuda", cutoff_distance=3, min_distance=2, exclude_border=False, niter=11, batch_size=2):
+    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, niter=11, batch_size=2):
         val_preds = []
-        val_dataloader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=1, pin_memory=True)
+        val_dataloader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+        device = torch.device(self._device)
         self.eval()
         with torch.inference_mode():
             for val_batch in val_dataloader:

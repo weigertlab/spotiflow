@@ -71,14 +71,13 @@ model = Spotipy(
     levels=args.levels,
     mode=args.mode,
     background_remover=True,
-    device="cuda" if torch.cuda.is_available() else "cpu"
+    device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 
 # Train model
 model.fit(
     train_ds=train_ds,
     val_ds=val_ds,
-    device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     params=vars(args),
 )
 
@@ -95,7 +94,7 @@ test_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"test",
 preds = model.predict_dataset(
     test_ds,
     batch_size=args.batch_size,
-    device="cuda" if torch.cuda.is_available() else "cpu",
+    min_distance=1,
 )
 
 stat = utils.points_matching_dataset(

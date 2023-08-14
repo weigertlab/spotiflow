@@ -20,7 +20,7 @@ print("Loading model...")
 model = Spotipy(pretrained_path=args.model_dir,
                 inference_mode=True,
                 which="best",
-                device="cuda" if torch.cuda.is_available() else "cpu")
+                device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
 print("Loading data...")
 val_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"val",
@@ -35,6 +35,4 @@ val_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"val",
 
 # Train model
 print("Optimizing threshold...")
-model.optimize_threshold(val_ds,
-                         device="cuda" if torch.cuda.is_available() else "cpu",
-                         )
+model.optimize_threshold(val_ds, min_distance=1)

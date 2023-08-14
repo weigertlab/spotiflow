@@ -88,6 +88,8 @@ class UNetBackbone(nn.Module):
             )
         ])
 
+        downsample_factors = tuple((tuple(d) for d in downsample_factors))
+
         self.upsamples = nn.ModuleList([nn.Upsample(scale_factor=downsample_factors[l], mode=upsampling_mode) for l in reversed(range(self.levels-1))])
 
         self.up_blocks = []
