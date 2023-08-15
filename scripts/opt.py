@@ -22,6 +22,10 @@ model = Spotipy(pretrained_path=args.model_dir,
                 which="best",
                 device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
+
+model = torch.compile(model)
+
+
 print("Loading data...")
 val_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"val",
                                        downsample_factors=[2**lv for lv in range(model._levels)],

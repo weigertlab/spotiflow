@@ -39,7 +39,6 @@ torch.manual_seed(args.seed)
 np.random.seed(args.seed)
 
 run_name = utils.get_run_name(args)
-print(run_name)
 
 # Load data
 train_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"train",
@@ -76,6 +75,8 @@ model = Spotipy(
     background_remover=True,
     device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 )
+
+model = torch.compile(model)
 
 # Train model
 model.fit(

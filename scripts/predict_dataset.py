@@ -26,8 +26,10 @@ model = Spotipy(pretrained_path=args.model_dir,
                 which=args.which,
                 device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
+model = torch.compile(model)
+
 if args.opt_split is not None:
-    print("Optimizing threshold and resaving model...")
+    print(f"Optimizing and updating threshold on {args.opt_split}...")
     opt_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/args.opt_split,
                                        downsample_factors=[2**lv for lv in range(model._levels)],
                                        sigma=1., 
@@ -38,7 +40,7 @@ if args.opt_split is not None:
                                        norm_percentiles=(1, 99.8))
 
     model.optimize_threshold(opt_ds, min_distance=1, batch_size=1)
-    model._save_model(args.model_dir, which=args.which, epoch=199)
+    model._save_model(args.model_dir, which=args.which, only_config=True)
 
 
 print("Loading data...")

@@ -243,13 +243,14 @@ class Spotipy(nn.Module):
         self._save_model(save_dir, epoch=epoch, which="last")
         return history
         
-    def _save_model(self, save_path: str, which: Literal["best", "last"], epoch: int) -> None:
+    def _save_model(self, save_path: str, which: Literal["best", "last"], epoch: Optional[int]=None, only_config: bool=False) -> None:
         checkpoint_path = Path(save_path)
-        torch.save({
-            "epoch": epoch+1,
-            "model_state": self.state_dict(),
-            "optimizer_state": self._optimizer.state_dict(),
-        }, str(checkpoint_path/f"{which}.pt"))
+        if not only_config:
+            torch.save({
+                "epoch": epoch+1 if epoch is not None else 0,
+                "model_state": self.state_dict(),
+                "optimizer_state": self._optimizer.state_dict(),
+            }, str(checkpoint_path/f"{which}.pt"))
         with open(str(checkpoint_path/"config.json"), "w") as fb:
             json.dump({"backbone_str": self._backbone_str,
                         "backbone_params": self._backbone_params,
