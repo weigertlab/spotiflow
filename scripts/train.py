@@ -26,8 +26,8 @@ parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="dire
 parser.add_argument("--initial-fmaps", type=int, default=32)
 parser.add_argument("--wandb-user", type=str, default="albertdm99")
 parser.add_argument("--wandb-project", type=str, default="spotipy")
+parser.add_argument("--loss", type=str, choices=["bce", "mse", "smoothl1", "adawing"], default="bce")
 parser.add_argument("--skip-logging", action="store_true", default=False)
-parser.add_argument("--run-name", type=str, required=False, default="synthetic_clean_test")
 parser.add_argument("--kernel-size", type=int, default=3)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--convs-per-level", type=int, default=3)
@@ -37,6 +37,9 @@ args = parser.parse_args()
 
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
+
+run_name = utils.get_run_name(args)
+print(run_name)
 
 # Load data
 train_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"train",
@@ -78,5 +81,5 @@ model = Spotipy(
 model.fit(
     train_ds=train_ds,
     val_ds=val_ds,
-    params=vars(args),
+    params=dict(vars(args), **{"run_name": run_name}),
 )

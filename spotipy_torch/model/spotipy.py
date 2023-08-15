@@ -18,6 +18,7 @@ from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .fpn import FeaturePyramidNetwork
 from .multihead import MultiHeadProcessor
+from .losses import AdaptiveWingLoss
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
@@ -96,7 +97,6 @@ class Spotipy(nn.Module):
             x = self._bg_remover(x)
         res = self._backbone(x)
         res = self._post(res)
-        # res = tuple(self._sigmoid(res) for res in res)
         return tuple(res)
 
     @staticmethod
@@ -113,6 +113,20 @@ class Spotipy(nn.Module):
             return wloss.sum()/y.numel()
         return _loss
 
+    def _loss_switcher(self, loss_f_str: str, pos_weight: float=10., loss_kwargs: dict={}) -> Tuple[callable]:
+        loss_f_str = loss_f_str.lower()
+        if loss_f_str == "bce":
+            loss_cls = nn.BCEWithLogitsLoss
+        elif loss_f_str == "adawing":
+            loss_cls = AdaptiveWingLoss
+        elif loss_f_str == "mse":
+            loss_cls = nn.MSELoss
+        elif loss_f_str == "smoothl1":
+            loss_cls = nn.SmoothL1Loss
+        else:
+            raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
+        return tuple(self._wrap_loss(loss_cls(reduction="none", **loss_kwargs), pos_weight if level==0 else 0) for level in range(self._levels))
+
     def fit(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, params: dict) -> dict:
         if len(params["wandb_user"])>0 and not params["skip_logging"]:
             utils.initialize_wandb(params, train_ds, val_ds)
@@ -120,9 +134,11 @@ class Spotipy(nn.Module):
                 wandb.watch(self, log_freq=50, log_graph=True)
         num_epochs = params["num_epochs"]
         learning_rate = params["lr"]
-        _loss_f = nn.BCEWithLogitsLoss(reduction="none")
+
+        loss_f_str = params["loss"]
         pos_weight = params["pos_weight"]
-        loss_funcs = tuple(self._wrap_loss(_loss_f, pos_weight if level==0 else 0) for level in range(self._levels))
+
+        loss_funcs = self._loss_switcher(loss_f_str, pos_weight)
         batch_size = params["batch_size"]
 
         save_dir = Path(params["save_dir"])

@@ -13,7 +13,7 @@ def read_coords_csv(fname: str):
     """
     try:
         df = pd.read_csv(fname)
-    except Exception as e:
+    except Exception as _:
         print(f"{fname} is empty. Continuing...")
         return 
     df = df.rename(columns = str.lower)
