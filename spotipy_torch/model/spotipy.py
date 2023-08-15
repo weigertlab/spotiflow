@@ -141,7 +141,7 @@ class Spotipy(nn.Module):
         loss_funcs = self._loss_switcher(loss_f_str, pos_weight)
         batch_size = params["batch_size"]
 
-        save_dir = Path(params["save_dir"])
+        save_dir = Path(params["save_dir"])/params["run_name"]
         save_dir.mkdir(exist_ok=True, parents=True)
 
         device = torch.device(self._device)
