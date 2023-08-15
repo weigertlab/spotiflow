@@ -1,5 +1,4 @@
 from pathlib import Path
-from skimage import img_as_float32
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 import augmend
@@ -26,7 +25,7 @@ class AnnotatedSpotsDataset(BaseDataset):
         # Load centers in-memory as they should be lightweight
 
         centers = [utils.read_coords_csv(f).astype(np.int32) for f in annotation_files]
-        images = [utils.normalize(img_as_float32(tifffile.imread(f)), *norm_percentiles) for f in tqdm(self._image_files, desc='Reading images')]
+        images = [utils.normalize(tifffile.imread(f), *norm_percentiles) for f in tqdm(self._image_files, desc='Reading images')]
         super().__init__(
             images=images,
             centers=centers,

@@ -1,5 +1,5 @@
-data-dir: /data/spots/datasets/telomeres
-save-dir: /data/spotipy_torch_v2_experiments/telomeres_unet_direct_4lv
+data-dir: /data/spots/datasets/breastdd_v2
+save-dir: /data/spotipy_torch_v2_experiments/breastdd_v2_unet_direct_relu_4lv
 batch-size: 4
 num-epochs: 200
 lr: 3e-4
@@ -10,7 +10,7 @@ crop-size: 512
 sigma: 1
 mode: direct
 initial-fmaps: 32
-run-name: telomeres_unet_direct_4lv
+run-name: breastdd_v2_unet_direct_relu_4lv
 kernel-size: 3
 convs-per-level: 3
 dropout: 0

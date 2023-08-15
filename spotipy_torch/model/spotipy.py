@@ -261,15 +261,17 @@ class Spotipy(nn.Module):
         self._optimizer.load_state_dict(checkpoint["optimizer_state"])
         return
 
-    def predict(self, img: np.ndarray, prob_thresh=.5, min_distance=1, exclude_border=False):
+    def predict(self, img: np.ndarray, prob_thresh=None, min_distance=1, exclude_border=False, verbose=True):
         assert img.ndim == 2, "Image must be 2D (Y,X)"
         device = torch.device(self._device)
         # Add B and C dimensions
-        img_t = torch.from_numpy(img.numpy()).to(torch.device(device)).unsqueeze(0).unsqueeze(0)
+        img_t = torch.from_numpy(img).to(torch.device(device)).unsqueeze(0).unsqueeze(0)
+        if verbose:
+            log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}")
         self.eval()
         with torch.inference_mode():
-            high_lv_hm = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0).detach().cpu().numpy())
-        pts = utils.prob_to_points(high_lv_hm, prob_thresh=prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
+            high_lv_hm = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
+        pts = utils.prob_to_points(high_lv_hm, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
         return pts, high_lv_hm
 
     def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False):

@@ -1,15 +1,12 @@
 import numpy as np
 import warnings
-import datetime
-import warnings
 from csbdeep.utils import normalize_mi_ma
-from scipy.optimize import minimize_scalar
 from skimage.feature import corner_peaks, corner_subpix
 import scipy.ndimage as ndi
-from tqdm import tqdm
 import networkx as nx
 from scipy.spatial.distance import cdist
 from types import SimpleNamespace
+from pathlib import Path
 import pandas as pd
 
 import logging
@@ -350,3 +347,10 @@ def initialize_wandb(options, train_dataset, val_dataset, silent=True):
         log.warn(f"Skipping logging to wandb due to missing options: {ke}")
         return None
     return None
+
+def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
+    """ writes points to csv file
+    """
+    df = pd.DataFrame(pts, columns=["y", "x"])
+    df.to_csv(fname, index=False)
+    return
