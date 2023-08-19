@@ -5,6 +5,7 @@ from pathlib import Path
 
 import configargparse
 import numpy as np
+import random
 import torch
 
 parser = configargparse.ArgumentParser(
@@ -35,8 +36,13 @@ parser.add_argument("--dropout", type=float, default=0)
 parser.add_argument("--augment-prob", type=float, default=0.5)
 args = parser.parse_args()
 
-torch.manual_seed(args.seed)
+random.seed(args.seed)
 np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+torch.cuda.manual_seed(args.seed)
+torch.mps.manual_seed(args.seed)
+torch.backends.cudnn.benchmark = False
+torch.use_deterministic_algorithms(True)
 
 run_name = utils.get_run_name(args)
 

@@ -52,7 +52,7 @@ def points_to_prob(points, shape, sigma = 1.5,  mode = "max"):
 
 
     x = np.zeros(shape, np.float32)
-    points = np.asarray(points).astype(np.int32)
+    points = np.round(points).astype(np.int32)
     assert points.ndim==2 and points.shape[1]==2
 
     points = _filter_shape(points, shape)
@@ -371,5 +371,6 @@ def get_run_name(namespace: SimpleNamespace):
     name += f"_crop{int(namespace.crop_size)}"
     name += f"_posweight{int(namespace.pos_weight)}"
     name += f"_seed{int(namespace.seed)}"
+    name += "_tormenter" # !
     name = name.replace(".", "") # Remove dots to avoid confusion with file extensions
     return name

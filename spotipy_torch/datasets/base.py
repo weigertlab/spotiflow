@@ -2,6 +2,7 @@ import pathlib
 from abc import ABC
 from typing import List, Sequence
 from torch.utils.data import Dataset
+from tormenter.transforms import CropAugmentation
 from tqdm.auto import tqdm
 
 import augmend
@@ -50,9 +51,11 @@ class BaseDataset(Dataset, ABC):
         self._mode = mode
         self._augmenter = self._build_augmenter(augment_probability, use_gpu=use_gpu)
         
-        self._cropper = augmend.Augmend()
+        self._size = size
+        self._cropper = None
         if not should_center_crop and size is not None:
-            self._cropper.add([augmend.RandomCrop(axis=(-2, -1), size=size), augmend.RandomCrop(axis=(-2, -1), size=size)])
+            self._cropper = CropAugmentation(probability=1, size=size)
+            # self._cropper.add([augmend.RandomCrop(axis=(-2, -1), size=size), augmend.RandomCrop(axis=(-2, -1), size=size)])
         elif size is not None: # For compat with the augmend object
             self._cropper = lambda lst: [utils.center_crop(img=item, size=size) for item in lst]
         self._cache = {}
@@ -67,19 +70,21 @@ class BaseDataset(Dataset, ABC):
         #     img, heatmap_lv0 = cached_item["img"], cached_item["heatmap_lv0"]
         # else:
         img, centers = self._images[idx], self._centers[idx]
-        # ... build highest level heatmap...
-        heatmap_lv0 = utils.points_to_prob(
-            centers, img.shape, mode=self._mode, sigma=self._sigma
-        )
+        img_size = img.shape
+
+        img = torch.from_numpy(img.copy()).unsqueeze(0) # Add B dimension
+        centers = torch.from_numpy(centers.copy()).unsqueeze(0) # Add B dimension
         
-        # ... and add to cache
-        # self._add_to_cache(idx, img, heatmap_lv0)
-
-        img, heatmap_lv0 = self._cropper((img, heatmap_lv0))
-
+        if self._cropper is not None:
+            img_size = self._size
+            img, centers = self._cropper(img, centers)
         # Apply augmentations
-        if (augmenter := self.get_augmenter()) is not None:
-            img, heatmap_lv0 = augmenter((img, heatmap_lv0))
+        if self.augmenter is not None:
+            img, centers = self.augmenter(img, centers)
+
+        heatmap_lv0 = utils.points_to_prob(
+            centers[0].numpy(), img_size, mode=self._mode, sigma=self._sigma
+        )
 
         # Build target at different resolution levels
         heatmaps = [
@@ -89,7 +94,7 @@ class BaseDataset(Dataset, ABC):
 
         # Cast to tensor and add channel dimension
         try:
-            ret_obj = {"img": torch.from_numpy(img.copy()).unsqueeze(0)}
+            ret_obj = {"img": img}
         except Exception as e:
             print(idx, img.shape, img.dtype)
             raise e
@@ -104,7 +109,8 @@ class BaseDataset(Dataset, ABC):
     def _build_augmenter(self, augment_probability, use_gpu=False):
         pass
 
-    def get_augmenter(self):
+    @property
+    def augmenter(self):
         return self._augmenter
 
     # def _add_to_cache(self, idx, img, heatmap):
