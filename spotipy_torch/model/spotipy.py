@@ -341,6 +341,7 @@ class Spotipy(nn.Module):
             if verbose:
                 iter_tiles = tqdm(iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles))
             for tile, s_src, s_dst in iter_tiles:
+                assert all(s%t == 0 for s, t in zip(tile.shape, n_tiles)), "Currently, tile shape must be divisible by n_tiles"
                 if normalizer is not None and callable(normalizer):
                     tile = normalizer(tile)
                 with torch.inference_mode():
@@ -373,7 +374,7 @@ class Spotipy(nn.Module):
             pts = utils._filter_shape(points, img.shape, idxr_array=points)
 
         if verbose:
-            log.info(f"Found {len(points)} spots.")
+            log.info(f"Found {len(pts)} spots.")
         details = SimpleNamespace(prob=probs, heatmap=y)
         return pts, details
 
