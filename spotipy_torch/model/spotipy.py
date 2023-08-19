@@ -1,9 +1,13 @@
+from csbdeep.internals.predict import tile_iterator
 from pathlib import Path
 from PIL import Image
+from scipy.ndimage import zoom
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+from types import SimpleNamespace
 from typing import Literal, Optional, Tuple
+
 
 import json
 import logging
@@ -23,6 +27,23 @@ from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+"""
+class BaseConfig...
+
+
+class BaseBackBone(nn.Module):
+    def __init__(self, config: BaseConfig ) -> None:
+        super().__init__(config)
+    @abstractmethod
+    def get_downsample_factors(self) -> Tuple[Tuple[int]]:
+        pass
+    @abstractmethod
+    def get_out_channels(self) -> Tuple[int]:
+        pass
+
+class ResNetBackbone(BaseBackBone, nn.Module):
+"""
 
 class Spotipy(nn.Module):
     """Supervised spot detector using a multi-stage neural network as a backbone for 
@@ -278,18 +299,83 @@ class Spotipy(nn.Module):
         self._optimizer.load_state_dict(checkpoint["optimizer_state"])
         return
 
-    def predict(self, img: np.ndarray, prob_thresh=None, min_distance=1, exclude_border=False, verbose=True):
+    def predict(self, img: np.ndarray, prob_thresh: Optional[float]=None,
+                n_tiles: Tuple[int, int]=(1,1), min_distance: int=1, exclude_border: bool=False,
+                scale: Optional[int]=None, peak_mode: str="skimage", normalizer: Optional[callable]=None, verbose: bool=True):
         assert img.ndim == 2, "Image must be 2D (Y,X)"
         device = torch.device(self._device)
         # Add B and C dimensions
-        img_t = torch.from_numpy(img).to(torch.device(device)).unsqueeze(0).unsqueeze(0)
         if verbose:
-            log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}")
+            log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}")
+
+        if scale is None or scale == 1:
+            x = img
+        else:
+            if verbose:
+                log.info(f"Scaling image by factor {scale}")
+
+            x = zoom(img, (scale, scale), order=1)
+
         self.eval()
-        with torch.inference_mode():
-            high_lv_hm = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
-        pts = utils.prob_to_points(high_lv_hm, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
-        return pts, high_lv_hm
+        # Predict without tiling
+        if all(n <= 1 for n in n_tiles):
+            if normalizer is not None and callable(normalizer):
+                x = normalizer(x)
+            with torch.inference_mode():
+                img_t = torch.from_numpy(x).to(torch.device(device)).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                y = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
+            if scale is not None and scale != 1:
+                y = zoom(y, (1./scale, 1./scale), order=1)
+            pts = utils.prob_to_points(y, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
+            probs = y[tuple(pts.astype(int).T)].tolist()
+        else: # Predict with tiling
+            y = np.empty(x.shape, np.float32)
+            points = []
+            probs = []
+            iter_tiles = tile_iterator(
+                x,
+                n_tiles=n_tiles,
+                block_sizes=tuple(self._backbone_params["downsample_factors"][0][0]**self._levels for _ in range(img.ndim)),
+                n_block_overlaps=(4,4),
+            )
+            if verbose:
+                iter_tiles = tqdm(iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles))
+            for tile, s_src, s_dst in iter_tiles:
+                if normalizer is not None and callable(normalizer):
+                    tile = normalizer(tile)
+                with torch.inference_mode():
+                    img_t = torch.from_numpy(tile).to(torch.device(device)).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                    y_tile = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
+                    p = utils.prob_to_points(y_tile, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
+                    # remove global offset
+                    p -= np.array([s.start for s in s_src[:2]])[None]
+                    write_shape = tuple(s.stop-s.start for s in s_dst[:2])
+                    p = utils._filter_shape(p, write_shape, idxr_array=p)
+
+                    y_tile_sub = y_tile[s_src[:2]]
+
+                    probs += y_tile_sub[tuple(p.astype(int).T)].tolist()
+                    
+                    # add global offset
+                    p += np.array([s.start for s in s_dst[:2]])[None]
+                    points.append(p)
+                    y[s_dst[:2]] = y_tile_sub
+            if scale is not None and scale != 1:
+                y = zoom(y, (1./scale, 1./scale), order=1)
+            
+            points = np.concatenate(points, axis=0)
+
+            probs = np.array(probs)
+            if scale is not None:
+                points /= scale
+            
+            probs = utils._filter_shape(probs, img.shape, idxr_array=points)
+            pts = utils._filter_shape(points, img.shape, idxr_array=points)
+
+        if verbose:
+            log.info(f"Found {len(points)} spots.")
+        details = SimpleNamespace(prob=probs, heatmap=y)
+        return pts, details
 
     def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False):
         preds = []
