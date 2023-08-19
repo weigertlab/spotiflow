@@ -367,7 +367,7 @@ class Spotipy(nn.Module):
             points = np.concatenate(points, axis=0)
 
             probs = np.array(probs)
-            if scale is not None:
+            if scale is not None and scale != 1:
                 points /= scale
             
             probs = utils._filter_shape(probs, img.shape, idxr_array=points)
