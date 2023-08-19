@@ -301,7 +301,24 @@ class Spotipy(nn.Module):
 
     def predict(self, img: np.ndarray, prob_thresh: Optional[float]=None,
                 n_tiles: Tuple[int, int]=(1,1), min_distance: int=1, exclude_border: bool=False,
-                scale: Optional[int]=None, peak_mode: str="skimage", normalizer: Optional[callable]=None, verbose: bool=True):
+                scale: Optional[int]=None, peak_mode: Literal["skimage", "fast"]="skimage", normalizer: Optional[callable]=None, verbose: bool=True) -> Tuple[np.ndarray, SimpleNamespace]:
+        """Predict spots in an image.
+        
+        Args:
+            img (np.ndarray): input image
+            prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
+            n_tiles (Tuple[int, int], optional): Number of tiles to split the image into. Defaults to (1,1).
+            min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.
+            exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
+            scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
+            peak_mode (str, optional): Peak detection mode. Currently unused. Defaults to "skimage".
+            normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
+            verbose (bool, optional): Whether to print logs and progress. Defaults to True.
+        
+        Returns:
+            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
+        """
+        
         assert img.ndim == 2, "Image must be 2D (Y,X)"
         device = torch.device(self._device)
         # Add B and C dimensions
