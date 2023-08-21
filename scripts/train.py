@@ -34,6 +34,7 @@ parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--convs-per-level", type=int, default=3)
 parser.add_argument("--dropout", type=float, default=0)
 parser.add_argument("--augment-prob", type=float, default=0.5)
+parser.add_argument("--skip-bg-remover", action="store_true", default=False)
 args = parser.parse_args()
 
 random.seed(args.seed)
@@ -78,7 +79,7 @@ model = Spotipy(
     },
     levels=args.levels,
     mode=args.mode,
-    background_remover=True,
+    background_remover=not args.skip_bg_remover,
     device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 

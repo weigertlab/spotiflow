@@ -73,8 +73,7 @@ class Spotipy(nn.Module):
             self._background_remover = background_remover
 
             # Build background remover
-            self._bg_remover = BackgroundRemover(device=self._device) if background_remover else None
-
+            self._bg_remover = BackgroundRemover(device=self._device) if background_remover else nn.Identity()
             # Build backbone
             self._backbone = self._backbone_switcher()
 
@@ -114,9 +113,8 @@ class Spotipy(nn.Module):
         Returns:
             Tuple[torch.Tensor]: iterable of results at different resolutions. Highest resolution first.
         """
-        if self._bg_remover is not None:
-            x = self._bg_remover(x)
-        res = self._backbone(x)
+        res = self._bg_remover(x)
+        res = self._backbone(res)
         res = self._post(res)
         return tuple(res)
 
