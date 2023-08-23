@@ -1,6 +1,6 @@
 from pathlib import Path
 from torch.utils.data import Dataset
-from tormenter.pipeline import AugmentationPipeline
+from tormenter.pipeline import Pipeline
 from tormenter.transforms import *
 from tqdm.auto import tqdm
 import augmend
@@ -58,12 +58,12 @@ class AnnotatedSpotsDataset(BaseDataset):
     def _build_augmenter(self, augment_probability, use_gpu=None):
         if augment_probability < 1e-8:
             return None
-        aug = AugmentationPipeline()
-        aug.add(FlipRot90Augmentation(probability=augment_probability))
-        aug.add(RotationAugmentation(probability=augment_probability, order=1))
-        aug.add(IsotropicScaleAugmentation(probability=augment_probability, order=1, scaling_factor=(.5, 2.)))
-        aug.add(GaussianNoiseAugmentation(probability=augment_probability, sigma=(0, 0.05)))
-        aug.add(IntensityScaleShiftAugmentation(probability=augment_probability, scale=(0.5, 2.), shift=(-0.2, 0.2)))
+        aug = Pipeline()
+        aug.add(FlipRot90(probability=augment_probability))
+        aug.add(Rotation(probability=augment_probability, order=1))
+        aug.add(IsotropicScale(probability=augment_probability, order=1, scaling_factor=(.5, 2.)))
+        aug.add(GaussianNoise(probability=augment_probability, sigma=(0, 0.05)))
+        aug.add(IntensityScaleShift(probability=augment_probability, scale=(0.5, 2.), shift=(-0.2, 0.2)))
         return aug
     
     def get_ordered_image_filenames(self):

@@ -2,7 +2,7 @@ import pathlib
 from abc import ABC
 from typing import List, Sequence
 from torch.utils.data import Dataset
-from tormenter.transforms import CropAugmentation
+from tormenter.transforms import Crop
 from tqdm.auto import tqdm
 
 import augmend
@@ -54,7 +54,7 @@ class BaseDataset(Dataset, ABC):
         self._size = size
         self._cropper = None
         if not should_center_crop and size is not None:
-            self._cropper = CropAugmentation(probability=1, size=size)
+            self._cropper = Crop(probability=1, size=size)
             # self._cropper.add([augmend.RandomCrop(axis=(-2, -1), size=size), augmend.RandomCrop(axis=(-2, -1), size=size)])
         elif size is not None: # For compat with the augmend object
             self._cropper = lambda lst: [utils.center_crop(img=item, size=size) for item in lst]

@@ -258,7 +258,7 @@ class Spotipy(nn.Module):
                 best_val_loss = last_val_loss
                 self._save_model(save_dir, epoch=epoch, which="best")
 
-        self.optimize_threshold(val_ds)
+        self.optimize_threshold(val_ds, batch_size=1)
         self._save_model(save_dir, epoch=epoch, which="last")
         return history
         
