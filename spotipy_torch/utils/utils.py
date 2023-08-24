@@ -373,5 +373,6 @@ def get_run_name(namespace: SimpleNamespace):
     name += f"_seed{int(namespace.seed)}"
     name += "_tormenter" # !
     name += "_skipbgremover" if namespace.skip_bg_remover else ""
+    name += "_dry_run" if namespace.dry_run else ""
     name = name.replace(".", "") # Remove dots to avoid confusion with file extensions
     return name

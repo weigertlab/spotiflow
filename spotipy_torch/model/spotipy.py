@@ -160,8 +160,11 @@ class Spotipy(nn.Module):
         loss_funcs = self._loss_switcher(loss_f_str, pos_weight)
         batch_size = params["batch_size"]
 
-        save_dir = Path(params["save_dir"])/params["run_name"]
-        save_dir.mkdir(exist_ok=True, parents=True)
+        if not params["dry_run"]:
+            save_dir = Path(params["save_dir"])/params["run_name"]
+            save_dir.mkdir(exist_ok=True, parents=True)
+        else:
+            log.warning("This is a dry run. Model will not be saved!")
 
         device = torch.device(self._device)
 
@@ -226,7 +229,7 @@ class Spotipy(nn.Module):
             scheduler.step(avg_val_loss)
             history["valid_loss"].append(avg_val_loss)
 
-            val_gt_centers = val_ds.get_centers()
+            val_gt_centers = val_ds.centers
             val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in val_preds]
             stats = utils.points_matching_dataset(val_gt_centers, val_pred_centers, cutoff_distance=3, by_image=True)
 
@@ -256,10 +259,12 @@ class Spotipy(nn.Module):
 
             if (last_val_loss := history["valid_loss"][-1]) < best_val_loss:
                 best_val_loss = last_val_loss
-                self._save_model(save_dir, epoch=epoch, which="best")
+                if not params["dry_run"]:
+                    self._save_model(save_dir, epoch=epoch, which="best")
 
         self.optimize_threshold(val_ds, batch_size=1)
-        self._save_model(save_dir, epoch=epoch, which="last")
+        if not params["dry_run"]:
+            self._save_model(save_dir, epoch=epoch, which="last")
         return history
         
     def _save_model(self, save_path: str, which: Literal["best", "last"], epoch: Optional[int]=None, only_config: bool=False) -> None:
@@ -426,7 +431,7 @@ class Spotipy(nn.Module):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
 
-        val_gt_pts = val_ds.get_centers()
+        val_gt_pts = val_ds.centers
     
         def _metric_at_threshold(thr):
             val_pred_pts = [utils.prob_to_points(p, prob_thresh=thr, exclude_border=exclude_border, min_distance=min_distance) for p in val_preds]

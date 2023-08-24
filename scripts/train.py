@@ -1,7 +1,10 @@
-from spotipy_torch import datasets
 from spotipy_torch import utils
+from spotipy_torch.data import SpotsDataset
 from spotipy_torch.model import Spotipy
+
 from pathlib import Path
+from tormenter import transforms
+from tormenter.pipeline import Pipeline
 
 import configargparse
 import numpy as np
@@ -35,6 +38,7 @@ parser.add_argument("--convs-per-level", type=int, default=3)
 parser.add_argument("--dropout", type=float, default=0)
 parser.add_argument("--augment-prob", type=float, default=0.5)
 parser.add_argument("--skip-bg-remover", action="store_true", default=False)
+parser.add_argument("--dry-run", action="store_true", default=False)
 args = parser.parse_args()
 
 random.seed(args.seed)
@@ -47,25 +51,35 @@ torch.use_deterministic_algorithms(True)
 
 run_name = utils.get_run_name(args)
 
-# Load data
-train_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"train",
-                                       downsample_factors=[2**lv for lv in range(args.levels)],
-                                       sigma=args.sigma, 
-                                       mode="max",
-                                       augment_probability=args.augment_prob,
-                                       use_gpu=False,
-                                       size=2*[args.crop_size],
-                                       should_center_crop=False,
-                                       norm_percentiles=(1, 99.8))
+assert 0. <= args.augment_prob <= 1., f"Augment probability must be between 0 and 1, got {args.augment_prob}!"
 
-val_ds = datasets.AnnotatedSpotsDataset(Path(args.data_dir)/"val",
-                                       downsample_factors=[2**lv for lv in range(args.levels)],
-                                       sigma=args.sigma, 
-                                       mode="max",
-                                       augment_probability=0,
-                                       use_gpu=False,
-                                       size=None,
-                                       norm_percentiles=(1, 99.8))
+augmenter = Pipeline()
+augmenter.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size)))
+augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
+augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
+augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
+augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
+augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
+        
+# Load data
+train_ds = SpotsDataset.from_folder(
+    path=Path(args.data_dir)/"train",
+    downsample_factors=[2**lv for lv in range(args.levels)],
+    augmenter=augmenter,
+    sigma=args.sigma,
+    mode="max",
+    normalizer=lambda img: utils.normalize(img, 1, 99.8),
+)
+
+val_ds = SpotsDataset.from_folder(
+    path=Path(args.data_dir)/"val",
+    downsample_factors=[2**lv for lv in range(args.levels)],
+    augmenter=None,
+    sigma=args.sigma,
+    mode="max",
+    normalizer=lambda img: utils.normalize(img, 1, 99.8),
+)
+
 
 # Create model
 model = Spotipy(
