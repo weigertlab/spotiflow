@@ -3,12 +3,11 @@ from spotipy_torch.data import SpotsDataset
 from spotipy_torch.model import Spotipy
 
 from pathlib import Path
+import lightning.pytorch as pl
 from tormenter import transforms
 from tormenter.pipeline import Pipeline
 
 import configargparse
-import numpy as np
-import random
 import torch
 
 parser = configargparse.ArgumentParser(
@@ -41,13 +40,15 @@ parser.add_argument("--skip-bg-remover", action="store_true", default=False)
 parser.add_argument("--dry-run", action="store_true", default=False)
 args = parser.parse_args()
 
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-torch.cuda.manual_seed(args.seed)
-torch.mps.manual_seed(args.seed)
-torch.backends.cudnn.benchmark = False
-torch.use_deterministic_algorithms(True)
+
+pl.seed_everything(args.seed, workers=True)
+# random.seed(args.seed)
+# np.random.seed(args.seed)
+# torch.manual_seed(args.seed)
+# torch.cuda.manual_seed(args.seed)
+# torch.mps.manual_seed(args.seed)
+# torch.backends.cudnn.benchmark = False
+# torch.use_deterministic_algorithms(True)
 
 run_name = utils.get_run_name(args)
 
@@ -80,6 +81,21 @@ val_ds = SpotsDataset.from_folder(
     normalizer=lambda img: utils.normalize(img, 1, 99.8),
 )
 
+train_dl = torch.utils.data.DataLoader(
+    train_ds,
+    batch_size=args.batch_size,
+    shuffle=True,
+    num_workers=0,
+    pin_memory=True,
+)
+
+val_dl = torch.utils.data.DataLoader(
+    val_ds,
+    batch_size=1,
+    shuffle=False,
+    num_workers=0,
+    pin_memory=True,
+)
 
 # Create model
 model = Spotipy(
@@ -97,11 +113,53 @@ model = Spotipy(
     device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 
-model = torch.compile(model)
+# model = torch.compile(model)
+
+callbacks = []
+
+if not args.dry_run:
+    callbacks.append(
+        pl.callbacks.ModelCheckpoint(
+            monitor="val_loss",
+            dirpath=Path(args.save_dir)/f"{run_name}",
+            filename="best",
+            save_top_k=1,
+            mode="min",
+            save_last=True,
+            save_weights_only=True,
+        )
+    )
+
+logger = pl.loggers.WandbLogger(
+    name=run_name,
+    project=args.wandb_project,
+    entity=args.wandb_user,
+    save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
+) if not args.skip_logging else None
+
+
+accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+trainer = pl.Trainer(
+    accelerator=accelerator,
+    devices=1 if accelerator != "cpu" else "auto",
+    logger=logger,
+    callbacks=callbacks,
+    deterministic=True,
+    benchmark=False,
+    max_epochs=args.num_epochs,
+)
+
+
+
+trainer.fit(
+    model,
+    train_dl,
+    val_dl,
+)
 
 # Train model
-model.fit(
-    train_ds=train_ds,
-    val_ds=val_ds,
-    params=dict(vars(args), **{"run_name": run_name}),
-)
+# model.fit(
+    # train_ds=train_ds,
+    # val_ds=val_ds,
+    # params=dict(vars(args), **{"run_name": run_name}),
+# )

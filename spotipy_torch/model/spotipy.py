@@ -1,15 +1,17 @@
 from csbdeep.internals.predict import tile_iterator
 from pathlib import Path
 from PIL import Image
+from lightning.pytorch.utilities.types import STEP_OUTPUT
 from scipy.ndimage import zoom
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from types import SimpleNamespace
-from typing import Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 
 
 import json
+import lightning.pytorch as pl
 import logging
 import matplotlib.cm as cm
 import torch
@@ -45,7 +47,7 @@ class BaseBackBone(nn.Module):
 class ResNetBackbone(BaseBackBone, nn.Module):
 """
 
-class Spotipy(nn.Module):
+class Spotipy(pl.LightningModule):
     """Supervised spot detector using a multi-stage neural network as a backbone for 
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
        module to allow loss computation and optimization at different resolution levels.
@@ -91,8 +93,12 @@ class Spotipy(nn.Module):
             self._sigmoid = nn.Sigmoid()
             self.to(torch.device(self._device))
 
-            self._optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad))
             self._prob_thresh = 0.5
+
+            self.save_hyperparameters()
+            
+            # For validation. maybe can be removed and replaced by a callback somehow?
+            self.valid_outputs = []
 
     def _backbone_switcher(self) -> nn.Module:
         """Switcher function to build the backbone.
@@ -146,127 +152,82 @@ class Spotipy(nn.Module):
             raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
         return tuple(self._wrap_loss(loss_cls(reduction="none", **loss_kwargs), pos_weight if level==0 else 0) for level in range(self._levels))
 
-    def fit(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, params: dict) -> dict:
-        if len(params["wandb_user"])>0 and not params["skip_logging"]:
-            utils.initialize_wandb(params, train_ds, val_ds)
-            if wandb.run is not None:
-                wandb.watch(self, log_freq=50, log_graph=True)
-        num_epochs = params["num_epochs"]
-        learning_rate = params["lr"]
+    def training_step(self, batch, batch_idx):
+        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._levels)]
+        imgs = batch["img"]
+        loss_funcs = self._loss_switcher("bce", pos_weight=10.) # TODO: parametrize somehow
+        out = self(imgs)
+        loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs)))
+        self.log_dict({
+            "train_loss": loss,
+        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        return loss
 
-        loss_f_str = params["loss"]
-        pos_weight = params["pos_weight"]
-
-        loss_funcs = self._loss_switcher(loss_f_str, pos_weight)
-        batch_size = params["batch_size"]
-
-        if not params["dry_run"]:
-            save_dir = Path(params["save_dir"])/params["run_name"]
-            save_dir.mkdir(exist_ok=True, parents=True)
-        else:
-            log.warning("This is a dry run. Model will not be saved!")
-
-        device = torch.device(self._device)
-
-        # Set LR
-        for g in self._optimizer.param_groups:
-            g['lr'] = learning_rate
+    def validation_step(self, batch, batch_idx):
+        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._levels)]
+        img = batch["img"]
+        loss_funcs = self._loss_switcher("bce", pos_weight=10.) # TODO: parametrize somehow
+        out = self(img)
         
-        dataloader_kwargs = {"num_workers": 0, "pin_memory": True} # Avoid MP for now
-        train_dataloader = DataLoader(dataset=train_ds, batch_size=batch_size, shuffle=True, **dataloader_kwargs)
-        valid_dataloader = DataLoader(dataset=val_ds, batch_size=1, shuffle=False, **dataloader_kwargs)
+        loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs)))
+        
+        high_lv_pred = self._sigmoid(out[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
+        self.valid_outputs.append(high_lv_pred)
 
-        scheduler = ReduceLROnPlateau(self._optimizer,
+        self.log_dict({
+            "val_loss": loss,
+        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+    def on_validation_epoch_end(self) -> None:
+        valid_outs = self.valid_outputs
+        valid_tgts = self.trainer.val_dataloaders.dataset.centers
+        val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in valid_outs]
+        stats = utils.points_matching_dataset(valid_tgts, val_pred_centers, cutoff_distance=3, by_image=True)
+        val_f1, val_acc = stats.f1, stats.accuracy
+        self.log_dict({
+            "val_f1": val_f1,
+            "val_acc": val_acc,
+        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        
+        self.valid_outputs.clear()
+
+    def on_train_end(self) -> None:
+        self.optimize_threshold(
+            val_ds=self.trainer.val_dataloaders.dataset,
+            cutoff_distance=3,
+            min_distance=1,
+            exclude_border=False,
+            batch_size=1
+        )
+        if self.trainer.checkpoint_callback is not None:
+            self._save_model(
+                save_path=self.trainer.checkpoint_callback.dirpath,
+                which="last",
+                only_config=True
+            )
+        return
+
+    def configure_optimizers(self) -> Any:
+        # TODO: parametrize learning rate
+        optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), lr=3e-4)
+        scheduler = ReduceLROnPlateau(optimizer,
                                       factor=0.5,
                                       patience=10,
                                       threshold=1e-4,
                                       min_lr=3e-6,
                                       cooldown=5,
                                       verbose=True)
-
-        history = {"train_loss": [], "valid_loss": []}
-        best_val_loss = float("inf")
-        log.info("Training...")
-        log.info(f"Number of trainable parameters: {sum(p.numel() for p in self.parameters() if p.requires_grad)}")
-        for epoch in tqdm(range(num_epochs)):
-            self.train()
-            tr_epoch_loss, val_epoch_loss = 0, 0
-            for tr_batch in (progbar := tqdm(train_dataloader)):
-                heatmap_lvs = [tr_batch[f"heatmap_lv{i}"] for i in range(self._levels)]
-                self.zero_grad()
-                imgs = tr_batch["img"].to(device)
-                out = self(imgs)
-                losses = tuple(loss_f(out[lv], heatmap_lvs[lv].to(device))/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs))
-                loss = sum(losses)
-                loss.backward()
-                self._optimizer.step()
-                tr_epoch_loss += loss.item()
-                losses_str = "  ".join(f"L{i} {l:.3f}" for i,l in enumerate(losses))
-                progbar.set_description(f'epoch: {epoch+1} | loss: {loss.item():.8f} | {losses_str}')
-                del out, loss, losses, imgs, tr_batch
-            history["train_loss"].append(tr_epoch_loss/len(train_ds))
-            if self._device == "cuda":
-                torch.cuda.empty_cache()
-
-            self.eval()
-            val_preds = []
-            with torch.inference_mode():
-                for val_batch in valid_dataloader:
-                    heatmap_lvs = [val_batch[f"heatmap_lv{i}"] for i in range(self._levels)]
-                    imgs = val_batch["img"].to(device)
-                    out = self(imgs)
-                    losses = tuple(loss_f(out[lv], heatmap_lvs[lv].to(device))/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs))
-                    loss = sum(losses)
-                    val_epoch_loss += loss.item()
-                    high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
-                    # TODO: code properly
-                    for batch_elem in range(high_lv_preds.shape[0]):
-                        val_preds += [high_lv_preds[batch_elem]]
-                    del out, loss, losses, imgs, val_batch
-            if self._device == "cuda":
-                torch.cuda.empty_cache()
-            avg_val_loss = val_epoch_loss/len(val_ds)
-            scheduler.step(avg_val_loss)
-            history["valid_loss"].append(avg_val_loss)
-
-            val_gt_centers = val_ds.centers
-            val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in val_preds]
-            stats = utils.points_matching_dataset(val_gt_centers, val_pred_centers, cutoff_distance=3, by_image=True)
-
-            val_f1, val_acc = stats.f1, stats.accuracy
-            log.info(f"Epoch {epoch+1} | Train loss: {history['train_loss'][-1]:.8f}")
-            log.info(f"Epoch {epoch+1} | Validation loss: {history['valid_loss'][-1]:.8f} | Validation F1: {val_f1:.3f}")
-
-            if wandb.run is not None:  
-                wandb.log({
-                    "Training loss": history["train_loss"][-1],
-                    "Validation loss": history["valid_loss"][-1],
-                    "Learning rate": self._optimizer.param_groups[0]['lr'],
-                    "Validation accuracy": val_acc,
-                    "Validation F1-Score": val_f1,
-                }, step=epoch)
-                if epoch == 0:
-                    # Log validation image and GT heatmap only in first epoch
-                    img4wandb_img = wandb.Image(val_ds[0]["img"].numpy(), caption="Raw image (normalized)")
-                    wandb.log({"Validation image": img4wandb_img}, step=epoch)
-                    img4wandb_gt = Image.fromarray((255*cm.magma(val_ds[0]["heatmap_lv0"].numpy()[0])).astype(np.uint8))
-                    img4wandb_gt = wandb.Image(img4wandb_gt, caption="Ground truth heatmap")
-                    wandb.log({"Ground truth": img4wandb_gt}, step=epoch)
-                img4wandb_hm = wandb.Image(
-                    Image.fromarray((255*cm.magma(val_preds[0])).astype(np.uint8)),
-                    caption="Prediction (full resolution)")
-                wandb.log({"Prediction": img4wandb_hm}, step=epoch)
-
-            if (last_val_loss := history["valid_loss"][-1]) < best_val_loss:
-                best_val_loss = last_val_loss
-                if not params["dry_run"]:
-                    self._save_model(save_dir, epoch=epoch, which="best")
-
-        self.optimize_threshold(val_ds, batch_size=1)
-        if not params["dry_run"]:
-            self._save_model(save_dir, epoch=epoch, which="last")
-        return history
-        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
+    
+    # TODO: refactor for lightning compat, maybe unneeded
     def _save_model(self, save_path: str, which: Literal["best", "last"], epoch: Optional[int]=None, only_config: bool=False) -> None:
         checkpoint_path = Path(save_path)
         if not only_config:
@@ -286,8 +247,8 @@ class Spotipy(nn.Module):
         return
     
 
+    # TODO: refactor for lightning compat, maybe unneeded
     def _load_model(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
-        # ! TODO: add device mapping
         config_path = Path(path)/"config.json"
         with open(config_path, "r") as fb:
             config = json.load(fb)
