@@ -55,7 +55,8 @@ pred_ds = SpotsDataset.from_folder(
 out_dir_split = Path(args.out_dir)/args.pred_split
 out_dir_split.mkdir(exist_ok=True, parents=True)
 
-fnames = pred_ds.image_files
+
+fnames = [Path(f).stem for f in pred_ds.image_files]
 
 for i, fname in tqdm(enumerate(fnames), desc="Predicting and writing", total=len(fnames)):
     normalized_img = pred_ds._images[i]
