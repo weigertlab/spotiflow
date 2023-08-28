@@ -115,7 +115,9 @@ model = Spotipy(
 
 # model = torch.compile(model)
 
-callbacks = []
+callbacks = [
+    pl.callbacks.LearningRateMonitor(logging_interval="epoch"),
+]
 
 if not args.dry_run:
     callbacks.append(
@@ -139,27 +141,18 @@ logger = pl.loggers.WandbLogger(
 
 
 accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-trainer = pl.Trainer(
+
+# Train model
+model.fit(
+    train_dl,
+    val_dl,
+    max_epochs=args.num_epochs,
+    logger=logger,
     accelerator=accelerator,
     devices=1 if accelerator != "cpu" else "auto",
-    logger=logger,
     callbacks=callbacks,
     deterministic=True,
     benchmark=False,
-    max_epochs=args.num_epochs,
 )
 
 
-
-trainer.fit(
-    model,
-    train_dl,
-    val_dl,
-)
-
-# Train model
-# model.fit(
-    # train_ds=train_ds,
-    # val_ds=val_ds,
-    # params=dict(vars(args), **{"run_name": run_name}),
-# )

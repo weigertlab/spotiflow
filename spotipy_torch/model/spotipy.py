@@ -1,30 +1,25 @@
+from collections import OrderedDict
 from csbdeep.internals.predict import tile_iterator
 from pathlib import Path
-from PIL import Image
-from lightning.pytorch.utilities.types import STEP_OUTPUT
 from scipy.ndimage import zoom
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from types import SimpleNamespace
-from typing import Any, Literal, Optional, Tuple
+from typing import Literal, Optional, Sequence, Tuple
 
 
 import json
 import lightning.pytorch as pl
 import logging
-import matplotlib.cm as cm
 import torch
 import torch.nn as nn
-import wandb
-
 import numpy as np
+
 
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .fpn import FeaturePyramidNetwork
 from .multihead import MultiHeadProcessor
-from .losses import AdaptiveWingLoss
+from .trainer import SpotipyTrainingWrapper
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +42,7 @@ class BaseBackBone(nn.Module):
 class ResNetBackbone(BaseBackBone, nn.Module):
 """
 
-class Spotipy(pl.LightningModule):
+class Spotipy(nn.Module):
     """Supervised spot detector using a multi-stage neural network as a backbone for 
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
        module to allow loss computation and optimization at different resolution levels.
@@ -59,7 +54,7 @@ class Spotipy(pl.LightningModule):
         self._device = device
         if pretrained_path is not None:
             print("Pretrained path given. Loading model...")
-            self._load_model(pretrained_path, which, inference_mode)
+            self.load_model(pretrained_path, which, inference_mode)
         else:
             self._backbone_str = backbone_str
             self._backbone_params = backbone_params
@@ -95,11 +90,6 @@ class Spotipy(pl.LightningModule):
 
             self._prob_thresh = 0.5
 
-            self.save_hyperparameters()
-            
-            # For validation. maybe can be removed and replaced by a callback somehow?
-            self.valid_outputs = []
-
     def _backbone_switcher(self) -> nn.Module:
         """Switcher function to build the backbone.
         """
@@ -124,118 +114,40 @@ class Spotipy(pl.LightningModule):
         res = self._post(res)
         return tuple(res)
 
-    @staticmethod
-    def _wrap_loss(func: callable, pos_weight: float=1.0, positive_threshold: float=0.01) -> callable:
-        """Wrap a loss function to add a weight to positive pixels."""
-        def _loss(y, target):
-            loss = func(y, target)
-            if pos_weight == 0:
-                return loss.sum()/y.numel()
-            mask_pos_tgt = target>positive_threshold
-            mask_pos_y = y>positive_threshold
-            mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
-            wloss = (1+pos_weight*mask_pos)*loss
-            return wloss.sum()/y.numel()
-        return _loss
+    def fit(self, train_dl: torch.utils.data.DataLoader, val_dl: torch.utils.data.DataLoader, max_epochs: int,
+              accelerator: str, logger: Optional[pl.loggers.Logger]=None, devices: Optional[int]=1,
+              callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], deterministic: Optional[bool]=True, benchmark: Optional[bool]=False):
+        """Train the model.
 
-    def _loss_switcher(self, loss_f_str: str, pos_weight: float=10., loss_kwargs: dict={}) -> Tuple[callable]:
-        loss_f_str = loss_f_str.lower()
-        if loss_f_str == "bce":
-            loss_cls = nn.BCEWithLogitsLoss
-        elif loss_f_str == "adawing":
-            loss_cls = AdaptiveWingLoss
-        elif loss_f_str == "mse":
-            loss_cls = nn.MSELoss
-        elif loss_f_str == "smoothl1":
-            loss_cls = nn.SmoothL1Loss
-        else:
-            raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
-        return tuple(self._wrap_loss(loss_cls(reduction="none", **loss_kwargs), pos_weight if level==0 else 0) for level in range(self._levels))
-
-    def training_step(self, batch, batch_idx):
-        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._levels)]
-        imgs = batch["img"]
-        loss_funcs = self._loss_switcher("bce", pos_weight=10.) # TODO: parametrize somehow
-        out = self(imgs)
-        loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs)))
-        self.log_dict({
-            "train_loss": loss,
-        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._levels)]
-        img = batch["img"]
-        loss_funcs = self._loss_switcher("bce", pos_weight=10.) # TODO: parametrize somehow
-        out = self(img)
-        
-        loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self._levels), loss_funcs)))
-        
-        high_lv_pred = self._sigmoid(out[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
-        self.valid_outputs.append(high_lv_pred)
-
-        self.log_dict({
-            "val_loss": loss,
-        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
-    def on_validation_epoch_end(self) -> None:
-        valid_outs = self.valid_outputs
-        valid_tgts = self.trainer.val_dataloaders.dataset.centers
-        val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in valid_outs]
-        stats = utils.points_matching_dataset(valid_tgts, val_pred_centers, cutoff_distance=3, by_image=True)
-        val_f1, val_acc = stats.f1, stats.accuracy
-        self.log_dict({
-            "val_f1": val_f1,
-            "val_acc": val_acc,
-        }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        
-        self.valid_outputs.clear()
-
-    def on_train_end(self) -> None:
-        self.optimize_threshold(
-            val_ds=self.trainer.val_dataloaders.dataset,
-            cutoff_distance=3,
-            min_distance=1,
-            exclude_border=False,
-            batch_size=1
+        """
+        spotipy_wrapper = SpotipyTrainingWrapper(self)
+        trainer = pl.Trainer(
+            accelerator=accelerator,
+            devices=devices,
+            logger=logger,
+            callbacks=callbacks,
+            deterministic=deterministic,
+            benchmark=benchmark,
+            max_epochs=max_epochs,
         )
-        if self.trainer.checkpoint_callback is not None:
-            self._save_model(
-                save_path=self.trainer.checkpoint_callback.dirpath,
-                which="last",
-                only_config=True
-            )
-        return
+        trainer.fit(spotipy_wrapper, train_dl, val_dl)
+        
 
-    def configure_optimizers(self) -> Any:
-        # TODO: parametrize learning rate
-        optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), lr=3e-4)
-        scheduler = ReduceLROnPlateau(optimizer,
-                                      factor=0.5,
-                                      patience=10,
-                                      threshold=1e-4,
-                                      min_lr=3e-6,
-                                      cooldown=5,
-                                      verbose=True)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "monitor": "val_loss",
-                "interval": "epoch",
-                "frequency": 1,
-            },
-        }
     
     # TODO: refactor for lightning compat, maybe unneeded
-    def _save_model(self, save_path: str, which: Literal["best", "last"], epoch: Optional[int]=None, only_config: bool=False) -> None:
+    def save_model(self, save_path: str, which: Literal["best", "last"], only_config: bool=False) -> None:
+        """Save the model to disk.
+
+        Args:
+            save_path (str): folder to save the model to
+            which (Literal["best", "last"]): which checkpoint to save. Should be either "best" or "last".
+            only_config (bool, optional): whether to log only the config (useful if re-saving only for threshold optimization). Defaults to False.
+        """
         checkpoint_path = Path(save_path)
         if not only_config:
             torch.save({
-                "epoch": epoch+1 if epoch is not None else 0,
-                "model_state": self.state_dict(),
-                "optimizer_state": self._optimizer.state_dict(),
-            }, str(checkpoint_path/f"{which}.pt"))
+                "state_dict": self.state_dict(),
+            }, str(checkpoint_path/f"{which}.ckpt"))
         with open(str(checkpoint_path/"config.json"), "w") as fb:
             json.dump({"backbone_str": self._backbone_str,
                         "backbone_params": self._backbone_params,
@@ -246,21 +158,42 @@ class Spotipy(pl.LightningModule):
                         }, fb)
         return
     
+    @staticmethod
+    def cleanup_state_dict_keys(model_dict: OrderedDict) -> OrderedDict:
+        """Remove the "model." prefix generated by the trainer wrapping class from the keys of a state dict.
 
-    # TODO: refactor for lightning compat, maybe unneeded
-    def _load_model(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
+        Args:
+            model_dict (OrderedDict): state dictionary to clean
+
+        Returns:
+            OrderedDict: cleaned state dictionary
+        """
+        clean_dict = OrderedDict()
+        for k, v in model_dict.items():
+            if "model." in k:
+                k = k.replace("model.", "")
+            clean_dict[k] = v
+        return clean_dict
+
+    def load_model(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
         config_path = Path(path)/"config.json"
         with open(config_path, "r") as fb:
             config = json.load(fb)
         self.__init__(**config, device=self._device, pretrained_path=None) # To avoid infinite recursion in __init__
-        states_path = Path(path)/f"{which}.pt"
+        states_path = Path(path)/f"{which}.ckpt"
+        
+        # ! For retrocompatibility, remove in the future
+        if not states_path.exists():
+            states_path = Path(path)/f"{which}.pt"
+
         checkpoint = torch.load(states_path, map_location=self._device)
-        self.load_state_dict(checkpoint["model_state"])
+        model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
+        self.load_state_dict(model_state)
+
         self._prob_thresh = config.get("prob_thresh", 0.5)
         if inference_mode:
             self.eval()
             return
-        self._optimizer.load_state_dict(checkpoint["optimizer_state"])
         return
 
     def predict(self, img: np.ndarray, prob_thresh: Optional[float]=None,
