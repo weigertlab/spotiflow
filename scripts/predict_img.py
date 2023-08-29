@@ -15,10 +15,12 @@ args = parser.parse_args()
 
 assert Path(args.model_dir).exists(), "Model does not exist!"
 
-model = Spotipy(pretrained_path=args.model_dir,
-                inference_mode=True,
-                which=args.which,
-                device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+
+model = Spotipy.from_pretrained(
+    pretrained_path=args.model_dir,
+    inference_mode=True,
+).to(torch.device(device))
 
 assert Path(args.img_dir).exists(), "Image does not exist!"
 model = torch.compile(model)
@@ -34,4 +36,5 @@ model.predict(
     peak_mode="skimage",
     normalizer=lambda im: normalize(im, 1, 99.8),
     verbose=True,
+    device=device
 )

@@ -21,10 +21,11 @@ parser.add_argument("--threshold", type=float, required=False, default=None)
 args = parser.parse_args()
 
 
-model = Spotipy(pretrained_path=args.model_dir,
-                inference_mode=True,
-                which=args.which,
-                device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+model = Spotipy.from_pretrained(
+    pretrained_path=args.model_dir,
+    inference_mode=True,
+).to(torch.device(device))
 
 model = torch.compile(model)
 
@@ -38,8 +39,8 @@ if args.opt_split is not None:
         mode="max",
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
-    model.optimize_threshold(opt_ds, min_distance=1, batch_size=1)
-    model.save_model(args.model_dir, which=args.which, only_config=True)
+    model.optimize_threshold(opt_ds, min_distance=1, batch_size=1, device=device)
+    model.save(args.model_dir, which=args.which, only_config=True)
 
 
 print("Loading data...")
