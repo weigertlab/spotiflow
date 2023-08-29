@@ -4,7 +4,7 @@ from pathlib import Path
 from scipy.ndimage import zoom
 from tqdm.auto import tqdm
 from types import SimpleNamespace
-from typing import Callable, Literal, Optional, Sequence, Tuple, Union
+from typing import Literal, Optional, Sequence, Tuple
 
 
 import lightning.pytorch as pl
@@ -20,7 +20,7 @@ from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotipyModelConfig, SpotipyTrainingConfig
 from .post import FeaturePyramidNetwork, MultiHeadProcessor
-from .trainer import SpotipyModelCheckpoint, SpotipyTrainingWrapper
+from .trainer import SpotipyTrainingWrapper
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)

@@ -1,6 +1,6 @@
 from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from typing import Callable, Tuple, Union
+from typing import Tuple
 
 
 import lightning.pytorch as pl
@@ -11,7 +11,6 @@ import torch.nn as nn
 
 from .config import SpotipyTrainingConfig
 from .losses import AdaptiveWingLoss
-from ..data import SpotsDataset
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
