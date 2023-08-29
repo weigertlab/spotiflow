@@ -50,7 +50,7 @@ class Spotipy(nn.Module):
                 out_channels=self.config.out_channels)
         else:
             raise NotImplementedError(f"Mode {config.mode} not implemented.")
-        
+        self._levels = self.config.levels
         self._sigmoid = nn.Sigmoid()
         self._prob_thresh = 0.5
     
