@@ -115,11 +115,9 @@ class SpotipyModelConfig(SpotipyConfig):
 
 
 class SpotipyTrainingConfig(SpotipyConfig):
-    def __init__(self, data_dir: Union[Path, str], model_dir: str, sigma: Number=1., crop_size: int=512, loss_f: str="bce",
+    def __init__(self, sigma: Number=1., crop_size: int=512, loss_f: str="bce",
                  pos_weight: Number=10., lr: float=3e-4, optimizer: str="adamw",
                  batch_size: int=4, num_epochs: int=200, **kwargs):
-        self.data_dir = Path(data_dir) if isinstance(data_dir, str) else data_dir
-        self.model_dir = Path(model_dir) if isinstance(model_dir, str) else model_dir
         self.sigma = sigma
         self.crop_size = crop_size
         self.loss_f = loss_f
@@ -133,8 +131,6 @@ class SpotipyTrainingConfig(SpotipyConfig):
 
     
     def is_valid(self):
-        assert self.data_dir.is_dir(), "data_dir must be an existing directory."
-        assert self.model_dir.is_dir(), "model_dir must be an existing directory."
         assert isinstance(self.sigma, Number) and self.sigma >= 0, "sigma must be a number >= 0."
         assert isinstance(self.crop_size, int) and self.crop_size > 0, "crop_size must be an integer > 0."
         assert self.loss_f in {"bce", "mse", "smoothl1", "adawing"}, "loss_f must be either 'bce', 'mse', 'smoothl1', or 'adawing'"

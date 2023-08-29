@@ -1,7 +1,6 @@
 from spotipy_torch import utils
 from spotipy_torch.data import SpotsDataset
-from spotipy_torch.model import Spotipy
-from spotipy_torch.model.config import SpotipyModelConfig, SpotipyTrainingConfig
+from spotipy_torch.model import Spotipy, SpotipyModelCheckpoint, SpotipyModelConfig, SpotipyTrainingConfig
 
 from pathlib import Path
 import lightning.pytorch as pl
@@ -64,12 +63,13 @@ augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 
 augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
 
 
+
+data_dir = Path(args.data_dir)
+assert data_dir.exists(), f"Data directory {data_dir} does not exist!"
+
 model_dir = Path(args.save_dir)/f"{run_name}"
-model_dir.mkdir(parents=True, exist_ok=True)
 
 training_config = SpotipyTrainingConfig(
-    data_dir=args.data_dir,
-    model_dir=Path(args.save_dir)/f"{run_name}",
     sigma=args.sigma,
     crop_size=args.crop_size,
     loss_f=args.loss,
@@ -108,14 +108,10 @@ callbacks = [
 
 if not args.dry_run:
     callbacks.append(
-        pl.callbacks.ModelCheckpoint(
+        SpotipyModelCheckpoint(
+            model_dir,
+            training_config,
             monitor="val_loss",
-            dirpath=training_config.model_dir,
-            filename="best",
-            save_top_k=1,
-            mode="min",
-            save_last=True,
-            save_weights_only=True,
         )
     )
 
@@ -127,7 +123,9 @@ if not args.skip_logging:
         save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
         config=
         {"model": vars(model_config),
-         "train": vars(training_config)},
+         "train": vars(training_config),
+         "data": str(args.data_dir),
+         "model_dir": str(model_dir)},
     )
     logger.watch(model, log_graph=False)
 else:
@@ -139,10 +137,29 @@ accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.m
 print(model_config)
 print(training_config)
 
+train_ds = SpotsDataset.from_folder(
+    data_dir/"train",
+    downsample_factors=[2**lv for lv in range(model_config.levels)], # ! model.downsample_factors
+    augmenter=augmenter,
+    sigma=training_config.sigma,
+    mode="max",
+    normalizer=lambda img: utils.normalize(img, 1, 99.8)
+)
+
+val_ds = SpotsDataset.from_folder(
+    data_dir/"val",
+    downsample_factors=[2**lv for lv in range(model_config.levels)],
+    augmenter=None,
+    sigma=training_config.sigma,
+    mode="max",
+    normalizer=lambda img: utils.normalize(img, 1, 99.8),
+)
+
 # Train model
 model.fit(
+    train_ds,
+    val_ds,
     training_config,
-    augmenter=augmenter,
     logger=logger,
     accelerator=accelerator,
     devices=1 if accelerator != "cpu" else "auto",

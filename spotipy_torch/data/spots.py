@@ -23,7 +23,7 @@ class SpotsDataset(Dataset):
         self,
         images: Sequence[np.ndarray],
         centers: Sequence[np.ndarray],
-        augmenter: Union[Callable, None],
+        augmenter: Union[Callable, None] = None,
         downsample_factors: Sequence[int] = (1,),
         sigma: float = 1.,
         mode: str = "max",

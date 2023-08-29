@@ -1,3 +1,4 @@
+from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Callable, Tuple, Union
 
@@ -101,23 +102,6 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         
         self._valid_outputs.clear()
 
-    def on_train_end(self) -> None:
-        self.model.optimize_threshold(
-            val_ds=self.trainer.val_dataloaders.dataset,
-            cutoff_distance=3,
-            min_distance=1,
-            exclude_border=False,
-            batch_size=1,
-            device=self.device,
-        )
-        if self.trainer.checkpoint_callback is not None:
-            self.model.save(
-                self.trainer.checkpoint_callback.dirpath,
-                which="last",
-                only_config=True
-            )
-        return
-
     def configure_optimizers(self) -> dict:
         if self.training_config.optimizer.lower() == "adamw":
             optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), lr=self.training_config.lr)
@@ -140,23 +124,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             },
         }
 
-    def generate_dataloaders(self, augmenter: Union[Callable, None]) -> torch.utils.data.DataLoader:
-        train_ds = SpotsDataset.from_folder(
-            self.training_config.data_dir/"train",
-            downsample_factors=[2**lv for lv in range(self.model._levels)],
-            augmenter=augmenter,
-            sigma=self.training_config.sigma,
-            mode="max",
-            normalizer=lambda img: utils.normalize(img, 1, 99.8),   
-        )
-        val_ds = SpotsDataset.from_folder(
-            self.training_config.data_dir/"val",
-            downsample_factors=[2**lv for lv in range(self.model._levels)],
-            augmenter=None,
-            sigma=self.training_config.sigma,
-            mode="max",
-            normalizer=lambda img: utils.normalize(img, 1, 99.8),
-        )
+    def generate_dataloaders(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset) -> torch.utils.data.DataLoader:
         train_dl = torch.utils.data.DataLoader(
             train_ds,
             batch_size=self.training_config.batch_size,
@@ -172,3 +140,39 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             pin_memory=True,
         )
         return train_dl, val_dl
+
+# a model checkpoint that uses Spotipy.save() to save the model
+class SpotipyModelCheckpoint(pl.callbacks.Callback):
+    def __init__(self, logdir, train_config: SpotipyTrainingConfig, monitor: str = "val_loss"):
+        self._logdir = Path(logdir)
+        self._monitor = monitor
+        self._best = float("inf")
+        self._train_config = train_config
+
+    def on_fit_start(self, trainer, pl_module):
+        if trainer.is_global_zero:
+            log.info(f"Creating logdir {self._logdir} and saving training config...")
+            self._logdir.mkdir(parents=True, exist_ok=True)
+            self._train_config.save(self._logdir/"train_config.yaml")
+
+    def on_validation_end(self, trainer, pl_module):
+        if trainer.is_global_zero:
+            value = trainer.logged_metrics[self._monitor]
+            if value < self._best:
+                self._best = value
+                log.info(f"Saved best model with {self._monitor}={value:.3f}.")
+                pl_module.model.save(self._logdir, which="best")
+    
+    def on_train_end(self, trainer, pl_module):
+        if trainer.is_global_zero:
+            pl_module.model.optimize_threshold(
+                val_ds=trainer.val_dataloaders.dataset,
+                cutoff_distance=3,
+                min_distance=1,
+                exclude_border=False,
+                batch_size=1,
+                device=pl_module.device,
+            )
+            pl_module.model.save(self._logdir, which="last", update_thresholds=True)
+            log.info("Saved last model with optimized threshold.")
+    
