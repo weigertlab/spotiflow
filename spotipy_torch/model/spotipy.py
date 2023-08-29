@@ -27,23 +27,6 @@ from ..utils import utils
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-"""
-class BaseConfig...
-
-
-class BaseBackBone(nn.Module):
-    def __init__(self, config: BaseConfig ) -> None:
-        super().__init__(config)
-    @abstractmethod
-    def get_downsample_factors(self) -> Tuple[Tuple[int]]:
-        pass
-    @abstractmethod
-    def get_out_channels(self) -> Tuple[int]:
-        pass
-
-class ResNetBackbone(BaseBackBone, nn.Module):
-"""
-
 class Spotipy(nn.Module):
     """Supervised spot detector using a multi-stage neural network as a backbone for 
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
