@@ -136,8 +136,11 @@ class Spotipy(nn.Module):
 
     def load(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
         thresholds_path = Path(path)/"thresholds.yaml"
-        with open(thresholds_path, "r") as fb:
-            thresholds = yaml.safe_load(fb)
+        if thresholds_path.is_file():
+            with open(thresholds_path, "r") as fb:
+                thresholds = yaml.safe_load(fb)
+        else:
+            thresholds = {}
 
         states_path = Path(path)/f"{which}.pt"
         

@@ -15,29 +15,30 @@ parser = configargparse.ArgumentParser(
     config_file_parser_class=configargparse.YAMLConfigFileParser,
 )
 parser.add("-c", "--config", required=False, is_config_file=True, help="Config file path")
-parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/synthetic_clean")
-parser.add_argument("--save-dir", type=str, default="/data/spots/results/synthetic_clean/spotipy_torch_v2")
-parser.add_argument("--batch-size", type=int, default=4)
-parser.add_argument("--num-epochs", type=int, default=200)
-parser.add_argument("--lr", type=float, default=3e-4)
-parser.add_argument("--pos-weight", type=float, default=10.0)
-parser.add_argument("--backbone", type=str, default="unet")
-parser.add_argument("--levels", type=int, default=4)
-parser.add_argument("--crop-size", type=int, default=512)
-parser.add_argument("--sigma", type=float, default=1.)
-parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="direct")
-parser.add_argument("--initial-fmaps", type=int, default=32)
-parser.add_argument("--wandb-user", type=str, default="albertdm99")
-parser.add_argument("--wandb-project", type=str, default="spotipy")
-parser.add_argument("--loss", type=str, choices=["bce", "mse", "smoothl1", "adawing"], default="bce")
-parser.add_argument("--skip-logging", action="store_true", default=False)
-parser.add_argument("--kernel-size", type=int, default=3)
-parser.add_argument("--seed", type=int, default=42)
-parser.add_argument("--convs-per-level", type=int, default=3)
-parser.add_argument("--dropout", type=float, default=0)
-parser.add_argument("--augment-prob", type=float, default=0.5)
-parser.add_argument("--skip-bg-remover", action="store_true", default=False)
-parser.add_argument("--dry-run", action="store_true", default=False)
+parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/synthetic_clean", help="Path to the data directory")
+parser.add_argument("--save-dir", type=str, default="/data/spots/results/synthetic_clean/spotipy_torch_v2", help="Path to the save directory")
+parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
+parser.add_argument("--num-epochs", type=int, default=200, help="Number of epochs to train for")
+parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
+parser.add_argument("--pos-weight", type=float, default=10.0, help="Weight for pixels containing a spot for the highest resolution loss function")
+parser.add_argument("--backbone", type=str, default="unet", choices=["unet", "resnet"], help="Backbone to use")
+parser.add_argument("--levels", type=int, default=4, help="Number of levels in the model")
+parser.add_argument("--crop-size", type=int, default=512, help="Size of the crops")
+parser.add_argument("--sigma", type=float, default=1., help="Sigma for the gaussian kernel")
+parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="direct", help="Mode to use for the model")
+parser.add_argument("--initial-fmaps", type=int, default=32, help="Number of feature maps in the first layer")
+parser.add_argument("--wandb-user", type=str, default="albertdm99", help="Wandb user name")
+parser.add_argument("--wandb-project", type=str, default="spotipy", help="Wandb project name")
+parser.add_argument("--loss", type=str, choices=["bce", "mse", "smoothl1", "adawing"], default="bce", help="Loss function to use")
+parser.add_argument("--skip-logging", action="store_true", default=False, help="If given, won't log to any logger")
+parser.add_argument("--kernel-size", type=int, default=3, help="Convolution kernel size")
+parser.add_argument("--seed", type=int, default=42, help="Random seed")
+parser.add_argument("--convs-per-level", type=int, default=3, help="Number of convolutions per level")
+parser.add_argument("--dropout", type=float, default=0, help="Dropout probability")
+parser.add_argument("--augment-prob", type=float, default=0.5, help="Probability of applying an augmentation")
+parser.add_argument("--skip-bg-remover", action="store_true", default=False, help="If given, won't use a background remover module")
+parser.add_argument("--dry-run", action="store_true", default=False, help="If given, won't save any output files")
+parser.add_argument("--logger", type=str, choices=["none", "tensorboard", "wandb"], default="wandb", help="Logger to use. Unused if --skip-logging is set.")
 args = parser.parse_args()
 
 
@@ -115,21 +116,30 @@ if not args.dry_run:
         )
     )
 
+
+logger = None
 if not args.skip_logging:
-    logger = pl.loggers.WandbLogger(
-        name=run_name,
-        project=args.wandb_project,
-        entity=args.wandb_user,
-        save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
-        config=
-        {"model": vars(model_config),
-         "train": vars(training_config),
-         "data": str(args.data_dir),
-         "model_dir": str(model_dir)},
-    )
-    logger.watch(model, log_graph=False)
-else:
-    logger = None
+    if args.logger == "wandb":
+        logger = pl.loggers.WandbLogger(
+            name=run_name,
+            project=args.wandb_project,
+            entity=args.wandb_user,
+            save_dir=Path(args.save_dir)/f"{run_name}"/"logs",
+            config=
+            {"model": vars(model_config),
+            "train": vars(training_config),
+            "data": str(args.data_dir),
+            "model_dir": str(model_dir)},
+        )
+        logger.watch(model, log_graph=False)
+    elif args.logger == "tensorboard":
+        logger = pl.loggers.TensorBoardLogger(
+            save_dir=Path(args.save_dir)/f"{run_name}"/"logs",
+            name=run_name,
+        )
+    else:
+        print(f"Unknown logger {args.logger}! Will not log to any logger.")
+
 
 
 accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
