@@ -4,12 +4,13 @@ from pathlib import Path
 from scipy.ndimage import zoom
 from tqdm.auto import tqdm
 from types import SimpleNamespace
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 
 
 import json
 import lightning.pytorch as pl
 import logging
+import pydash
 import torch
 import torch.nn as nn
 import numpy as np
@@ -17,6 +18,7 @@ import numpy as np
 
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
+from .config import SpotipyModelConfig, SpotipyTrainingConfig
 from .fpn import FeaturePyramidNetwork
 from .multihead import MultiHeadProcessor
 from .trainer import SpotipyTrainingWrapper
@@ -47,58 +49,40 @@ class Spotipy(nn.Module):
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
        module to allow loss computation and optimization at different resolution levels.
     """
-    def __init__(self, backbone_str: str="resnet", backbone_params: dict={}, levels: int=3, pretrained_path: Optional[str]=None,
-                 mode: Literal["direct", "fpn"]="fpn", background_remover: bool=True, device: str="cpu", which: str="best", inference_mode: bool=True, **kwargs: dict):
+    def __init__(self, config: SpotipyModelConfig):
         super().__init__()
-        assert mode in {"direct", "fpn"}, "Mode must be either 'direct' or 'fpn'."
-        self._device = device
-        if pretrained_path is not None:
-            print("Pretrained path given. Loading model...")
-            self.load_model(pretrained_path, which, inference_mode)
+        self.config = config
+        self._levels = config.levels
+        self._bg_remover = BackgroundRemover() if config.background_remover else nn.Identity()
+        self._backbone = self._backbone_switcher()
+        if config.mode == "direct":
+            self._post = MultiHeadProcessor(
+                in_channels_list=self._backbone.out_channels_list,
+                out_channels=self.config.out_channels,
+                kernel_sizes=self.config.kernel_sizes,
+                initial_fmaps=self.config.initial_fmaps,
+            )
+        elif config.mode == "fpn":
+            self._post = FeaturePyramidNetwork(
+                in_channels_list=self._backbone.out_channels_list,
+                out_channels=self.config.out_channels)
         else:
-            self._backbone_str = backbone_str
-            self._backbone_params = backbone_params
-            self._backbone_params.update(
-                {"in_channels": self._backbone_params.get("in_channels", 1),
-                 "initial_fmaps": self._backbone_params.get("initial_fmaps", 32),
-                 "downsample_factors": self._backbone_params.get("downsample_factors", tuple((2, 2) for _ in range(levels))),
-                 "kernel_sizes": self._backbone_params.get("kernel_sizes", tuple((3, 3) for _ in range(levels))),
-                 })
-            self._levels = levels
-            self._pretrained_path = pretrained_path
-            self._mode = mode
-            self._background_remover = background_remover
+            raise NotImplementedError(f"Mode {config.mode} not implemented.")
+        
+        self._sigmoid = nn.Sigmoid()
+        self._prob_thresh = 0.5
+    
+    @classmethod
+    def from_pretrained(cls, pretrained_path: str, inference_mode=True) -> None:
+        """Load a pretrained model.
 
-            # Build background remover
-            self._bg_remover = BackgroundRemover(device=self._device) if background_remover else nn.Identity()
-            # Build backbone
-            self._backbone = self._backbone_switcher()
-
-            # Build postprocessing modules
-            if mode == "direct":
-                self._post = MultiHeadProcessor(in_channels_list=self._backbone.out_channels_list,
-                                                out_channels=1,
-                                                kernel_sizes=self._backbone_params["kernel_sizes"],
-                                                initial_fmaps=self._backbone_params["initial_fmaps"])
-            elif mode == "fpn":
-                self._post = FeaturePyramidNetwork(in_channels_list=self._backbone.out_channels_list, out_channels=1)
-            else:
-                raise NotImplementedError(f"Mode {mode} not implemented.")
-
-            self._sigmoid = nn.Sigmoid()
-            self.to(torch.device(self._device))
-
-            self._prob_thresh = 0.5
-
-    def _backbone_switcher(self) -> nn.Module:
-        """Switcher function to build the backbone.
+        Args:
+            pretrained_path (str): path to the pretrained model
         """
-        if self._backbone_str == "unet":
-            return UNetBackbone(**self._backbone_params)
-        if self._backbone_str == "resnet":
-            return ResNetBackbone(**self._backbone_params)
-        else:
-            raise NotImplementedError(f"Backbone {self._backbone_str} not implemented.")
+        model_config = SpotipyModelConfig.from_config_file(Path(pretrained_path)/"config.json")
+        model = cls(model_config)
+        model.load(pretrained_path, inference_mode=inference_mode)
+        return model
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Forward pass
@@ -114,13 +98,11 @@ class Spotipy(nn.Module):
         res = self._post(res)
         return tuple(res)
 
-    def fit(self, train_dl: torch.utils.data.DataLoader, val_dl: torch.utils.data.DataLoader, max_epochs: int,
-              accelerator: str, logger: Optional[pl.loggers.Logger]=None, devices: Optional[int]=1,
+    def fit(self, train_config: SpotipyTrainingConfig, augmenter: Union[Callable, None], accelerator: str, logger: Optional[pl.loggers.Logger]=None, devices: Optional[int]=1,
               callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], deterministic: Optional[bool]=True, benchmark: Optional[bool]=False):
         """Train the model.
 
         """
-        spotipy_wrapper = SpotipyTrainingWrapper(self)
         trainer = pl.Trainer(
             accelerator=accelerator,
             devices=devices,
@@ -128,34 +110,31 @@ class Spotipy(nn.Module):
             callbacks=callbacks,
             deterministic=deterministic,
             benchmark=benchmark,
-            max_epochs=max_epochs,
+            max_epochs=train_config.num_epochs,
         )
-        trainer.fit(spotipy_wrapper, train_dl, val_dl)
-        
-
+        training_wrapper = SpotipyTrainingWrapper(self, train_config)
+        train_dl, val_dl = training_wrapper.generate_dataloaders(augmenter=augmenter)
+        trainer.fit(training_wrapper, train_dl, val_dl)
+        log.info("Training finished.")
+        train_config.save(train_config.model_dir/"train_config.json")
     
-    # TODO: refactor for lightning compat, maybe unneeded
-    def save_model(self, save_path: str, which: Literal["best", "last"], only_config: bool=False) -> None:
+    def save(self, path: str, which: Literal["best", "last"], only_config: bool=False) -> None:
         """Save the model to disk.
 
         Args:
-            save_path (str): folder to save the model to
+            path (str): folder to save the model to
             which (Literal["best", "last"]): which checkpoint to save. Should be either "best" or "last".
             only_config (bool, optional): whether to log only the config (useful if re-saving only for threshold optimization). Defaults to False.
         """
-        checkpoint_path = Path(save_path)
+        checkpoint_path = Path(path)
         if not only_config:
             torch.save({
                 "state_dict": self.state_dict(),
             }, str(checkpoint_path/f"{which}.ckpt"))
-        with open(str(checkpoint_path/"config.json"), "w") as fb:
-            json.dump({"backbone_str": self._backbone_str,
-                        "backbone_params": self._backbone_params,
-                        "levels": self._levels,
-                        "mode": self._mode,
-                        "background_remover": self._background_remover,
-                        "prob_thresh": self._prob_thresh,
-                        }, fb)
+
+        self.config.save(checkpoint_path/"config.json")
+        with open(checkpoint_path/"thresholds.json", "w") as fb:
+            json.dump({"prob_thresh": self._prob_thresh}, fb, indent=4)
         return
     
     @staticmethod
@@ -175,22 +154,22 @@ class Spotipy(nn.Module):
             clean_dict[k] = v
         return clean_dict
 
-    def load_model(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
-        config_path = Path(path)/"config.json"
-        with open(config_path, "r") as fb:
-            config = json.load(fb)
-        self.__init__(**config, device=self._device, pretrained_path=None) # To avoid infinite recursion in __init__
+    def load(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
+        thresholds_path = Path(path)/"thresholds.json"
+        with open(thresholds_path, "r") as fb:
+            thresholds = json.load(fb)
+
         states_path = Path(path)/f"{which}.ckpt"
         
         # ! For retrocompatibility, remove in the future
         if not states_path.exists():
             states_path = Path(path)/f"{which}.pt"
 
-        checkpoint = torch.load(states_path, map_location=self._device)
+        checkpoint = torch.load(states_path)
         model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
         self.load_state_dict(model_state)
 
-        self._prob_thresh = config.get("prob_thresh", 0.5)
+        self._prob_thresh = thresholds.get("prob_thresh", 0.5)
         if inference_mode:
             self.eval()
             return
@@ -198,7 +177,7 @@ class Spotipy(nn.Module):
 
     def predict(self, img: np.ndarray, prob_thresh: Optional[float]=None,
                 n_tiles: Tuple[int, int]=(1,1), min_distance: int=1, exclude_border: bool=False,
-                scale: Optional[int]=None, peak_mode: Literal["skimage", "fast"]="skimage", normalizer: Optional[callable]=None, verbose: bool=True) -> Tuple[np.ndarray, SimpleNamespace]:
+                scale: Optional[int]=None, peak_mode: Literal["skimage", "fast"]="skimage", normalizer: Optional[callable]=None, verbose: bool=True, device: str="cpu") -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
         
         Args:
@@ -217,7 +196,7 @@ class Spotipy(nn.Module):
         """
         
         assert img.ndim == 2, "Image must be 2D (Y,X)"
-        device = torch.device(self._device)
+        device = torch.device(device)
         # Add B and C dimensions
         if verbose:
             log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}")
@@ -236,7 +215,7 @@ class Spotipy(nn.Module):
             if normalizer is not None and callable(normalizer):
                 x = normalizer(x)
             with torch.inference_mode():
-                img_t = torch.from_numpy(x).to(torch.device(device)).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                img_t = torch.from_numpy(x).to(device).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
                 y = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
             if scale is not None and scale != 1:
                 y = zoom(y, (1./scale, 1./scale), order=1)
@@ -249,7 +228,7 @@ class Spotipy(nn.Module):
             iter_tiles = tile_iterator(
                 x,
                 n_tiles=n_tiles,
-                block_sizes=tuple(self._backbone_params["downsample_factors"][0][0]**self._levels for _ in range(img.ndim)),
+                block_sizes=tuple(self.model_config.downsample_factors[0][0]**self._levels for _ in range(img.ndim)),
                 n_block_overlaps=(4,4),
             )
             if verbose:
@@ -259,7 +238,7 @@ class Spotipy(nn.Module):
                 if normalizer is not None and callable(normalizer):
                     tile = normalizer(tile)
                 with torch.inference_mode():
-                    img_t = torch.from_numpy(tile).to(torch.device(device)).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                    img_t = torch.from_numpy(tile).to(device).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
                     y_tile = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
                     p = utils.prob_to_points(y_tile, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
                     # remove global offset
@@ -292,10 +271,10 @@ class Spotipy(nn.Module):
         details = SimpleNamespace(prob=probs, heatmap=y)
         return pts, details
 
-    def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False):
+    def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False, device: str="cpu"):
         preds = []
         dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
-        device = torch.device(self._device)
+        device = torch.device(device)
         log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}")
         self.eval()
         with torch.inference_mode():
@@ -311,10 +290,9 @@ class Spotipy(nn.Module):
         p = [utils.prob_to_points(pred, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance) for pred in preds]
         return p
 
-    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, niter=11, batch_size=2):
+    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, niter=11, batch_size=2, device=torch.device("cpu")):
         val_preds = []
         val_dataloader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
-        device = torch.device(self._device)
         self.eval()
         with torch.inference_mode():
             for val_batch in val_dataloader:
@@ -345,4 +323,31 @@ class Spotipy(nn.Module):
         print(f"Best F1-score: {best_f1:.3f}")
         self._prob_thresh = best_thr
         return
+    
+    def _backbone_switcher(self) -> nn.Module:
+        """Switcher function to build the backbone.
+        """
+        if self.config.backbone == "unet":
+            backbone_params = pydash.pick(
+                self.config,
+                "in_channels",
+                "initial_fmaps",
+                "downsample_factors",
+                "kernel_sizes",
+                "batch_norm",
+            )
+            return UNetBackbone(**backbone_params)
+        if self.config.backbone == "resnet":
+            backbone_params = pydash.pick(
+                self.config,
+                "in_channels",
+                "initial_fmaps",
+                "downsample_factors",
+                "kernel_sizes",
+                "batch_norm",
+            )
+            return ResNetBackbone(**backbone_params)
+        else:
+            raise NotImplementedError(f"Backbone {self.config.backbone} not implemented.")
+
         

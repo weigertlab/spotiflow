@@ -1,6 +1,7 @@
 from spotipy_torch import utils
 from spotipy_torch.data import SpotsDataset
 from spotipy_torch.model import Spotipy
+from spotipy_torch.model.config import SpotipyModelConfig, SpotipyTrainingConfig
 
 from pathlib import Path
 import lightning.pytorch as pl
@@ -61,57 +62,43 @@ augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
 augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
 augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
 augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
-        
-# Load data
-train_ds = SpotsDataset.from_folder(
-    path=Path(args.data_dir)/"train",
-    downsample_factors=[2**lv for lv in range(args.levels)],
-    augmenter=augmenter,
-    sigma=args.sigma,
-    mode="max",
-    normalizer=lambda img: utils.normalize(img, 1, 99.8),
-)
 
-val_ds = SpotsDataset.from_folder(
-    path=Path(args.data_dir)/"val",
-    downsample_factors=[2**lv for lv in range(args.levels)],
-    augmenter=None,
-    sigma=args.sigma,
-    mode="max",
-    normalizer=lambda img: utils.normalize(img, 1, 99.8),
-)
 
-train_dl = torch.utils.data.DataLoader(
-    train_ds,
+model_dir = Path(args.save_dir)/f"{run_name}"
+model_dir.mkdir(parents=True, exist_ok=True)
+
+training_config = SpotipyTrainingConfig(
+    data_dir=args.data_dir,
+    model_dir=Path(args.save_dir)/f"{run_name}",
+    sigma=args.sigma,
+    crop_size=args.crop_size,
+    loss_f=args.loss,
+    pos_weight=args.pos_weight,
+    lr=args.lr,
+    optimizer="adamw",
     batch_size=args.batch_size,
-    shuffle=True,
-    num_workers=0,
-    pin_memory=True,
+    num_epochs=args.num_epochs,
 )
 
-val_dl = torch.utils.data.DataLoader(
-    val_ds,
-    batch_size=1,
-    shuffle=False,
-    num_workers=0,
-    pin_memory=True,
-)
 
-# Create model
-model = Spotipy(
-    args.backbone,
-    backbone_params={
-        "in_channels": 1,
-        "initial_fmaps": args.initial_fmaps,
-        "downsample_factors": tuple((2, 2) for _ in range(args.levels)),
-        "kernel_sizes": tuple((args.kernel_size, args.kernel_size) for _ in range(args.convs_per_level)),
-        "padding": "same",
-    },
+model_config = SpotipyModelConfig(
+    backbone=args.backbone,
+    in_channels=1,
+    out_channels=1,
+    initial_fmaps=args.initial_fmaps,
+    n_convs_per_level=args.convs_per_level,
+    downsample_factor=2,
+    kernel_size=args.kernel_size,
+    padding="same",
     levels=args.levels,
     mode=args.mode,
     background_remover=not args.skip_bg_remover,
-    device="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    batch_norm=False,
+    dropout=args.dropout,
 )
+
+# Create model
+model = Spotipy(model_config)
 
 # model = torch.compile(model)
 
@@ -123,7 +110,7 @@ if not args.dry_run:
     callbacks.append(
         pl.callbacks.ModelCheckpoint(
             monitor="val_loss",
-            dirpath=Path(args.save_dir)/f"{run_name}",
+            dirpath=training_config.model_dir,
             filename="best",
             save_top_k=1,
             mode="min",
@@ -138,6 +125,9 @@ if not args.skip_logging:
         project=args.wandb_project,
         entity=args.wandb_user,
         save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
+        config=
+        {"model": vars(model_config),
+         "train": vars(training_config)},
     )
     logger.watch(model, log_graph=False)
 else:
@@ -146,11 +136,13 @@ else:
 
 accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
+print(model_config)
+print(training_config)
+
 # Train model
 model.fit(
-    train_dl,
-    val_dl,
-    max_epochs=args.num_epochs,
+    training_config,
+    augmenter=augmenter,
     logger=logger,
     accelerator=accelerator,
     devices=1 if accelerator != "cpu" else "auto",

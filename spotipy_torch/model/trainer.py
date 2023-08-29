@@ -1,12 +1,16 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from typing import Tuple
+from typing import Callable, Tuple, Union
 
 
 import lightning.pytorch as pl
 import logging
 import torch
 import torch.nn as nn
+
+
+from .config import SpotipyTrainingConfig
 from .losses import AdaptiveWingLoss
+from ..data import SpotsDataset
 from ..utils import utils
 
 logging.basicConfig(level=logging.INFO)
@@ -17,12 +21,13 @@ class SpotipyTrainingWrapper(pl.LightningModule):
        feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
        module to allow loss computation and optimization at different resolution levels.
     """
-    def __init__(self, model, lr: float=3e-4, pos_weight: float=10., loss_f: str="bce"):
+    def __init__(self, model, training_config: SpotipyTrainingConfig):
         super().__init__()
         self.model = model
-        self._lr = lr
-        self._loss_funcs = self._loss_switcher(loss_f, pos_weight)
-        # For validation. maybe can be removed and replaced by a callback somehow?
+
+        self.training_config = training_config
+
+        self._loss_funcs = self._loss_switcher()
 
         self._valid_outputs = []
 
@@ -43,8 +48,8 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             return wloss.sum()/y.numel()
         return _loss
 
-    def _loss_switcher(self, loss_f_str: str, pos_weight: float=10., loss_kwargs: dict={}) -> Tuple[callable]:
-        loss_f_str = loss_f_str.lower()
+    def _loss_switcher(self, loss_kwargs: dict={}) -> Tuple[callable]:
+        loss_f_str = self.training_config.loss_f.lower()
         if loss_f_str == "bce":
             loss_cls = nn.BCEWithLogitsLoss
         elif loss_f_str == "adawing":
@@ -55,7 +60,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             loss_cls = nn.SmoothL1Loss
         else:
             raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
-        return tuple(self._wrap_loss(loss_cls(reduction="none", **loss_kwargs), pos_weight if level==0 else 0) for level in range(self.model._levels))
+        return tuple(self._wrap_loss(loss_cls(reduction="none", **loss_kwargs), self.training_config.pos_weight if level==0 else 0) for level in range(self.model._levels))
 
     def training_step(self, batch, batch_idx):
         heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self.model._levels)]
@@ -102,18 +107,22 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             cutoff_distance=3,
             min_distance=1,
             exclude_border=False,
-            batch_size=1
+            batch_size=1,
+            device=self.device,
         )
         if self.trainer.checkpoint_callback is not None:
-            self.model.save_model(
-                save_path=self.trainer.checkpoint_callback.dirpath,
+            self.model.save(
+                self.trainer.checkpoint_callback.dirpath,
                 which="last",
                 only_config=True
             )
         return
 
     def configure_optimizers(self) -> dict:
-        optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), lr=self._lr)
+        if self.training_config.optimizer.lower() == "adamw":
+            optimizer = torch.optim.AdamW((p for p in self.parameters() if p.requires_grad), lr=self.training_config.lr)
+        else:
+            raise NotImplementedError(f"Optimizer {self.training_config.optimizer} not implemented.")
         scheduler = ReduceLROnPlateau(optimizer,
                                       factor=0.5,
                                       patience=10,
@@ -130,3 +139,36 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 "frequency": 1,
             },
         }
+
+    def generate_dataloaders(self, augmenter: Union[Callable, None]) -> torch.utils.data.DataLoader:
+        train_ds = SpotsDataset.from_folder(
+            self.training_config.data_dir/"train",
+            downsample_factors=[2**lv for lv in range(self.model._levels)],
+            augmenter=augmenter,
+            sigma=self.training_config.sigma,
+            mode="max",
+            normalizer=lambda img: utils.normalize(img, 1, 99.8),   
+        )
+        val_ds = SpotsDataset.from_folder(
+            self.training_config.data_dir/"val",
+            downsample_factors=[2**lv for lv in range(self.model._levels)],
+            augmenter=None,
+            sigma=self.training_config.sigma,
+            mode="max",
+            normalizer=lambda img: utils.normalize(img, 1, 99.8),
+        )
+        train_dl = torch.utils.data.DataLoader(
+            train_ds,
+            batch_size=self.training_config.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+        )
+        val_dl = torch.utils.data.DataLoader(
+            val_ds,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
+        return train_dl, val_dl

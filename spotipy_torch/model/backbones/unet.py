@@ -31,7 +31,7 @@ class UNetBackbone(nn.Module):
         batch_norm: bool=False,
         padding: Union[str, int]=1,
         padding_mode: str="zeros",
-        dropout: int=0,
+        dropout: float=0,
         upsampling_mode: str="nearest"):
 
         super().__init__()
