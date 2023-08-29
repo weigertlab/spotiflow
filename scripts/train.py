@@ -132,12 +132,16 @@ if not args.dry_run:
         )
     )
 
-logger = pl.loggers.WandbLogger(
-    name=run_name,
-    project=args.wandb_project,
-    entity=args.wandb_user,
-    save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
-) if not args.skip_logging else None
+if not args.skip_logging:
+    logger = pl.loggers.WandbLogger(
+        name=run_name,
+        project=args.wandb_project,
+        entity=args.wandb_user,
+        save_dir=Path(args.save_dir)/f"{run_name}"/"wandb",
+    )
+    logger.watch(model, log_graph=False)
+else:
+    logger = None
 
 
 accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -154,5 +158,3 @@ model.fit(
     deterministic=True,
     benchmark=False,
 )
-
-

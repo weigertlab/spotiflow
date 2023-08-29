@@ -39,7 +39,7 @@ if args.opt_split is not None:
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
     model.optimize_threshold(opt_ds, min_distance=1, batch_size=1)
-    model._save_model(args.model_dir, which=args.which, only_config=True)
+    model.save_model(args.model_dir, which=args.which, only_config=True)
 
 
 print("Loading data...")
