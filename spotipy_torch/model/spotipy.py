@@ -35,7 +35,6 @@ class Spotipy(nn.Module):
     def __init__(self, config: SpotipyModelConfig):
         super().__init__()
         self.config = config
-        self._levels = config.levels
         self._bg_remover = BackgroundRemover() if config.background_remover else nn.Identity()
         self._backbone = self._backbone_switcher()
         if config.mode == "direct":
@@ -211,7 +210,7 @@ class Spotipy(nn.Module):
             iter_tiles = tile_iterator(
                 x,
                 n_tiles=n_tiles,
-                block_sizes=tuple(self.model_config.downsample_factors[0][0]**self._levels for _ in range(img.ndim)),
+                block_sizes=tuple(self.model_config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim)),
                 n_block_overlaps=(4,4),
             )
             if verbose:
