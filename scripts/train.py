@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     train_ds = SpotsDataset.from_folder(
         data_dir/"train",
-        downsample_factors=[2**lv for lv in range(model_config.levels)], # ! model.downsample_factors
+        downsample_factors=[args.downsample_factor**lv for lv in range(model_config.levels)], # ! model.downsample_factors
         augmenter=augmenter,
         sigma=training_config.sigma,
         mode="max",
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
     val_ds = SpotsDataset.from_folder(
         data_dir/"val",
-        downsample_factors=[2**lv for lv in range(model_config.levels)],
+        downsample_factors=[args.downsample_factor**lv for lv in range(model_config.levels)],
         augmenter=augmenter_val,
         sigma=training_config.sigma,
         mode="max",
