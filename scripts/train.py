@@ -50,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="direct", help="Mode to use for the model")
     parser.add_argument("--in-channels", type=int, default=1, help="Number of input channels")
     parser.add_argument("--levels", type=int, default=4, help="Number of levels in the model")
-    parser.add_argument("--downsample-factors", type=int, default=2)
+    parser.add_argument("--downsample-factor", type=int, default=2)
     parser.add_argument("--initial-fmaps", type=int, default=32, help="Number of feature maps in the first layer")
     parser.add_argument("--kernel-size", type=int, default=3, help="Convolution kernel size")
     parser.add_argument("--convs-per-level", type=int, default=3, help="Number of convolutions per level")
