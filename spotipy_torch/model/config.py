@@ -115,11 +115,12 @@ class SpotipyModelConfig(SpotipyConfig):
 
 
 class SpotipyTrainingConfig(SpotipyConfig):
-    def __init__(self, sigma: Number=1., crop_size: int=512, loss_f: str="bce",
-                 pos_weight: Number=10., lr: float=3e-4, optimizer: str="adamw",
-                 batch_size: int=4, num_epochs: int=200, **kwargs):
+    def __init__(self, sigma: Number=1., crop_size: int=512, smart_crop: bool=False, loss_f: str="bce",
+                 pos_weight: Number=10., lr: float=3e-4, optimizer: str="adamw", batch_size: int=4,
+                 num_epochs: int=200, **kwargs):
         self.sigma = sigma
         self.crop_size = crop_size
+        self.smart_crop = bool(smart_crop)
         self.loss_f = loss_f
         self.pos_weight = pos_weight
         self.lr = lr

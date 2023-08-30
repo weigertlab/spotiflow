@@ -39,6 +39,7 @@ parser.add_argument("--augment-prob", type=float, default=0.5, help="Probability
 parser.add_argument("--skip-bg-remover", action="store_true", default=False, help="If given, won't use a background remover module")
 parser.add_argument("--dry-run", action="store_true", default=False, help="If given, won't save any output files")
 parser.add_argument("--logger", type=str, choices=["none", "tensorboard", "wandb"], default="wandb", help="Logger to use. Unused if --skip-logging is set.")
+parser.add_argument("--smart-crop", action="store_true", default=False, help="If given, random cropping will prioritize crops containing points")
 args = parser.parse_args()
 
 
@@ -56,7 +57,7 @@ run_name = utils.get_run_name(args)
 assert 0. <= args.augment_prob <= 1., f"Augment probability must be between 0 and 1, got {args.augment_prob}!"
 
 augmenter = Pipeline()
-augmenter.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size)))
+augmenter.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size), smart=args.smart_crop))
 augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
 augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
 augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
@@ -73,6 +74,7 @@ model_dir = Path(args.save_dir)/f"{run_name}"
 training_config = SpotipyTrainingConfig(
     sigma=args.sigma,
     crop_size=args.crop_size,
+    smart_crop=args.smart_crop,
     loss_f=args.loss,
     pos_weight=args.pos_weight,
     lr=args.lr,
@@ -116,6 +118,8 @@ if not args.dry_run:
         )
     )
 
+save_dir = Path(args.save_dir)/f"{run_name}"
+save_dir.mkdir(parents=True, exist_ok=True)
 
 logger = None
 if not args.skip_logging:
@@ -124,7 +128,7 @@ if not args.skip_logging:
             name=run_name,
             project=args.wandb_project,
             entity=args.wandb_user,
-            save_dir=Path(args.save_dir)/f"{run_name}"/"logs",
+            save_dir=save_dir/"logs",
             config=
             {"model": vars(model_config),
             "train": vars(training_config),
@@ -134,12 +138,11 @@ if not args.skip_logging:
         logger.watch(model, log_graph=False)
     elif args.logger == "tensorboard":
         logger = pl.loggers.TensorBoardLogger(
-            save_dir=Path(args.save_dir)/f"{run_name}"/"logs",
+            save_dir=save_dir/"logs",
             name=run_name,
         )
     else:
         print(f"Unknown logger {args.logger}! Will not log to any logger.")
-
 
 
 accelerator = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"

@@ -92,6 +92,7 @@ class Spotipy(nn.Module):
             deterministic=deterministic,
             benchmark=benchmark,
             max_epochs=train_config.num_epochs,
+            log_every_n_steps=min(50, len(train_ds)//train_config.batch_size),
         )
         training_wrapper = SpotipyTrainingWrapper(self, train_config)
         train_dl, val_dl = training_wrapper.generate_dataloaders(train_ds, val_ds)

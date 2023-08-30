@@ -1,13 +1,16 @@
 from pathlib import Path
+from PIL import Image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Tuple
 
 
 import lightning.pytorch as pl
 import logging
+import matplotlib.cm as cm
+import numpy as np
 import torch
 import torch.nn as nn
-
+import wandb
 
 from .config import SpotipyTrainingConfig
 from .losses import AdaptiveWingLoss
@@ -98,8 +101,43 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             "val_f1": val_f1,
             "val_acc": val_acc,
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        
+
+        self.log_images(valid_outs)
+
         self._valid_outputs.clear()
+
+    def log_images(self, valid_outs):
+        if isinstance(self.logger, pl.loggers.WandbLogger): # log images to wandb
+            n_images = min(2, len(self.trainer.val_dataloaders.dataset))
+            self.logger.log_image(
+                key="val_img", images=[self.trainer.val_dataloaders.dataset[idx]["img"][0].unsqueeze(-1).numpy() for idx in range(n_images)],
+            )
+            self.logger.log_image(
+                key="val_tgt", images=[cm.magma(self.trainer.val_dataloaders.dataset[idx]["heatmap_lv0"][0].numpy()) for idx in range(n_images)],
+            )
+            self.logger.log_image(
+                key="val_pred", images=[cm.magma(valid_outs[idx]) for idx in range(n_images)],
+            )
+
+        elif isinstance(self.logger, pl.loggers.TensorBoardLogger):
+            n_images = min(2, len(self.trainer.val_dataloaders.dataset))
+            for img_idx in range(n_images):
+                self.logger.experiment.add_image(
+                    f"val/img/{img_idx}",
+                    self.trainer.val_dataloaders.dataset[img_idx]["img"].numpy(),
+                    self.global_step,
+                )
+                self.logger.experiment.add_image(
+                    f"val/tgt/{img_idx}",
+                    cm.magma(self.trainer.val_dataloaders.dataset[img_idx]["heatmap_lv0"][0].numpy()).transpose(2,0,1),
+                    self.global_step,
+                )
+                self.logger.experiment.add_image(
+                    f"val/pred/{img_idx}",
+                    cm.magma(valid_outs[img_idx]).transpose(2,0,1),
+                    self.global_step,
+                )
+        return
 
     def configure_optimizers(self) -> dict:
         if self.training_config.optimizer.lower() == "adamw":
