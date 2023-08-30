@@ -113,7 +113,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_outputs.clear()
 
     def log_images(self):
-        n_images_to_log = min(2, len(self._valid_inputs))
+        n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger): # Wandb logger
             self.logger.log_image(
                 key="input", images=[v.transpose(1,2,0) for v in self._valid_inputs[:n_images_to_log]], step=self.current_epoch,
