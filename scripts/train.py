@@ -44,10 +44,11 @@ if __name__ == "__main__":
     parser.add("-c", "--config", required=False, is_config_file=True, help="Config file path")
     parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/synthetic_clean", help="Path to the data directory")
     parser.add_argument("--save-dir", type=str, default="/data/spots/results/synthetic_clean/spotipy_torch_v2", help="Path to the save directory")
+    parser.add_argument("--max-files", type=int, default=None, help="Maximum number of files to use")
     # model 
     parser.add_argument("--backbone", type=str, default="unet", choices=["unet", "resnet"], help="Backbone to use")
     parser.add_argument("--mode", type=str, choices=["direct", "fpn"], default="direct", help="Mode to use for the model")
-    parser.add_argument("--in_channels", type=int, default=1, help="Number of input channels")
+    parser.add_argument("--in-channels", type=int, default=1, help="Number of input channels")
     parser.add_argument("--levels", type=int, default=4, help="Number of levels in the model")
     parser.add_argument("--initial-fmaps", type=int, default=32, help="Number of feature maps in the first layer")
     parser.add_argument("--kernel-size", type=int, default=3, help="Convolution kernel size")
@@ -62,6 +63,7 @@ if __name__ == "__main__":
     parser.add_argument("--augment-prob", type=float, default=0.5, help="Probability of applying an augmentation")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--num-epochs", type=int, default=200, help="Number of epochs to train for")
+    parser.add_argument("--num-workers", type=int, default=8, help="Number of data workers")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
     parser.add_argument("--pos-weight", type=float, default=10.0, help="Weight for pixels containing a spot for the highest resolution loss function")
     # logging 
@@ -74,7 +76,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-
+    if args.in_channels>1:
+        args.skip_bg_remover = True
+        
+        
     pl.seed_everything(args.seed, workers=True)
 
     run_name = get_run_name(args)
@@ -89,6 +94,9 @@ if __name__ == "__main__":
     augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
     augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
 
+    augmenter_val = Pipeline()
+    augmenter_val.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size)))
+    
 
 
     data_dir = Path(args.data_dir)
@@ -179,15 +187,17 @@ if __name__ == "__main__":
         augmenter=augmenter,
         sigma=training_config.sigma,
         mode="max",
+        max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8)
     )
 
     val_ds = SpotsDataset.from_folder(
         data_dir/"val",
         downsample_factors=[2**lv for lv in range(model_config.levels)],
-        augmenter=None,
+        augmenter=augmenter_val,
         sigma=training_config.sigma,
         mode="max",
+        max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
 
@@ -200,6 +210,7 @@ if __name__ == "__main__":
         accelerator=accelerator,
         devices=1 if accelerator != "cpu" else "auto",
         callbacks=callbacks,
+        num_workers=args.num_workers,
         deterministic=True,
         benchmark=False,
     )

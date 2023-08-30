@@ -56,6 +56,7 @@ class SpotsDataset(Dataset):
                     sigma: float = 1.,
                     image_extensions : Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg"),
                     mode: str = "max",
+                    max_files: Optional[int] = None,
                     normalizer: Callable = utils.normalize) -> None:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
@@ -74,14 +75,17 @@ class SpotsDataset(Dataset):
         
         image_files = sorted(tuple(chain(*tuple(path.glob(f'*.{ext}') for ext in image_extensions))))
         center_files = sorted([str(path/f) for f in path.iterdir() if f.suffix == ".csv"])
-        
+
+        if max_files is not None:
+            image_files = image_files[:max_files]
+            center_files = center_files[:max_files]
+                    
         if not len(image_files) == len(center_files):
             raise ValueError(f"Different number of images and centers found! {len(image_files)} images, {len(center_files)} centers.")
 
-        images = [normalizer(io.imread(img)) for img in image_files]
-        images = [np.repeat(img[...,None], 3, axis=-1) for img in images]
+        images = [normalizer(io.imread(img)).mean(axis=-1) for img in tqdm(image_files, desc="Loading images")]
         
-        centers = [utils.read_coords_csv(center).astype(np.int32) for center in center_files]
+        centers = [utils.read_coords_csv(center).astype(np.int32) for center in tqdm(center_files, desc='Loading centers')]
 
         return cls(
             images=images,
@@ -113,6 +117,8 @@ class SpotsDataset(Dataset):
         heatmap_lv0 = utils.points_to_prob( 
             centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
         )
+
+        img = img + torch.from_numpy(heatmap_lv0.copy()).unsqueeze(0)
 
         # Build target at different resolution levels
         heatmaps = [

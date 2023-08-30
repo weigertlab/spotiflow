@@ -79,8 +79,14 @@ class Spotipy(nn.Module):
         res = self._post(res)
         return tuple(res)
 
-    def fit(self, train_ds, val_ds, train_config: SpotipyTrainingConfig, accelerator: str, logger: Optional[pl.loggers.Logger]=None, devices: Optional[int]=1,
-              callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], deterministic: Optional[bool]=True, benchmark: Optional[bool]=False):
+    def fit(self, train_ds, val_ds, train_config: SpotipyTrainingConfig, 
+            accelerator: str, 
+            logger: Optional[pl.loggers.Logger]=None, 
+            devices: Optional[int]=1,
+            num_workers: Optional[int]=0,
+            callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], 
+            deterministic: Optional[bool]=True, 
+            benchmark: Optional[bool]=False):
         """Train the model.
 
         """
@@ -94,7 +100,7 @@ class Spotipy(nn.Module):
             max_epochs=train_config.num_epochs,
         )
         training_wrapper = SpotipyTrainingWrapper(self, train_config)
-        train_dl, val_dl = training_wrapper.generate_dataloaders(train_ds, val_ds)
+        train_dl, val_dl = training_wrapper.generate_dataloaders(train_ds, val_ds, num_workers=num_workers)
         trainer.fit(training_wrapper, train_dl, val_dl)
         log.info("Training finished.")
 

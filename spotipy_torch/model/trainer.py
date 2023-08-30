@@ -30,6 +30,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._loss_funcs = self._loss_switcher()
 
         self._valid_inputs = []
+        self._valid_targets = []
         self._valid_outputs = []
         
 
@@ -85,6 +86,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         
         high_lv_pred = self.model._sigmoid(out[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
         self._valid_inputs.append(img[0].detach().cpu().numpy())
+        self._valid_targets.append(batch["heatmap_lv0"][0,0].detach().cpu().numpy())
         self._valid_outputs.append(high_lv_pred)
 
         self.log_dict({
@@ -108,10 +110,14 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                         "input", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
                     )
                 self.logger.experiment.add_image(
+                        "target", self._valid_targets[i], self.current_epoch, dataformats="HW"
+                    )
+                self.logger.experiment.add_image(
                         "output", self._valid_outputs[i], self.current_epoch, dataformats="HW"
                     )
         
         self._valid_inputs.clear()
+        self._valid_targets.clear()
         self._valid_outputs.clear()
 
     def configure_optimizers(self) -> dict:
