@@ -54,7 +54,7 @@ class Spotipy(nn.Module):
         self._prob_thresh = 0.5
     
     @classmethod
-    def from_pretrained(cls, pretrained_path: str, inference_mode=True) -> None:
+    def from_pretrained(cls, pretrained_path: str, inference_mode=True, map_location:str = 'cuda') -> None:
         """Load a pretrained model.
 
         Args:
@@ -62,7 +62,7 @@ class Spotipy(nn.Module):
         """
         model_config = SpotipyModelConfig.from_config_file(Path(pretrained_path)/"config.yaml")
         model = cls(model_config)
-        model.load(pretrained_path, inference_mode=inference_mode)
+        model.load(pretrained_path, inference_mode=inference_mode, map_location=map_location)
         return model
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
@@ -143,7 +143,7 @@ class Spotipy(nn.Module):
             clean_dict[k] = v
         return clean_dict
 
-    def load(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True) -> None:
+    def load(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True, map_location:str='cuda') -> None:
         thresholds_path = Path(path)/"thresholds.yaml"
         if thresholds_path.is_file():
             with open(thresholds_path, "r") as fb:
@@ -157,7 +157,7 @@ class Spotipy(nn.Module):
         if not states_path.exists():
             states_path = Path(path)/f"{which}.ckpt"
 
-        checkpoint = torch.load(states_path)
+        checkpoint = torch.load(states_path, map_location=map_location)
         model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
         self.load_state_dict(model_state)
 
