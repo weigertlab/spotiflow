@@ -140,5 +140,5 @@ class SpotipyTrainingConfig(SpotipyConfig):
         assert isinstance(self.lr, float) and self.lr > 0, "lr must be a floating point number greater than 0."
         assert self.optimizer in {"adamw"}, "optimizer must be 'adamw'"
         assert isinstance(self.batch_size, int) and self.batch_size > 0, "batch_size must be an integer greater than 0."
-        assert isinstance(self.num_epochs, int) and self.num_epochs > 0, "num_epochs must be an integer greater than 0."
+        assert isinstance(self.num_epochs, int) and self.num_epochs >= 0, "num_epochs must be a positive integer or 0"
 

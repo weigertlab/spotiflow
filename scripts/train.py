@@ -207,16 +207,17 @@ if __name__ == "__main__":
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
 
-    # Train model
-    model.fit(
-        train_ds,
-        val_ds,
-        training_config,
-        logger=logger,
-        accelerator=accelerator,
-        devices=1 if accelerator != "cpu" else "auto",
-        callbacks=callbacks,
-        num_workers=args.num_workers,
-        deterministic=True,
-        benchmark=False,
-    )
+    if args.num_epochs >0:
+        # Train model
+        model.fit(
+            train_ds,
+            val_ds,
+            training_config,
+            logger=logger,
+            accelerator=accelerator,
+            devices=1 if accelerator != "cpu" else "auto",
+            callbacks=callbacks,
+            num_workers=args.num_workers,
+            deterministic=True,
+            benchmark=False,
+        )

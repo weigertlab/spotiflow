@@ -75,7 +75,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         out = self(imgs)
         loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self.model._levels), self._loss_funcs)))
         self.log_dict({
-            "train_loss": np.float32(loss),
+            "train_loss": loss,
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
@@ -93,7 +93,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_outputs.append(high_lv_pred)
 
         self.log_dict({
-            "val_loss": np.float32(loss),
+            "val_loss": loss,
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
