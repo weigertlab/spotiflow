@@ -29,7 +29,9 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         self._loss_funcs = self._loss_switcher()
 
+        self._valid_inputs = []
         self._valid_outputs = []
+        
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         return self.model(x)
@@ -82,6 +84,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self.model._levels), self._loss_funcs)))
         
         high_lv_pred = self.model._sigmoid(out[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
+        self._valid_inputs.append(img[0].detach().cpu().numpy())
         self._valid_outputs.append(high_lv_pred)
 
         self.log_dict({
@@ -99,6 +102,16 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             "val_acc": val_acc,
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         
+        if self.logger is not None:
+            for i in range(min(3, len(self._valid_inputs))):
+                self.logger.experiment.add_image(
+                        "input", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
+                    )
+                self.logger.experiment.add_image(
+                        "output", self._valid_outputs[i], self.current_epoch, dataformats="HW"
+                    )
+        
+        self._valid_inputs.clear()
         self._valid_outputs.clear()
 
     def configure_optimizers(self) -> dict:
@@ -123,19 +136,19 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             },
         }
 
-    def generate_dataloaders(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset) -> torch.utils.data.DataLoader:
+    def generate_dataloaders(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, num_workers:int=0) -> torch.utils.data.DataLoader:
         train_dl = torch.utils.data.DataLoader(
             train_ds,
             batch_size=self.training_config.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=num_workers,
             pin_memory=True,
         )
         val_dl = torch.utils.data.DataLoader(
             val_ds,
             batch_size=1,
             shuffle=False,
-            num_workers=0,
+            num_workers=num_workers,
             pin_memory=True,
         )
         return train_dl, val_dl

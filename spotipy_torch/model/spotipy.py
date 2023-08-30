@@ -192,6 +192,14 @@ class Spotipy(nn.Module):
 
             x = zoom(img, (scale, scale), order=1)
 
+
+
+        div_by = tuple(self.config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim))
+        pad_shape = tuple(int(d*np.ceil(s/d)) for s,d in zip(x.shape, div_by))
+        if verbose: print(f"Padding to shape {pad_shape}")
+        x, padding = utils.center_pad(x, pad_shape, mode="reflect")
+        
+        
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
@@ -202,6 +210,9 @@ class Spotipy(nn.Module):
                 y = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
             if scale is not None and scale != 1:
                 y = zoom(y, (1./scale, 1./scale), order=1)
+            
+            y = utils.center_crop(y, img.shape[:2])
+                            
             pts = utils.prob_to_points(y, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
             probs = y[tuple(pts.astype(int).T)].tolist()
         else: # Predict with tiling
@@ -211,13 +222,13 @@ class Spotipy(nn.Module):
             iter_tiles = tile_iterator(
                 x,
                 n_tiles=n_tiles,
-                block_sizes=tuple(self.model_config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim)),
+                block_sizes=div_by,
                 n_block_overlaps=(4,4),
             )
             if verbose:
                 iter_tiles = tqdm(iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles))
             for tile, s_src, s_dst in iter_tiles:
-                assert all(s%t == 0 for s, t in zip(tile.shape, n_tiles)), "Currently, tile shape must be divisible by n_tiles"
+                #assert all(s%t == 0 for s, t in zip(tile.shape, n_tiles)), "Currently, tile shape must be divisible by n_tiles"
                 if normalizer is not None and callable(normalizer):
                     tile = normalizer(tile)
                 with torch.inference_mode():
@@ -250,7 +261,8 @@ class Spotipy(nn.Module):
             pts = utils._filter_shape(points, img.shape, idxr_array=points)
 
         if verbose:
-            log.info(f"Found {len(pts)} spots.")
+            log.info(f"Found {len(pts)} spots")
+            
         details = SimpleNamespace(prob=probs, heatmap=y)
         return pts, details
 

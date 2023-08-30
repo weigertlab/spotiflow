@@ -3,11 +3,12 @@ from typing import Callable, Dict, Optional, Sequence, Union
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
+from skimage import io 
 import logging
 import numpy as np
 import sys
 import torch
-import tifffile 
+from itertools import chain 
 import pandas as pd
 
 from .. import utils
@@ -53,12 +54,13 @@ class SpotsDataset(Dataset):
                     augmenter: Union[Callable, None],
                     downsample_factors: Sequence[int] = (1,),
                     sigma: float = 1.,
+                    image_extensions : Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg"),
                     mode: str = "max",
                     normalizer: Callable = utils.normalize) -> None:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
         Args:
-            path (Union[Path, str]): Path to folder containing images and centers.
+            path (Union[Path, str]): Path to folder containing images (with given extensions) and centers.
             augmenter (Callable): Augmenter function.
             downsample_factors (Sequence[int], optional): Downsample factors. Defaults to (1,).
             sigma (float, optional): Sigma of Gaussian kernel to generate heatmap. Defaults to 1.
@@ -69,11 +71,16 @@ class SpotsDataset(Dataset):
             path = Path(path)
         image_files = sorted(path.glob("*.tif"))
         center_files = sorted(path.glob("*.csv"))
-        image_files = sorted([str(path/f) for f in path.iterdir() if f.suffix in {".tif", ".tiff"}])
+        
+        image_files = sorted(tuple(chain(*tuple(path.glob(f'*.{ext}') for ext in image_extensions))))
         center_files = sorted([str(path/f) for f in path.iterdir() if f.suffix == ".csv"])
+        
+        if not len(image_files) == len(center_files):
+            raise ValueError(f"Different number of images and centers found! {len(image_files)} images, {len(center_files)} centers.")
 
-
-        images = [normalizer(tifffile.imread(img)) for img in image_files]
+        images = [normalizer(io.imread(img)) for img in image_files]
+        images = [np.repeat(img[...,None], 3, axis=-1) for img in images]
+        
         centers = [utils.read_coords_csv(center).astype(np.int32) for center in center_files]
 
         return cls(
@@ -94,11 +101,17 @@ class SpotsDataset(Dataset):
         img = torch.from_numpy(img.copy()).unsqueeze(0) # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0) # Add B dimension
 
+        # rgb images should be in channel last format
+        if img.ndim==4:
+            img = img.permute(0, 3, 1, 2)
+        else: 
+            img = img.unsqueeze(1)
+            
         img, centers = self.augmenter(img, centers)
         img, centers = img.squeeze(0), centers.squeeze(0) # Remove B dimension
 
         heatmap_lv0 = utils.points_to_prob( 
-            centers.numpy(), img.shape, mode=self._mode, sigma=self._sigma
+            centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
         )
 
         # Build target at different resolution levels
@@ -108,7 +121,7 @@ class SpotsDataset(Dataset):
         ]
 
         # Cast to tensor and add channel dimension
-        ret_obj = {"img": img.unsqueeze(0)}
+        ret_obj = {"img": img}
         ret_obj.update(
             {
                 f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy()).unsqueeze(0)

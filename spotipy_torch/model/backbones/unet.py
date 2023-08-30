@@ -35,6 +35,7 @@ class UNetBackbone(nn.Module):
         upsampling_mode: str="nearest"):
 
         super().__init__()
+        
         self.levels = len(downsample_factors)+1
         self.n_convs_per_level = len(kernel_sizes)
 

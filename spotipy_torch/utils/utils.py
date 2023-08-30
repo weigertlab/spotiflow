@@ -355,24 +355,3 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
     df.to_csv(fname, index=False)
     return
 
-def get_run_name(namespace: SimpleNamespace):
-    name = f"{Path(namespace.data_dir).stem}"
-    name += f"_{namespace.backbone}"
-    name += f"_lvs{int(namespace.levels)}"
-    name += f"_fmaps{int(namespace.initial_fmaps)}"
-    name += f"_{namespace.mode}"
-    name += f"_convperlv{int(namespace.convs_per_level)}"
-    name += f"_loss{namespace.loss}"
-    name += f"_epochs{int(namespace.num_epochs)}"
-    name += f"_lr{namespace.lr}"
-    name += f"_bsize{int(namespace.batch_size)}"
-    name += f"_ksize{int(namespace.kernel_size)}"
-    name += f"_sigma{int(namespace.sigma)}"
-    name += f"_crop{int(namespace.crop_size)}"
-    name += f"_posweight{int(namespace.pos_weight)}"
-    name += f"_seed{int(namespace.seed)}"
-    name += "_tormenter" # !
-    name += "_skipbgremover" if namespace.skip_bg_remover else ""
-    name += "_dry_run" if namespace.dry_run else ""
-    name = name.replace(".", "") # Remove dots to avoid confusion with file extensions
-    return name
