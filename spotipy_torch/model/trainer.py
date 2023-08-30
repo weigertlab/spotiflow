@@ -204,7 +204,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
         if trainer.is_global_zero:
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=3,
+                cutoff_distance=2*pl_module.training_config.sigma+1,
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
