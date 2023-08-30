@@ -74,8 +74,8 @@ class SpotsDataset(Dataset):
         center_files = sorted(path.glob("*.csv"))
         
         image_files = sorted(tuple(chain(*tuple(path.glob(f'*.{ext}') for ext in image_extensions))))
-        center_files = sorted([str(path/f) for f in path.iterdir() if f.suffix == ".csv"])
-
+        center_files = sorted(path.glob('*.csv'))
+        
         if max_files is not None:
             image_files = image_files[:max_files]
             center_files = center_files[:max_files]
@@ -86,7 +86,7 @@ class SpotsDataset(Dataset):
         images = [normalizer(io.imread(img)) for img in tqdm(image_files, desc="Loading images")]
         
         centers = [utils.read_coords_csv(center).astype(np.int32) for center in tqdm(center_files, desc='Loading centers')]
-
+        
         return cls(
             images=images,
             centers=centers,
