@@ -97,43 +97,32 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
-        valid_outs = self._valid_outputs
-        valid_tgts = self.trainer.val_dataloaders.dataset.centers
-        val_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in valid_outs]
-        stats = utils.points_matching_dataset(valid_tgts, val_pred_centers, cutoff_distance=3, by_image=True)
+        valid_tgt_centers = [utils.prob_to_points(t, exclude_border=False, min_distance=1) for t in self._valid_targets]
+        valid_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in self._valid_outputs]
+        stats = utils.points_matching_dataset(valid_tgt_centers, valid_pred_centers, cutoff_distance=3, by_image=True)
         val_f1, val_acc = stats.f1, stats.accuracy
         self.log_dict({
             "val_f1": val_f1,
             "val_acc": val_acc,
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         
-        if self.logger is not None:
-            for i in range(min(3, len(self._valid_inputs))):
-                self.logger.experiment.add_image(
-                        "input", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
-                    )
-                self.logger.experiment.add_image(
-                        "target", self._valid_targets[i], self.current_epoch, dataformats="HW"
-                    )
-                self.logger.experiment.add_image(
-                        "output", self._valid_outputs[i], self.current_epoch, dataformats="HW"
-                    )
-        
+        if not self.trainer.sanity_checking:
+            self.log_images()
         self._valid_inputs.clear()
         self._valid_targets.clear()
         self._valid_outputs.clear()
 
-    def log_images(self, valid_outs):
-        n_images_to_log = min(3, len(self.trainer.val_dataloaders.dataset), len(valid_outs))
+    def log_images(self):
+        n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger): # Wandb logger
             self.logger.log_image(
-                key="val_img", images=[self.trainer.val_dataloaders.dataset[idx]["img"][0].unsqueeze(-1).numpy() for idx in range(n_images_to_log)], step=self.global_step,
+                key="input", images=[v.transpose(1,2,0) for v in self._valid_inputs[:n_images_to_log]], step=self.global_step,
             )
             self.logger.log_image(
-                key="val_tgt", images=[cm.magma(self.trainer.val_dataloaders.dataset[idx]["heatmap_lv0"][0].numpy()) for idx in range(n_images_to_log)], step=self.global_step,
+                key="target", images=[cm.magma(v) for v in self._valid_targets[:n_images_to_log]], step=self.global_step,
             )
             self.logger.log_image(
-                key="val_pred", images=[cm.magma(valid_outs[idx]) for idx in range(n_images_to_log)], step=self.global_step,
+                key="output", images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]], step=self.global_step,
             )
 
         elif isinstance(self.logger, pl.loggers.TensorBoardLogger): # TensorBoard logger

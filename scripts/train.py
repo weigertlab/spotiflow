@@ -97,7 +97,7 @@ if __name__ == "__main__":
     augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
 
     augmenter_val = Pipeline()
-    augmenter_val.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size)))
+    augmenter_val.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size), smart=args.smart_crop))
     
 
 
