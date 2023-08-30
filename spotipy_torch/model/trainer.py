@@ -75,7 +75,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         out = self(imgs)
         loss = sum(tuple(loss_f(out[lv], heatmap_lvs[lv])/4**lv for lv, loss_f in zip(range(self.model._levels), self._loss_funcs)))
         self.log_dict({
-            "train_loss": loss,
+            "train_loss": np.float32(loss),
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
@@ -93,17 +93,17 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_outputs.append(high_lv_pred)
 
         self.log_dict({
-            "val_loss": loss,
+            "val_loss": np.float32(loss),
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
         valid_tgt_centers = [utils.prob_to_points(t, exclude_border=False, min_distance=1) for t in self._valid_targets]
         valid_pred_centers = [utils.prob_to_points(p, exclude_border=False, min_distance=1) for p in self._valid_outputs]
-        stats = utils.points_matching_dataset(valid_tgt_centers, valid_pred_centers, cutoff_distance=3, by_image=True)
+        stats = utils.points_matching_dataset(valid_tgt_centers, valid_pred_centers, cutoff_distance=2*self.training_config.sigma+1, by_image=True)
         val_f1, val_acc = stats.f1, stats.accuracy
         self.log_dict({
-            "val_f1": val_f1,
-            "val_acc": val_acc,
+            "val_f1": np.float32(val_f1),
+            "val_acc": np.float32(val_acc),
         }, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         
         if not self.trainer.sanity_checking:
