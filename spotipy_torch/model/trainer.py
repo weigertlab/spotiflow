@@ -113,7 +113,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_outputs.clear()
 
     def log_images(self):
-        n_images_to_log = min(3, len(self._valid_inputs))
+        n_images_to_log = min(2, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger): # Wandb logger
             self.logger.log_image(
                 key="input", images=[v.transpose(1,2,0) for v in self._valid_inputs[:n_images_to_log]], step=self.current_epoch,
@@ -204,7 +204,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
         if trainer.is_global_zero:
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=2*pl_module.training_config.sigma+1,
+                cutoff_distance=2*self._train_config.sigma+1,
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
