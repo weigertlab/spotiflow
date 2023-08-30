@@ -187,23 +187,23 @@ class Spotipy(nn.Module):
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
         """
         
-        assert img.ndim == 2, "Image must be 2D (Y,X)"
+        assert img.ndim in (2,3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
         device = torch.device(device)
-        # Add B and C dimensions
         if verbose:
             log.info(f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}")
 
+        if img.ndim==2: 
+            img = img[...,None]
+            
         if scale is None or scale == 1:
             x = img
         else:
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
+            factor = (scale, scale, 1)
+            x = zoom(img, factor, order=1)
 
-            x = zoom(img, (scale, scale), order=1)
-
-
-
-        div_by = tuple(self.config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim))
+        div_by = tuple(self.config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim-1)) + (1,)
         pad_shape = tuple(int(d*np.ceil(s/d)) for s,d in zip(x.shape, div_by))
         if verbose: print(f"Padding to shape {pad_shape}")
         x, padding = utils.center_pad(x, pad_shape, mode="reflect")
@@ -215,7 +215,8 @@ class Spotipy(nn.Module):
             if normalizer is not None and callable(normalizer):
                 x = normalizer(x)
             with torch.inference_mode():
-                img_t = torch.from_numpy(x).to(device).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                img_t = torch.from_numpy(x).to(device).unsqueeze(0) # Add B and C dimensions
+                img_t = img_t.permute(0,3,1,2)
                 y = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
             if scale is not None and scale != 1:
                 y = zoom(y, (1./scale, 1./scale), order=1)
@@ -241,7 +242,8 @@ class Spotipy(nn.Module):
                 if normalizer is not None and callable(normalizer):
                     tile = normalizer(tile)
                 with torch.inference_mode():
-                    img_t = torch.from_numpy(tile).to(device).unsqueeze(0).unsqueeze(0) # Add B and C dimensions
+                    img_t = torch.from_numpy(tile).to(device).unsqueeze(0) # Add B and C dimensions
+                    img_t = img_t.permute(0,3,1,2)
                     y_tile = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
                     p = utils.prob_to_points(y_tile, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
                     # remove global offset
@@ -266,8 +268,8 @@ class Spotipy(nn.Module):
             if scale is not None and scale != 1:
                 points = np.round((points.astype(float) / scale)).astype(int)
             
-            probs = utils._filter_shape(probs, img.shape, idxr_array=points)
-            pts = utils._filter_shape(points, img.shape, idxr_array=points)
+            probs = utils._filter_shape(probs, img.shape[:2], idxr_array=points)
+            pts = utils._filter_shape(points, img.shape[:2], idxr_array=points)
 
         if verbose:
             log.info(f"Found {len(pts)} spots")
