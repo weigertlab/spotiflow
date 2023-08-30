@@ -118,8 +118,6 @@ class SpotsDataset(Dataset):
             centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
         )
 
-        img = img + torch.from_numpy(heatmap_lv0.copy()).unsqueeze(0)
-
         # Build target at different resolution levels
         heatmaps = [
             utils.multiscale_decimate(heatmap_lv0, ds)
