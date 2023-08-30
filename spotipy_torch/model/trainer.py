@@ -116,25 +116,25 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger): # Wandb logger
             self.logger.log_image(
-                key="input", images=[v.transpose(1,2,0) for v in self._valid_inputs[:n_images_to_log]], step=self.global_step,
+                key="input", images=[v.transpose(1,2,0) for v in self._valid_inputs[:n_images_to_log]], step=self.current_epoch,
             )
             self.logger.log_image(
-                key="target", images=[cm.magma(v) for v in self._valid_targets[:n_images_to_log]], step=self.global_step,
+                key="target", images=[cm.magma(v) for v in self._valid_targets[:n_images_to_log]], step=self.current_epoch,
             )
             self.logger.log_image(
-                key="output", images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]], step=self.global_step,
+                key="output", images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]], step=self.current_epoch,
             )
 
         elif isinstance(self.logger, pl.loggers.TensorBoardLogger): # TensorBoard logger
             for i in range(n_images_to_log):
                 self.logger.experiment.add_image(
-                        "input", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
+                        f"images/input/{i}", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
                     )
                 self.logger.experiment.add_image(
-                        "target", self._valid_targets[i], self.current_epoch, dataformats="HW"
+                        f"images/target/{i}", cm.magma(self._valid_targets[i]), self.current_epoch, dataformats="HWC"
                     )
                 self.logger.experiment.add_image(
-                        "output", self._valid_outputs[i], self.current_epoch, dataformats="HW"
+                        f"images/output/{i}", cm.magma(self._valid_outputs[i]), self.current_epoch, dataformats="HWC"
                     )
         return
 
