@@ -124,36 +124,29 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_outputs.clear()
 
     def log_images(self, valid_outs):
-        if isinstance(self.logger, pl.loggers.WandbLogger): # log images to wandb
-            n_images = min(2, len(self.trainer.val_dataloaders.dataset))
+        n_images_to_log = min(3, len(self.trainer.val_dataloaders.dataset), len(valid_outs))
+        if isinstance(self.logger, pl.loggers.WandbLogger): # Wandb logger
             self.logger.log_image(
-                key="val_img", images=[self.trainer.val_dataloaders.dataset[idx]["img"][0].unsqueeze(-1).numpy() for idx in range(n_images)],
+                key="val_img", images=[self.trainer.val_dataloaders.dataset[idx]["img"][0].unsqueeze(-1).numpy() for idx in range(n_images_to_log)], step=self.global_step,
             )
             self.logger.log_image(
-                key="val_tgt", images=[cm.magma(self.trainer.val_dataloaders.dataset[idx]["heatmap_lv0"][0].numpy()) for idx in range(n_images)],
+                key="val_tgt", images=[cm.magma(self.trainer.val_dataloaders.dataset[idx]["heatmap_lv0"][0].numpy()) for idx in range(n_images_to_log)], step=self.global_step,
             )
             self.logger.log_image(
-                key="val_pred", images=[cm.magma(valid_outs[idx]) for idx in range(n_images)],
+                key="val_pred", images=[cm.magma(valid_outs[idx]) for idx in range(n_images_to_log)], step=self.global_step,
             )
 
-        elif isinstance(self.logger, pl.loggers.TensorBoardLogger):
-            n_images = min(2, len(self.trainer.val_dataloaders.dataset))
-            for img_idx in range(n_images):
+        elif isinstance(self.logger, pl.loggers.TensorBoardLogger): # TensorBoard logger
+            for i in range(n_images_to_log):
                 self.logger.experiment.add_image(
-                    f"val/img/{img_idx}",
-                    self.trainer.val_dataloaders.dataset[img_idx]["img"].numpy(),
-                    self.global_step,
-                )
+                        "input", self._valid_inputs[i], self.current_epoch, dataformats="CHW"
+                    )
                 self.logger.experiment.add_image(
-                    f"val/tgt/{img_idx}",
-                    cm.magma(self.trainer.val_dataloaders.dataset[img_idx]["heatmap_lv0"][0].numpy()).transpose(2,0,1),
-                    self.global_step,
-                )
+                        "target", self._valid_targets[i], self.current_epoch, dataformats="HW"
+                    )
                 self.logger.experiment.add_image(
-                    f"val/pred/{img_idx}",
-                    cm.magma(valid_outs[img_idx]).transpose(2,0,1),
-                    self.global_step,
-                )
+                        "output", self._valid_outputs[i], self.current_epoch, dataformats="HW"
+                    )
         return
 
     def configure_optimizers(self) -> dict:

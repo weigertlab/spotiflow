@@ -15,6 +15,7 @@ parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/telome
 parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotipy_torch_v2")
 parser.add_argument("--which", type=str, default="best")
 parser.add_argument("--batch-size", type=int, default=1)
+parser.add_argument("--threshold-range", nargs="+", default=(0.3, 0.7))
 args = parser.parse_args()
 
 
@@ -40,7 +41,8 @@ val_ds = SpotsDataset.from_folder(Path(args.data_dir)/"val",
 
 # Train model
 print("Optimizing threshold...")
-model.optimize_threshold(val_ds, min_distance=1, batch_size=args.batch_size, device=device)
+threshold_range = tuple(float(t) for t in args.threshold_range)
+model.optimize_threshold(val_ds, min_distance=1, batch_size=args.batch_size, device=device, threshold_range=threshold_range)
 
 print("Re-saving model config...")
-model.save(args.model_dir, which=args.which, only_config=True)
+model.save(args.model_dir, which=args.which, update_thresholds=True)

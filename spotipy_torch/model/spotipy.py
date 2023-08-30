@@ -294,7 +294,7 @@ class Spotipy(nn.Module):
         p = [utils.prob_to_points(pred, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance) for pred in preds]
         return p
 
-    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, niter=11, batch_size=2, device=torch.device("cpu")):
+    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, threshold_range: Tuple[float, float]=(.3, .7), niter=11, batch_size=2, device=torch.device("cpu")):
         val_preds = []
         val_dataloader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
         self.eval()
@@ -320,8 +320,8 @@ class Spotipy(nn.Module):
             i = np.argmax(ys)
             i1, i2 = max(0,i-1), min(i+1, len(thr)-1)
             return thr[i], (thr[i1],thr[i2]), ys[i]
-        
-        _, t_bounds, _ = _grid_search(0.3, 0.7)
+
+        _, t_bounds, _ = _grid_search(*threshold_range)
         best_thr, _, best_f1 = _grid_search(*t_bounds)
         print(f"Best threshold: {best_thr:.3f}")
         print(f"Best F1-score: {best_f1:.3f}")
