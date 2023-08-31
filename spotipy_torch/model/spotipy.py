@@ -253,14 +253,14 @@ class Spotipy(nn.Module):
             pts = utils.prob_to_points(y, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
             probs = y[tuple(pts.astype(int).T)].tolist()
         else: # Predict with tiling
-            y = np.empty(x.shape, np.float32)
+            y = np.empty(x.shape[:2], np.float32)
             points = []
             probs = []
             iter_tiles = tile_iterator(
                 x,
-                n_tiles=n_tiles,
+                n_tiles=n_tiles+(1,) if x.ndim == 3 and len(n_tiles) == 2 else n_tiles,
                 block_sizes=div_by,
-                n_block_overlaps=(4,4),
+                n_block_overlaps=(4,4) if x.ndim == 2 else (4,4,1),
             )
             if verbose:
                 iter_tiles = tqdm(iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles))
