@@ -212,7 +212,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             },
         }
 
-    def generate_dataloaders(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, num_train_samples:int=None, num_workers:int=0) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]]:
+    def generate_dataloaders(self, train_ds: torch.utils.data.Dataset, val_ds: torch.utils.data.Dataset, num_train_samples:int=None, num_workers:int=0) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
         """Generate the training and validation dataloaders according to the training configuration.
 
         Args:
