@@ -423,7 +423,7 @@ class Spotipy(nn.Module):
             for val_batch in val_dataloader:
                 imgs = val_batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
+                high_lv_preds = self._sigmoid(out['heatmap'][0].squeeze(1)).detach().cpu().numpy()
                 for batch_elem in range(high_lv_preds.shape[0]):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
