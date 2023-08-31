@@ -59,7 +59,7 @@ class Spotipy(nn.Module):
         self._prob_thresh = 0.5
     
     @classmethod
-    def from_pretrained(cls, pretrained_path: str, inference_mode=True, map_location:str = "cuda") -> None:
+    def from_pretrained(cls, pretrained_path: str, inference_mode=True, which: str="best", map_location: str="cuda") -> None:
         """Load a pretrained model.
 
         Args:
@@ -69,7 +69,7 @@ class Spotipy(nn.Module):
         """
         model_config = SpotipyModelConfig.from_config_file(Path(pretrained_path)/"config.yaml")
         model = cls(model_config)
-        model.load(pretrained_path, inference_mode=inference_mode, map_location=map_location)
+        model.load(pretrained_path, which=which, inference_mode=inference_mode, map_location=map_location)
         return model
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
