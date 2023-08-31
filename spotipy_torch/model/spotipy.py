@@ -28,10 +28,15 @@ log = logging.getLogger(__name__)
 
 class Spotipy(nn.Module):
     """Supervised spot detector using a multi-stage neural network as a backbone for 
-       feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
-       module to allow loss computation and optimization at different resolution levels.
+       feature extraction followed by resolution-dependent post-processing modules
+       to allow loss computation and optimization at different resolution levels.
     """
-    def __init__(self, config: SpotipyModelConfig):
+    def __init__(self, config: SpotipyModelConfig) -> None:
+        """Initialize the model.
+
+        Args:
+            config (SpotipyModelConfig): model configuration object
+        """
         super().__init__()
         self.config = config
         self._bg_remover = BackgroundRemover() if config.background_remover else nn.Identity()
@@ -54,11 +59,13 @@ class Spotipy(nn.Module):
         self._prob_thresh = 0.5
     
     @classmethod
-    def from_pretrained(cls, pretrained_path: str, inference_mode=True, map_location:str = 'cuda') -> None:
+    def from_pretrained(cls, pretrained_path: str, inference_mode=True, map_location:str = "cuda") -> None:
         """Load a pretrained model.
 
         Args:
             pretrained_path (str): path to the pretrained model
+            inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
+            map_location (str, optional): device string to load the model to. Defaults to 'cuda'.
         """
         model_config = SpotipyModelConfig.from_config_file(Path(pretrained_path)/"config.yaml")
         model = cls(model_config)
@@ -72,7 +79,7 @@ class Spotipy(nn.Module):
             x (torch.Tensor): input image
 
         Returns:
-            Tuple[torch.Tensor]: iterable of results at different resolutions. Highest resolution first.
+            Tuple[torch.Tensor]: iterable of results at different resolutions (highest resolution first, lowest last).
         """
         res = self._bg_remover(x)
         res = self._backbone(res)
@@ -89,6 +96,17 @@ class Spotipy(nn.Module):
             benchmark: Optional[bool]=False):
         """Train the model.
 
+        Args:
+            train_ds (torch.utils.data.Dataset): training dataset
+            val_ds (torch.utils.data.Dataset): validation dataset
+            train_config (SpotipyTrainingConfig): training configuration
+            accelerator (str): accelerator to use. Can be "cpu", "cuda", "mps" or "auto".
+            logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to None.
+            devices (Optional[int], optional): number of accelerating devices to use. Defaults to 1.
+            num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0.
+            callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
+            deterministic (Optional[bool], optional): whether to use deterministic training. Set to True for deterministic behaviour at a cost of performance. Defaults to True.
+            benchmark (Optional[bool], optional): whether to use benchmarking. Set to False for deterministic behaviour at a cost of performance. Defaults to False.
         """
         trainer = pl.Trainer(
             accelerator=accelerator,
@@ -144,6 +162,14 @@ class Spotipy(nn.Module):
         return clean_dict
 
     def load(self, path: str, which: Literal["best", "last"]="best", inference_mode: bool=True, map_location:str='cuda') -> None:
+        """Load a model from disk.
+
+        Args:
+            path (str): folder to load the model from
+            which (Literal['best', 'last'], optional): which checkpoint to load. Defaults to "best".
+            inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
+            map_location (str, optional): device string to load the model to. Defaults to 'cuda'.
+        """
         thresholds_path = Path(path)/"thresholds.yaml"
         if thresholds_path.is_file():
             with open(thresholds_path, "r") as fb:
@@ -169,7 +195,7 @@ class Spotipy(nn.Module):
 
     def predict(self, img: np.ndarray, prob_thresh: Optional[float]=None,
                 n_tiles: Tuple[int, int]=(1,1), min_distance: int=1, exclude_border: bool=False,
-                scale: Optional[int]=None, peak_mode: Literal["skimage", "fast"]="skimage", normalizer: Optional[callable]=None, verbose: bool=True, device: str="cpu") -> Tuple[np.ndarray, SimpleNamespace]:
+                scale: Optional[int]=None, peak_mode: Literal["skimage", "fast"]="skimage", normalizer: Optional[callable]=None, verbose: bool=True, device: str="cuda") -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
         
         Args:
@@ -182,6 +208,7 @@ class Spotipy(nn.Module):
             peak_mode (str, optional): Peak detection mode. Currently unused. Defaults to "skimage".
             normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
+            device (str, optional): Device to use for prediction. Defaults to "cuda".
         
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
@@ -278,6 +305,17 @@ class Spotipy(nn.Module):
         return pts, details
 
     def predict_dataset(self, ds: torch.utils.data.Dataset, min_distance=1, exclude_border=False, batch_size=4, prob_thresh=None, return_heatmaps=False, device: str="cpu"):
+        """Predict spots from a torch dataset.
+
+        Args:
+            ds (torch.utils.data.Dataset): dataset to predict
+            min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.
+            exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
+            batch_size (int, optional): Batch size to use for prediction. Defaults to 4.
+            prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
+            return_heatmaps (bool, optional): Whether to return the heatmaps. Defaults to False.
+            device (str, optional): Device to use for prediction. Defaults to 'cpu'.
+        """
         preds = []
         dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
         device = torch.device(device)
@@ -296,7 +334,19 @@ class Spotipy(nn.Module):
         p = [utils.prob_to_points(pred, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance) for pred in preds]
         return p
 
-    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, threshold_range: Tuple[float, float]=(.3, .7), niter=11, batch_size=2, device=torch.device("cpu")):
+    def optimize_threshold(self, val_ds: torch.utils.data.Dataset, cutoff_distance=3, min_distance=2, exclude_border=False, threshold_range: Tuple[float, float]=(.3, .7), niter=11, batch_size=2, device=torch.device("cpu")) -> None:
+        """Optimize the probability threshold on an annotated dataset.
+
+        Args:
+            val_ds (torch.utils.data.Dataset): dataset to optimize on
+            cutoff_distance (int, optional): distance tolerance considered for points matching. Defaults to 3.
+            min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.. Defaults to 2.
+            exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
+            threshold_range (Tuple[float, float], optional): Range of thresholds to consider. Defaults to (.3, .7).
+            niter (int, optional): number of iterations for both coarse- and fine-grained search. Defaults to 11.
+            batch_size (int, optional): batch size to use. Defaults to 2.
+            device (_type_, optional): computing device. Defaults to torch.device("cpu").
+        """
         val_preds = []
         val_dataloader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
         self.eval()
