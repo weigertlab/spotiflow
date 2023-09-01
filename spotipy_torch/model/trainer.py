@@ -189,24 +189,24 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 images=[
                     v.transpose(1, 2, 0) for v in self._valid_inputs[:n_images_to_log]
                 ],
-                step=self.current_epoch,
+                step=self.global_step,
             )
             self.logger.log_image(
                 key="target",
                 images=[cm.magma(v) for v in self._valid_targets[:n_images_to_log]],
-                step=self.current_epoch,
+                step=self.global_step,
             )
             self.logger.log_image(
                 key="output",
                 images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]],
-                step=self.current_epoch,
+                step=self.global_step,
             )
             self.logger.log_image(
                 key="flow",
                 images=[
                     0.5 * (1 + v.transpose(1,2,0)) for v in self._valid_flows[:n_images_to_log]
                 ],
-                step=self.current_epoch,
+                step=self.global_step,
             )
 
         elif isinstance(
