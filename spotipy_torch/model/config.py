@@ -68,14 +68,15 @@ class SpotipyConfig(argparse.Namespace, abc.ABC):
 
 class SpotipyModelConfig(SpotipyConfig):
     def __init__(self, backbone: Literal["resnet", "unet"]="unet", in_channels: int=1, out_channels: int=1, initial_fmaps: int=32,
-                 n_convs_per_level: int=3, downsample_factor: int=2, kernel_size: int=3,
-                 padding: Union[int, str]='same', levels: int=4, mode: Literal["direct", "fpn"]="direct", background_remover: bool=True,
+                 fmap_inc_factor: int=2, n_convs_per_level: int=3, downsample_factor: int=2, kernel_size: int=3,
+                 padding: Union[int, str]="same", levels: int=4, mode: Literal["direct", "fpn"]="direct", background_remover: bool=True,
                  batch_norm: bool=False, downsample_factors: Optional[Tuple[Tuple[int, int]]]=None, kernel_sizes: Optional[Tuple[Tuple[int, int]]]=None,
                  dropout: float=0., **kwargs):
         self.backbone = backbone
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.initial_fmaps = initial_fmaps
+        self.fmap_inc_factor = fmap_inc_factor
         self.n_convs_per_level = n_convs_per_level
         if downsample_factors is None:
             self.downsample_factors = tuple((downsample_factor, downsample_factor) for _ in range(levels))
@@ -101,18 +102,19 @@ class SpotipyModelConfig(SpotipyConfig):
     
     def is_valid(self):
         assert self.backbone in {"resnet", "unet"}, "backbone must be either 'resnet' or 'unet'"
-        assert isinstance(self.in_channels, int) and self.in_channels > 0, "in_channels must be greater than 0"
-        assert isinstance(self.out_channels, int) and self.out_channels > 0, "out_channels must be greater than 0"
-        assert isinstance(self.initial_fmaps, int) and self.initial_fmaps > 0, "initial_fmaps must be greater than 0"
-        assert isinstance(self.n_convs_per_level, int) and self.n_convs_per_level > 0, "n_convs_per_level must be greater than 0"
+        assert isinstance(self.in_channels, int) and self.in_channels > 0, "in_channels must be an integer greater than 0"
+        assert isinstance(self.out_channels, int) and self.out_channels > 0, "out_channels must be an integer greater than 0"
+        assert isinstance(self.initial_fmaps, int) and self.initial_fmaps > 0, "initial_fmaps must be an integer greater than 0"
+        assert isinstance(self.fmap_inc_factor, int) and self.fmap_inc_factor > 0, "fmap_inc_factor must be an integer greater than 0"
+        assert isinstance(self.n_convs_per_level, int) and self.n_convs_per_level > 0, "n_convs_per_level must be an integer greater than 0"
         assert all(isinstance(factor, tuple) and len(factor) == 2 for factor in self.downsample_factors), "downsample_factors must be a tuple of tuples of length 2"
         assert all(isinstance(f, int) and f > 0 for factor in self.downsample_factors for f in factor), "downsample_factors must be a tuple of tuples of integers"
         assert len(self.kernel_sizes) == self.n_convs_per_level, "kernel_sizes must have length equal to n_convs_per_level"
         assert all(isinstance(ksize, tuple) and len(ksize) == 2 for ksize in self.kernel_sizes), "kernel_sizes must be a tuple of tuples of length 2"
         assert all(isinstance(k, int) and k > 0 for ksize in self.kernel_sizes for k in ksize), "kernel_sizes must be a tuple of tuples of integers"
-        assert isinstance(self.padding, int) or self.padding in {"same", "valid"}, "padding must be either 'same' or 'valid'"
-        assert isinstance(self.padding, str) or self.padding >= 0, "padding must be greater than or equal to 0"
-        assert self.levels > 0, "levels must be greater than 0"
+        assert isinstance(self.padding, int) or self.padding in {"same", "valid"}, "padding must be either an integer, 'same' or 'valid'"
+        assert isinstance(self.padding, str) or self.padding >= 0, "if padding is an integer, then it must be greater than or equal to 0"
+        assert isinstance(self.levels, int) and self.levels > 0, "levels must be an integer greater than 0"
         assert self.mode in {"direct", "fpn"}, "mode must be either 'direct' or 'fpn'"
         assert 0. <= self.dropout <= 1., "dropout must be between 0 and 1"
 
