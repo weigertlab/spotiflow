@@ -277,7 +277,7 @@ class Spotipy(nn.Module):
                 )  # Add B and C dimensions
                 img_t = img_t.permute(0, 3, 1, 2)
                 y = (
-                    self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0))
+                    self._sigmoid(self(img_t)["heatmaps"][0].squeeze(0).squeeze(0))
                     .detach()
                     .cpu()
                     .numpy()
