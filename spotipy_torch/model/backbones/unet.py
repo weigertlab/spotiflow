@@ -69,7 +69,7 @@ class UNetBackbone(nn.Module):
             ConvBlock(
                 in_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 2) if n == 0 else initial_fmaps * fmap_inc_factor ** (self.levels-1),
                 out_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
-                kernel_size=kernel_sizes[n],
+                kernel_size=kernel_sizes[self.n_convs_per_level-1],
                 activation=self.activation,
                 batch_norm=batch_norm,
                 padding=padding,
@@ -101,7 +101,7 @@ class UNetBackbone(nn.Module):
             for n in range(self.n_convs_per_level-1):
                 curr_lv += [
                     ConvBlock(
-                        in_channels=initial_fmaps * fmap_inc_factor ** (l+1) if n == 0 else initial_fmaps * fmap_inc_factor ** l,
+                        in_channels=2*initial_fmaps * fmap_inc_factor ** l if n == 0 else initial_fmaps * fmap_inc_factor ** l,
                         out_channels=initial_fmaps * fmap_inc_factor ** l,
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
@@ -126,7 +126,6 @@ class UNetBackbone(nn.Module):
         self.up_blocks = nn.ModuleList(self.up_blocks[::-1])
 
         self.out_channels_list = [initial_fmaps * fmap_inc_factor ** max(0, l-1) for l in range(self.levels-1)]+[initial_fmaps * fmap_inc_factor ** max(self.levels-2, 0)]
-
         def init_kaiming(m):
             if self.activation is nn.ReLU:
                 nonlinearity = "relu"
