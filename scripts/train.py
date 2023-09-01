@@ -52,6 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("--levels", type=int, default=4, help="Number of levels in the model")
     parser.add_argument("--downsample-factor", type=int, default=2)
     parser.add_argument("--initial-fmaps", type=int, default=32, help="Number of feature maps in the first layer")
+    parser.add_argument("--fmap-inc-factor", type=int, default=2, help="Factor by which the number of feature maps increases per level")
     parser.add_argument("--kernel-size", type=int, default=3, help="Convolution kernel size")
     parser.add_argument("--convs-per-level", type=int, default=3, help="Number of convolutions per level")
     parser.add_argument("--dropout", type=float, default=0, help="Dropout probability")
@@ -128,6 +129,7 @@ if __name__ == "__main__":
         in_channels=args.in_channels,
         out_channels=1,
         initial_fmaps=args.initial_fmaps,
+        fmap_inc_factor=args.fmap_inc_factor,
         n_convs_per_level=args.convs_per_level,
         downsample_factor=args.downsample_factor,
         kernel_size=args.kernel_size,

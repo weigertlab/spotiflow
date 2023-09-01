@@ -68,7 +68,7 @@ class SpotipyConfig(argparse.Namespace, abc.ABC):
 
 class SpotipyModelConfig(SpotipyConfig):
     def __init__(self, backbone: Literal["resnet", "unet"]="unet", in_channels: int=1, out_channels: int=1, initial_fmaps: int=32,
-                 n_convs_per_level: int=3, downsample_factor: int=2, kernel_size: int=3,
+                 fmap_inc_factor: Number=2, n_convs_per_level: int=3, downsample_factor: int=2, kernel_size: int=3,
                  padding: Union[int, str]='same', levels: int=4, mode: Literal["direct", "fpn"]="direct", background_remover: bool=True,
                  batch_norm: bool=False, downsample_factors: Optional[Tuple[Tuple[int, int]]]=None, kernel_sizes: Optional[Tuple[Tuple[int, int]]]=None,
                  dropout: float=0., **kwargs):
@@ -76,6 +76,7 @@ class SpotipyModelConfig(SpotipyConfig):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.initial_fmaps = initial_fmaps
+        self.fmap_inc_factor = fmap_inc_factor
         self.n_convs_per_level = n_convs_per_level
         if downsample_factors is None:
             self.downsample_factors = tuple((downsample_factor, downsample_factor) for _ in range(levels))
