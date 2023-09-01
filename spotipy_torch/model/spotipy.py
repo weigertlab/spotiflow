@@ -469,6 +469,7 @@ class Spotipy(nn.Module):
                 "downsample_factors",
                 "kernel_sizes",
                 "batch_norm",
+                "padding"
             )
             return UNetBackbone(**backbone_params)
         if self.config.backbone == "resnet":
@@ -479,6 +480,7 @@ class Spotipy(nn.Module):
                 "downsample_factors",
                 "kernel_sizes",
                 "batch_norm",
+                "padding"
             )
             return ResNetBackbone(**backbone_params)
         else:

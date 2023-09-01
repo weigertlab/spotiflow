@@ -69,7 +69,7 @@ class SpotipyConfig(argparse.Namespace, abc.ABC):
 class SpotipyModelConfig(SpotipyConfig):
     def __init__(self, backbone: Literal["resnet", "unet"]="unet", in_channels: int=1, out_channels: int=1, initial_fmaps: int=32,
                  n_convs_per_level: int=3, downsample_factor: int=2, kernel_size: int=3,
-                 padding: Union[int, str]="same", levels: int=4, mode: Literal["direct", "fpn"]="direct", background_remover: bool=True,
+                 padding: Union[int, str]='same', levels: int=4, mode: Literal["direct", "fpn"]="direct", background_remover: bool=True,
                  batch_norm: bool=False, downsample_factors: Optional[Tuple[Tuple[int, int]]]=None, kernel_sizes: Optional[Tuple[Tuple[int, int]]]=None,
                  dropout: float=0., **kwargs):
         self.backbone = backbone
@@ -87,7 +87,10 @@ class SpotipyModelConfig(SpotipyConfig):
         else:
             log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
             self.kernel_sizes = kernel_sizes
-        self.padding = padding
+            
+        if padding == 'same':
+            self.padding = self.kernel_sizes[0][0]//2
+            
         self.levels = levels
         self.mode = mode
         self.background_remover = bool(background_remover)
