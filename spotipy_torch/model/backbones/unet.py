@@ -63,7 +63,6 @@ class UNetBackbone(nn.Module):
                 ]
             self.down_blocks.append(nn.Sequential(*curr_lv))
             
-
         # Middle
         self.middle = nn.Sequential(*[
             ConvBlock(

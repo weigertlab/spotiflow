@@ -91,6 +91,8 @@ class SpotipyModelConfig(SpotipyConfig):
             
         if padding == 'same':
             self.padding = self.kernel_sizes[0][0]//2
+        else: 
+            self.padding = padding
             
         self.levels = levels
         self.mode = mode

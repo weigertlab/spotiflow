@@ -98,7 +98,7 @@ class MultiHeadProcessor(nn.Module):
         out_channels: int,
         kernel_sizes: Tuple[Tuple[int, int]],
         initial_fmaps: int,
-        fmap_inc_factor: int = 2,
+        fmap_inc_factor: float = 2,
         activation: nn.Module = nn.ReLU,
         padding: Union[str, int] = "same",
         padding_mode: str = "zeros",
@@ -119,8 +119,8 @@ class MultiHeadProcessor(nn.Module):
                     ConvBlock(
                         in_channels=in_channels_list[h]
                         if n == 0
-                        else initial_fmaps * fmap_inc_factor**h,
-                        out_channels=initial_fmaps * fmap_inc_factor**h,
+                        else int(initial_fmaps * fmap_inc_factor**h),
+                        out_channels=int(initial_fmaps * fmap_inc_factor**h),
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         padding=padding,
@@ -131,7 +131,7 @@ class MultiHeadProcessor(nn.Module):
             self.heads.append(nn.Sequential(*curr_head))
             self.last_convs.append(
                 ConvBlock(
-                    in_channels=initial_fmaps * fmap_inc_factor**h,
+                    in_channels=int(initial_fmaps * fmap_inc_factor**h),
                     out_channels=out_channels,
                     kernel_size=1,
                     activation=nn.Identity,

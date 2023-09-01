@@ -52,6 +52,7 @@ class Spotipy(nn.Module):
                 out_channels=self.config.out_channels,
                 kernel_sizes=self.config.kernel_sizes,
                 initial_fmaps=self.config.initial_fmaps,
+                fmap_inc_factor=self.config.fmap_inc_factor,
             )
         elif config.mode == "fpn":
             self._post = FeaturePyramidNetwork(

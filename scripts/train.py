@@ -122,7 +122,8 @@ if __name__ == "__main__":
     )
 
     save_dir = Path(args.save_dir)/f"{run_name}"
-    save_dir.mkdir(parents=True, exist_ok=True)
+    if not args.dry:
+        save_dir.mkdir(parents=True, exist_ok=True)
 
     model_config = SpotipyModelConfig(
         backbone=args.backbone,
@@ -161,7 +162,7 @@ if __name__ == "__main__":
 
 
     logger = None
-    if not args.skip_logging:
+    if not args.dry and not args.skip_logging:
         if args.logger == "wandb":
             logger = pl.loggers.WandbLogger(
                 name=run_name,
