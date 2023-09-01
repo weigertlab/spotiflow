@@ -213,7 +213,7 @@ class Spotipy(nn.Module):
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
         """
-        
+
         assert img.ndim in (2,3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
         device = torch.device(device)
         if verbose:
@@ -221,21 +221,24 @@ class Spotipy(nn.Module):
 
         if img.ndim==2: 
             img = img[...,None]
-            
+
         if scale is None or scale == 1:
             x = img
         else:
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
+            if scale < 1:
+                # Make sure that the scaling can be inverted exactly at the same shape
+                inv_scale = int(1/scale)
+                assert all(s % inv_scale == 0 for s in img.shape[:2]), "Invalid scale factor"
             factor = (scale, scale, 1)
             x = zoom(img, factor, order=1)
 
         div_by = tuple(self.config.downsample_factors[0][0]**self.config.levels for _ in range(img.ndim-1)) + (1,)
         pad_shape = tuple(int(d*np.ceil(s/d)) for s,d in zip(x.shape, div_by))
-        if verbose: print(f"Padding to shape {pad_shape}")
+        if verbose: log.info(f"Padding to shape {pad_shape}")
         x, padding = utils.center_pad(x, pad_shape, mode="reflect")
-        
-        
+    
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
@@ -247,7 +250,6 @@ class Spotipy(nn.Module):
                 y = self._sigmoid(self(img_t)[0].squeeze(0).squeeze(0)).detach().cpu().numpy()
             if scale is not None and scale != 1:
                 y = zoom(y, (1./scale, 1./scale), order=1)
-            
             y = utils.center_crop(y, img.shape[:2])
                             
             pts = utils.prob_to_points(y, prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh, exclude_border=exclude_border, min_distance=min_distance)
@@ -288,8 +290,12 @@ class Spotipy(nn.Module):
                     y[s_dst[:2]] = y_tile_sub
             if scale is not None and scale != 1:
                 y = zoom(y, (1./scale, 1./scale), order=1)
-            
+            y = utils.center_crop(y, img.shape[:2])
+
             points = np.concatenate(points, axis=0)
+
+            # Remove padding
+            points = points - np.array((padding[0][0], padding[1][0]))[None]
 
             probs = np.array(probs)
             if scale is not None and scale != 1:
@@ -375,8 +381,8 @@ class Spotipy(nn.Module):
 
         _, t_bounds, _ = _grid_search(*threshold_range)
         best_thr, _, best_f1 = _grid_search(*t_bounds)
-        print(f"Best threshold: {best_thr:.3f}")
-        print(f"Best F1-score: {best_f1:.3f}")
+        log.info(f"Best threshold: {best_thr:.3f}")
+        log.info(f"Best F1-score: {best_f1:.3f}")
         self._prob_thresh = float(best_thr)
         return
     
