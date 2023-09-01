@@ -51,8 +51,8 @@ class UNetBackbone(nn.Module):
             for n in range(self.n_convs_per_level):
                 curr_lv += [
                     ConvBlock(
-                        in_channels=in_channels if l == 0 and n == 0 else initial_fmaps * fmap_inc_factor ** (l - 1) if n == 0 else initial_fmaps * fmap_inc_factor ** l,
-                        out_channels=initial_fmaps * fmap_inc_factor ** l,
+                        in_channels=in_channels if l == 0 and n == 0 else int(initial_fmaps * fmap_inc_factor ** (l - 1)) if n == 0 else int(initial_fmaps * fmap_inc_factor ** l),
+                        out_channels=int(initial_fmaps * fmap_inc_factor ** l),
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         batch_norm=batch_norm,
@@ -67,8 +67,8 @@ class UNetBackbone(nn.Module):
         # Middle
         self.middle = nn.Sequential(*[
             ConvBlock(
-                in_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 2) if n == 0 else initial_fmaps * fmap_inc_factor ** (self.levels-1),
-                out_channels=initial_fmaps * fmap_inc_factor ** (self.levels - 1),
+                in_channels=int(initial_fmaps * fmap_inc_factor ** (self.levels - 2) if n == 0 else initial_fmaps * fmap_inc_factor ** (self.levels-1)),
+                out_channels=int(initial_fmaps * fmap_inc_factor ** (self.levels - 1)),
                 kernel_size=kernel_sizes[self.n_convs_per_level-1],
                 activation=self.activation,
                 batch_norm=batch_norm,
@@ -78,8 +78,8 @@ class UNetBackbone(nn.Module):
             )
         for n in range(self.n_convs_per_level-1)] + [
             ConvBlock(
-                in_channels=initial_fmaps * fmap_inc_factor ** (self.levels-1),
-                out_channels=initial_fmaps * fmap_inc_factor ** max(self.levels-2, 0),
+                in_channels=int(initial_fmaps * fmap_inc_factor ** (self.levels-1)),
+                out_channels=int(initial_fmaps * fmap_inc_factor ** max(self.levels-2, 0)),
                 kernel_size=kernel_sizes[self.n_convs_per_level-1],
                 activation=self.activation,
                 batch_norm=batch_norm,
@@ -101,8 +101,8 @@ class UNetBackbone(nn.Module):
             for n in range(self.n_convs_per_level-1):
                 curr_lv += [
                     ConvBlock(
-                        in_channels=2*initial_fmaps * fmap_inc_factor ** l if n == 0 else initial_fmaps * fmap_inc_factor ** l,
-                        out_channels=initial_fmaps * fmap_inc_factor ** l,
+                        in_channels=2*int(initial_fmaps * fmap_inc_factor ** l) if n == 0 else int(initial_fmaps * fmap_inc_factor ** l),
+                        out_channels=int(initial_fmaps * fmap_inc_factor ** l),
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         batch_norm=batch_norm,
@@ -112,8 +112,8 @@ class UNetBackbone(nn.Module):
                     )
                 ]
             curr_lv += [ConvBlock(
-                in_channels=initial_fmaps * fmap_inc_factor ** l,
-                out_channels=initial_fmaps * fmap_inc_factor ** max(0, l-1),
+                in_channels=int(initial_fmaps * fmap_inc_factor ** l),
+                out_channels=int(initial_fmaps * fmap_inc_factor ** max(0, l-1)),
                 kernel_size=kernel_sizes[self.n_convs_per_level-1],
                 activation=self.activation,
                 batch_norm=batch_norm,
@@ -125,7 +125,8 @@ class UNetBackbone(nn.Module):
         
         self.up_blocks = nn.ModuleList(self.up_blocks[::-1])
 
-        self.out_channels_list = [initial_fmaps * fmap_inc_factor ** max(0, l-1) for l in range(self.levels-1)]+[initial_fmaps * fmap_inc_factor ** max(self.levels-2, 0)]
+        self.out_channels_list = [int(initial_fmaps * fmap_inc_factor ** max(0, l-1)) for l in range(self.levels-1)]+[int(initial_fmaps * fmap_inc_factor ** max(self.levels-2, 0))]
+
         def init_kaiming(m):
             if self.activation is nn.ReLU:
                 nonlinearity = "relu"
