@@ -80,7 +80,7 @@ Then `cd` into the cloned repository and run the tests:
 - [x] Refactor datasets
 - [x] Refactor `spotipy_torch/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
 - [ ] Add fast peak detection mode
-- [ ] Make prediction workable on images whose size is non-divisible by powers of 2
+- [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [ ] First docs prototype
 - [x] Tests
 
