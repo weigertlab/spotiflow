@@ -137,9 +137,7 @@ class SpotsDataset(Dataset):
                 centers.numpy(), img.shape[-2:], sigma=self._sigma
             ).transpose((2, 0, 1))
             flow = torch.from_numpy(flow).float()
-        else:
-            flow = None
-
+        
         heatmap_lv0 = utils.points_to_prob(
             centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
         )
@@ -151,7 +149,11 @@ class SpotsDataset(Dataset):
         ]
 
         # Cast to tensor and add channel dimension
-        ret_obj = {"img": img.float(), "flow": flow}
+        ret_obj = {"img": img.float()} 
+        
+        if self._compute_flow:
+            ret_obj.update({"flow": flow})
+            
         ret_obj.update(
             {
                 f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy()).unsqueeze(0)
