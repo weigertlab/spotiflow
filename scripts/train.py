@@ -27,10 +27,11 @@ def get_run_name(args: SimpleNamespace):
     name += f"_crop{int(args.crop_size)}"
     name += f"_posweight{int(args.pos_weight)}"
     name += f"_seed{int(args.seed)}"
+    name += f"_aug{args.augment_prob:.1f}"
     name += "_tormenter" # !
     name += "_skipbgremover" if args.skip_bg_remover else ""
     name += "_dry" if args.dry else ""
-    name = name.replace(".", "") # Remove dots to avoid confusion with file extensions
+    name = name.replace(".", "_") # Remove dots to avoid confusion with file extensions
     return name
 
 
@@ -62,11 +63,12 @@ if __name__ == "__main__":
     parser.add_argument("--sigma", type=float, default=1., help="Sigma for the gaussian kernel")
     parser.add_argument("--loss", type=str, choices=["bce", "mse", "smoothl1", "adawing"], default="bce", help="Loss function to use")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--augment-prob", type=float, default=0.5, help="Probability of applying an augmentation")
+    parser.add_argument("--augment-prob", type=float, default=0.5, help="Probability of applying each augmentation")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--num-epochs", type=int, default=200, help="Number of epochs to train for")
     parser.add_argument("--num-workers", type=int, default=8, help="Number of data workers")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
+    parser.add_argument("--lr-reduce-patience", type=int, default=10, help="Learning rate scheduler patience")
     parser.add_argument("--pos-weight", type=float, default=10.0, help="Weight for pixels containing a spot for the highest resolution loss function")
     parser.add_argument("--smart-crop", action="store_true", default=False, help="If given, random cropping will prioritize crops containing points")
     parser.add_argument("--num-train-samples", type=int, default=None, help="Number of training samples per epoch (use all if None)")
@@ -94,8 +96,8 @@ if __name__ == "__main__":
     augmenter.add(transforms.Crop(probability=1., size=(args.crop_size, args.crop_size), smart=args.smart_crop))
     augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
     augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
-    augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
-    augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
+    # augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
+    # augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
     augmenter.add(transforms.IntensityScaleShift(probability=args.augment_prob, scale=(0.5, 2.), shift=(-0.2, 0.2)))
 
     augmenter_val = Pipeline()
@@ -114,6 +116,7 @@ if __name__ == "__main__":
         loss_f=args.loss,
         pos_weight=args.pos_weight,
         lr=args.lr,
+        lr_reduce_patience=args.lr_reduce_patience,
         num_train_samples=args.num_train_samples,
         smart_crop=args.smart_crop, 
         optimizer="adamw",

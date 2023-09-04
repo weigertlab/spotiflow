@@ -197,6 +197,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         lr: float = 3e-4,
         optimizer: str = "adamw",
         batch_size: int = 4,
+        lr_reduce_patience:int = 10, 
         num_epochs: int = 200,
         **kwargs,
     ):
@@ -206,6 +207,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.loss_f = loss_f
         self.pos_weight = pos_weight
         self.lr = lr
+        self.lr_reduce_patience = lr_reduce_patience
         self.optimizer = optimizer
         self.batch_size = batch_size
         self.num_epochs = num_epochs

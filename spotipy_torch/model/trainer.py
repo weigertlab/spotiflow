@@ -18,6 +18,20 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
+def _img_to_rgb_or_gray(x: torch.Tensor):
+    """  x.shape = C, H, W"""
+    assert x.ndim == 3
+    n_channels = x.shape[0] 
+    if n_channels in (1,3):
+        return x 
+    elif n_channels == 2:
+        return torch.cat((x[:1], x[1:], x[:1]), dim=0)
+    else: 
+        _cs = np.linspace(0,n_channels-1, 3).astype(int)
+        return x[_cs]
+        
+    
+
 class SpotipyTrainingWrapper(pl.LightningModule):
     """Supervised spot detector using a multi-stage neural network as a backbone for
     feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
@@ -203,7 +217,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             self.logger.log_image(
                 key="input",
                 images=[
-                    v.transpose(1, 2, 0) for v in self._valid_inputs[:n_images_to_log]
+                    _img_to_rgb_or_gray(v).transpose(1, 2, 0) for v in self._valid_inputs[:n_images_to_log]
                 ],
                 step=self.global_step,
             )
@@ -233,7 +247,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             for i in range(n_images_to_log):
                 self.logger.experiment.add_image(
                     f"images/input/{i}",
-                    self._valid_inputs[i],
+                    _img_to_rgb_or_gray(self._valid_inputs[i]),
                     self.current_epoch,
                     dataformats="CHW",
                 )
@@ -268,24 +282,27 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             raise NotImplementedError(
                 f"Optimizer {self.training_config.optimizer} not implemented."
             )
-        scheduler = ReduceLROnPlateau(
-            optimizer,
-            factor=0.5,
-            patience=10,
-            threshold=1e-4,
-            min_lr=3e-6,
-            cooldown=5,
-            verbose=True,
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
+        
+        out = dict(optimizer=optimizer) 
+        
+        if self.training_config.lr_reduce_patience>0:
+            scheduler = ReduceLROnPlateau(
+                optimizer,
+                factor=0.5,
+                patience=self.training_config.lr_reduce_patience,
+                threshold=1e-4,
+                min_lr=3e-6,
+                cooldown=5,
+                verbose=True,
+            )
+            out["lr_scheduler"] =  {
                 "scheduler": scheduler,
                 "monitor": "val_loss",
                 "interval": "epoch",
                 "frequency": 1,
-            },
-        }
+            } 
+        
+        return out
 
     def generate_dataloaders(
         self,
