@@ -62,9 +62,10 @@ class Spotipy(nn.Module):
         else:
             raise NotImplementedError(f"Mode {config.mode} not implemented.")
 
-        self._flow = SimpleConv(
-            in_channels=self._backbone.out_channels_list[0], out_channels=3
-        )
+        if self.config.compute_flow:
+            self._flow = SimpleConv(
+                in_channels=self._backbone.out_channels_list[0], out_channels=3
+            )
 
         self._levels = self.config.levels
         self._sigmoid = nn.Sigmoid()
@@ -102,8 +103,11 @@ class Spotipy(nn.Module):
         x = self._bg_remover(x)
         x = self._backbone(x)
         heatmaps = tuple(self._post(x))
-        flow = self._flow(x[0])
-        return dict(heatmaps=heatmaps, flow=flow)
+        if self.config.compute_flow:
+            flow = self._flow(x[0])
+            return dict(heatmaps=heatmaps, flow=flow)
+        else:
+            return dict(heatmaps=heatmaps)
 
     def fit(
         self,
@@ -424,7 +428,9 @@ class Spotipy(nn.Module):
             for val_batch in val_dataloader:
                 imgs = val_batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = self._sigmoid(out['heatmaps'][0].squeeze(1)).detach().cpu().numpy()
+                high_lv_preds = (
+                    self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
+                )
                 for batch_elem in range(high_lv_preds.shape[0]):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
@@ -471,7 +477,7 @@ class Spotipy(nn.Module):
                 "downsample_factors",
                 "kernel_sizes",
                 "batch_norm",
-                "padding"
+                "padding",
             )
             return UNetBackbone(**backbone_params)
         if self.config.backbone == "resnet":
@@ -483,7 +489,7 @@ class Spotipy(nn.Module):
                 "downsample_factors",
                 "kernel_sizes",
                 "batch_norm",
-                "padding"
+                "padding",
             )
             return ResNetBackbone(**backbone_params)
         else:

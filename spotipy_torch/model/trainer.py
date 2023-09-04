@@ -32,7 +32,9 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         self._loss_funcs = self._loss_switcher()
 
-        self._loss_func_flow = nn.MSELoss()
+        if self.model.config.compute_flow:
+            self._loss_func_flow = nn.MSELoss()
+
         self._valid_inputs = []
         self._valid_targets = []
         self._valid_outputs = []
@@ -82,19 +84,29 @@ class SpotipyTrainingWrapper(pl.LightningModule):
     def _common_step(self, batch):
         heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self.model._levels)]
         imgs = batch["img"]
-        flow = batch["flow"]
+
+        if self.model.config.compute_flow:
+            flow = batch["flow"]
 
         out = self(imgs)
         pred_heatmap = out["heatmaps"]
-        pred_flow = out["flow"]
+
         loss_heatmap = sum(
             tuple(
                 loss_f(pred_heatmap[lv], heatmap_lvs[lv]) / 4**lv
                 for lv, loss_f in zip(range(self.model._levels), self._loss_funcs)
             )
         )
-        loss_flow = self._loss_func_flow(pred_flow, flow)
-        loss = loss_heatmap + loss_flow
+        loss = loss_heatmap
+
+        if self.model.config.compute_flow:
+            pred_flow = out["flow"]
+            loss_flow = self._loss_func_flow(pred_flow, flow)
+            loss = loss + loss_flow
+        else:
+            pred_flow = None
+            loss_flow = torch.tensor(0.0)
+
         return dict(
             loss=loss,
             loss_flow=loss_flow,
@@ -131,7 +143,11 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             .cpu()
             .numpy()
         )
-        flow = out["pred_flow"].squeeze(0).detach().cpu().numpy()
+        if self.model.config.compute_flow:
+            flow = out["pred_flow"].squeeze(0).detach().cpu().numpy()
+        else:
+            flow = None
+
         self._valid_inputs.append(img[0].detach().cpu().numpy())
         self._valid_targets.append(batch["heatmap_lv0"][0, 0].detach().cpu().numpy())
         self._valid_outputs.append(heatmap)
@@ -201,13 +217,15 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]],
                 step=self.global_step,
             )
-            self.logger.log_image(
-                key="flow",
-                images=[
-                    0.5 * (1 + v.transpose(1,2,0)) for v in self._valid_flows[:n_images_to_log]
-                ],
-                step=self.global_step,
-            )
+            if self.model.config.compute_flow:
+                self.logger.log_image(
+                    key="flow",
+                    images=[
+                        0.5 * (1 + v.transpose(1, 2, 0))
+                        for v in self._valid_flows[:n_images_to_log]
+                    ],
+                    step=self.global_step,
+                )
 
         elif isinstance(
             self.logger, pl.loggers.TensorBoardLogger
@@ -231,12 +249,13 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                     self.current_epoch,
                     dataformats="HWC",
                 )
-                self.logger.experiment.add_image(
-                    f"images/flow/{i}",
-                    0.5 * (1 + self._valid_flows[i]),
-                    self.current_epoch,
-                    dataformats="CHW",
-                )
+                if self.model.config.compute_flow:
+                    self.logger.experiment.add_image(
+                        f"images/flow/{i}",
+                        0.5 * (1 + self._valid_flows[i]),
+                        self.current_epoch,
+                        dataformats="CHW",
+                    )
         return
 
     def configure_optimizers(self) -> dict:

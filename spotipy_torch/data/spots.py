@@ -28,6 +28,7 @@ class SpotsDataset(Dataset):
         downsample_factors: Sequence[int] = (1,),
         sigma: float = 1.0,
         mode: str = "max",
+        compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
     ) -> None:
         super().__init__()
@@ -43,6 +44,7 @@ class SpotsDataset(Dataset):
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")
 
+        self._compute_flow = compute_flow
         self._sigma = sigma
         self._mode = mode
         self._augmenter = (
@@ -60,6 +62,7 @@ class SpotsDataset(Dataset):
         image_extensions: Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg"),
         mode: str = "max",
         max_files: Optional[int] = None,
+        compute_flow: bool = False,
         normalizer: Callable = utils.normalize,
     ) -> None:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
@@ -108,6 +111,7 @@ class SpotsDataset(Dataset):
             downsample_factors=downsample_factors,
             sigma=sigma,
             mode=mode,
+            compute_flow=compute_flow,
             image_files=image_files,
         )
 
@@ -128,10 +132,13 @@ class SpotsDataset(Dataset):
         img, centers = self.augmenter(img, centers)
         img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B dimension
 
-        flow = utils.points_to_flow(
-            centers.numpy(), img.shape[-2:], sigma=self._sigma
-        ).transpose((2, 0, 1))
-        flow = torch.from_numpy(flow).float()
+        if self._compute_flow:
+            flow = utils.points_to_flow(
+                centers.numpy(), img.shape[-2:], sigma=self._sigma
+            ).transpose((2, 0, 1))
+            flow = torch.from_numpy(flow).float()
+        else:
+            flow = None
 
         heatmap_lv0 = utils.points_to_prob(
             centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
@@ -144,7 +151,7 @@ class SpotsDataset(Dataset):
         ]
 
         # Cast to tensor and add channel dimension
-        ret_obj = {"img": img, "flow": flow}
+        ret_obj = {"img": img.float(), "flow": flow}
         ret_obj.update(
             {
                 f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy()).unsqueeze(0)

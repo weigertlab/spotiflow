@@ -100,6 +100,7 @@ class MultiHeadProcessor(nn.Module):
         initial_fmaps: int,
         fmap_inc_factor: float = 2,
         activation: nn.Module = nn.ReLU,
+        batch_norm: bool = False,
         padding: Union[str, int] = "same",
         padding_mode: str = "zeros",
         dropout: int = 0,
@@ -112,6 +113,7 @@ class MultiHeadProcessor(nn.Module):
         self.last_convs = (
             nn.ModuleList()
         )  # Need to be separated to avoid kaiming init on blocks with non-relu activations
+
         for h in range(self.n_heads):
             curr_head = []
             for n in range(self.n_convs_per_head):
@@ -123,6 +125,7 @@ class MultiHeadProcessor(nn.Module):
                         out_channels=int(initial_fmaps * fmap_inc_factor**h),
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
+                        batch_norm=batch_norm,
                         padding=padding,
                         padding_mode=padding_mode,
                         dropout=dropout,
