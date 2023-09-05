@@ -15,7 +15,11 @@ log = logging.getLogger(__name__)
 
 def read_coords_csv(fname: str):
     """parses a csv file and returns correctly ordered points array"""
-    df = pd.read_csv(fname)
+    try:
+        df = pd.read_csv(fname)
+    except pd.errors.EmptyDataError:
+        return np.zeros((0, 2), dtype=np.int)
+
     df = df.rename(columns=str.lower)
     cols = set(df.columns)
 

@@ -19,7 +19,7 @@ import yaml
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotipyModelConfig, SpotipyTrainingConfig
-from .post import FeaturePyramidNetwork, MultiHeadProcessor, SimpleConv
+from .post import FeaturePyramidNetwork, MultiHeadProcessor
 from .trainer import SpotipyTrainingWrapper
 from ..utils import (
     prob_to_points,
@@ -63,8 +63,30 @@ class Spotipy(nn.Module):
             raise NotImplementedError(f"Mode {config.mode} not implemented.")
 
         if self.config.compute_flow:
-            self._flow = SimpleConv(
-                in_channels=self._backbone.out_channels_list[0], out_channels=3
+            self._flow = nn.Sequential(
+                nn.Conv2d(
+                    self._backbone.out_channels_list[0],
+                    self._backbone.out_channels_list[0],
+                    3,
+                    padding=1,
+                    bias=False if self.config.batch_norm else True,
+                ),
+                nn.BatchNorm2d(self._backbone.out_channels_list[0])
+                if self.config.batch_norm
+                else nn.Identity(),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(
+                    self._backbone.out_channels_list[0],
+                    self._backbone.out_channels_list[0],
+                    3,
+                    padding=1,
+                    bias=False if self.config.batch_norm else True,
+                ),
+                nn.BatchNorm2d(self._backbone.out_channels_list[0])
+                if self.config.batch_norm
+                else nn.Identity(),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(self._backbone.out_channels_list[0], 3, 3, padding=1),
             )
 
         self._levels = self.config.levels

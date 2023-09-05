@@ -86,6 +86,8 @@ class SpotsDataset(Dataset):
         center_files = sorted(path.glob("*.csv"))
 
         if max_files is not None:
+            # idx = np.arange(len(image_files))
+            # np.random.shuffle(idx)
             image_files = image_files[:max_files]
             center_files = center_files[:max_files]
 
@@ -134,10 +136,10 @@ class SpotsDataset(Dataset):
 
         if self._compute_flow:
             flow = utils.points_to_flow(
-                centers.numpy(), img.shape[-2:], sigma=self._sigma
+                centers.numpy(), img.shape[-2:], sigma=2 * self._sigma
             ).transpose((2, 0, 1))
             flow = torch.from_numpy(flow).float()
-        
+
         heatmap_lv0 = utils.points_to_prob(
             centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
         )
@@ -149,11 +151,11 @@ class SpotsDataset(Dataset):
         ]
 
         # Cast to tensor and add channel dimension
-        ret_obj = {"img": img.float()} 
-        
+        ret_obj = {"img": img.float()}
+
         if self._compute_flow:
             ret_obj.update({"flow": flow})
-            
+
         ret_obj.update(
             {
                 f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy()).unsqueeze(0)

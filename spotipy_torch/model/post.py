@@ -106,6 +106,7 @@ class MultiHeadProcessor(nn.Module):
         dropout: int = 0,
     ):
         super().__init__()
+
         self.n_heads = len(in_channels_list)
         self.n_convs_per_head = len(kernel_sizes)
         self.activation = activation
@@ -119,10 +120,11 @@ class MultiHeadProcessor(nn.Module):
             for n in range(self.n_convs_per_head):
                 curr_head += [
                     ConvBlock(
-                        in_channels=in_channels_list[h]
-                        if n == 0
-                        else int(initial_fmaps * fmap_inc_factor**h),
-                        out_channels=int(initial_fmaps * fmap_inc_factor**h),
+                        in_channels=in_channels_list[h] if n == 0
+                        # else int(initial_fmaps * fmap_inc_factor**h),
+                        # out_channels=int(initial_fmaps * fmap_inc_factor**h),
+                        else initial_fmaps,
+                        out_channels=initial_fmaps,
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         batch_norm=batch_norm,
@@ -134,7 +136,7 @@ class MultiHeadProcessor(nn.Module):
             self.heads.append(nn.Sequential(*curr_head))
             self.last_convs.append(
                 ConvBlock(
-                    in_channels=int(initial_fmaps * fmap_inc_factor**h),
+                    in_channels=initial_fmaps,
                     out_channels=out_channels,
                     kernel_size=1,
                     activation=nn.Identity,
@@ -187,6 +189,8 @@ class SimpleConv(nn.Module):
                     in_channels,
                     out_channels if last else in_channels,
                     3,
+                    padding=1,
+                    bias=True,
                     activation=nn.Identity if last else activation,
                 )
             )
