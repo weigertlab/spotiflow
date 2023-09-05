@@ -26,7 +26,7 @@ class ConvBlock(nn.Module):
                 kernel_size=kernel_size,
                 padding=padding,
                 padding_mode=padding_mode,
-                bias=bias,
+                bias=bias if bias and not batch_norm else False,
             ),
             nn.BatchNorm2d(out_channels) if batch_norm else nn.Identity(),
             activation(),
@@ -189,7 +189,8 @@ class UNetBackbone(nn.Module):
                 )
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, nonlinearity=nonlinearity)
-                nn.init.zeros_(m.bias)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
         if activation is nn.ReLU or activation is nn.LeakyReLU:
             self.apply(init_kaiming)
