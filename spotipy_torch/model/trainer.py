@@ -1,6 +1,6 @@
 from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from typing import Tuple
+from typing import Tuple, Union
 
 
 import lightning.pytorch as pl
@@ -19,26 +19,28 @@ log = logging.getLogger(__name__)
 
 
 def _img_to_rgb_or_gray(x: torch.Tensor):
-    """  x.shape = C, H, W"""
+    """x.shape = C, H, W"""
     assert x.ndim == 3
-    n_channels = x.shape[0] 
-    if n_channels in (1,3):
-        return x 
+    n_channels = x.shape[0]
+    if n_channels in (1, 3):
+        return x
     elif n_channels == 2:
         return torch.cat((x[:1], x[1:], x[:1]), dim=0)
-    else: 
-        _cs = np.linspace(0,n_channels-1, 3).astype(int)
+    else:
+        _cs = np.linspace(0, n_channels - 1, 3).astype(int)
         return x[_cs]
-        
-    
+
 
 class SpotipyTrainingWrapper(pl.LightningModule):
-    """Supervised spot detector using a multi-stage neural network as a backbone for
-    feature extraction followed by a Feature Pyramid Network (Lin et al., CVPR '17)
-    module to allow loss computation and optimization at different resolution levels.
-    """
+    """Lightning module that wraps a Spotipy model and handles the training stage."""
 
     def __init__(self, model, training_config: SpotipyTrainingConfig):
+        """Initializes the SpotipyTrainingWrapper.
+
+        Args:
+            model (SpotipyModel): The model to train.
+            training_config (SpotipyTrainingConfig): The training configuration.
+        """
         super().__init__()
         self.model = model
 
@@ -55,13 +57,30 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_flows = []
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
+        """Forward pass of the model.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            Tuple[torch.Tensor]: The output of the model.
+        """
         return self.model(x)
 
     @staticmethod
     def _wrap_loss(
         func: callable, pos_weight: float = 1.0, positive_threshold: float = 0.01
     ) -> callable:
-        """Wrap a loss function to add a weight to positive pixels."""
+        """Wrap a loss function to add a weight to positive pixels.
+
+        Args:
+            func (callable): The loss function to be wrapped.
+            pos_weight (float, optional): The weight to be added to positive pixels. Defaults to 1.0.
+            positive_threshold (float, optional): The threshold to consider a pixel as positive. Defaults to 0.01.
+
+        Returns:
+            callable: The wrapped loss function.
+        """
 
         def _loss(y, target):
             loss = func(y, target)
@@ -76,6 +95,14 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         return _loss
 
     def _loss_switcher(self, loss_kwargs: dict = {}) -> Tuple[callable]:
+        """Helper function to switch between loss functions.
+
+        Args:
+            loss_kwargs (dict, optional): The keyword arguments to be passed to the loss function. Defaults to no arguments.
+
+        Returns:
+            Tuple[callable]: The loss functions to be applied at different resolution levels (from highest to lowest).
+        """
         loss_f_str = self.training_config.loss_f.lower()
         if loss_f_str == "bce":
             loss_cls = nn.BCEWithLogitsLoss
@@ -130,6 +157,15 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         )
 
     def training_step(self, batch, batch_idx):
+        """Training step of the model.
+
+        Args:
+            batch (torch.Tensor): The batch of data.
+            batch_idx (int): The index of the batch.
+
+        Returns:
+            torch.Tensor: loss of the model for the given batch
+        """
         out = self._common_step(batch)
 
         self.log_dict(
@@ -145,7 +181,13 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         )
         return out["loss"]
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx) -> None:
+        """Validation step of the model. Populates the lists of inputs, targets and outputs for logging when the validation epoch ends.
+
+        Args:
+            batch (torch.Tensor): The batch of data.
+            batch_idx (int): The index of the batch.
+        """
         [batch[f"heatmap_lv{lv}"] for lv in range(self.model._levels)]
         img = batch["img"]
 
@@ -178,6 +220,9 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         )
 
     def on_validation_epoch_end(self) -> None:
+        """Called when the validation epoch ends.
+        Logs the F1 score and accuracy of the model on the validation set, as well as some sample images.
+        """
         valid_tgt_centers = [
             prob_to_points(t, exclude_border=False, min_distance=1)
             for t in self._valid_targets
@@ -212,12 +257,14 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_flows.clear()
 
     def log_images(self):
+        """Helper function to log sample images according to different loggers (wandb and tensorboard)."""
         n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger):  # Wandb logger
             self.logger.log_image(
                 key="input",
                 images=[
-                    _img_to_rgb_or_gray(v).transpose(1, 2, 0) for v in self._valid_inputs[:n_images_to_log]
+                    _img_to_rgb_or_gray(v).transpose(1, 2, 0)
+                    for v in self._valid_inputs[:n_images_to_log]
                 ],
                 step=self.global_step,
             )
@@ -273,6 +320,11 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         return
 
     def configure_optimizers(self) -> dict:
+        """Build the optimizer and scheduler.
+
+        Returns:
+            dict: The optimizer and scheduler to be used during training.
+        """
         if self.training_config.optimizer.lower() == "adamw":
             optimizer = torch.optim.AdamW(
                 (p for p in self.parameters() if p.requires_grad),
@@ -282,10 +334,10 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             raise NotImplementedError(
                 f"Optimizer {self.training_config.optimizer} not implemented."
             )
-        
-        out = dict(optimizer=optimizer) 
-        
-        if self.training_config.lr_reduce_patience>0:
+
+        out = dict(optimizer=optimizer)
+
+        if self.training_config.lr_reduce_patience > 0:
             scheduler = ReduceLROnPlateau(
                 optimizer,
                 factor=0.5,
@@ -295,13 +347,13 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 cooldown=5,
                 verbose=True,
             )
-            out["lr_scheduler"] =  {
+            out["lr_scheduler"] = {
                 "scheduler": scheduler,
                 "monitor": "val_loss",
                 "interval": "epoch",
                 "frequency": 1,
-            } 
-        
+            }
+
         return out
 
     def generate_dataloaders(
@@ -310,7 +362,18 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         val_ds: torch.utils.data.Dataset,
         num_train_samples: int = None,
         num_workers: int = 0,
-    ) -> torch.utils.data.DataLoader:
+    ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+        """Generate the training and validation dataloaders according to the training configuration.
+
+        Args:
+            train_ds (torch.utils.data.Dataset): training dataset
+            val_ds (torch.utils.data.Dataset): validation dataset
+            num_train_samples (int, optional): number of training samples assumed to be in the training data. Useful to keep number of updates per epoch constant across different datasets. Defaults to None (len(train_ds)).
+            num_workers (int, optional): number of workers to use. Defaults to 0.
+
+        Returns:
+            Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]: training and validation dataloaders
+        """
         train_dl = torch.utils.data.DataLoader(
             train_ds,
             batch_size=self.training_config.batch_size,
@@ -335,21 +398,47 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
 # a model checkpoint that uses Spotipy.save() to save the model
 class SpotipyModelCheckpoint(pl.callbacks.Callback):
+    """Callback to save the best model according to a given metric.
+    Uses Spotipy.save() to save the model for maximum flexibility.
+    """
+
     def __init__(
-        self, logdir, train_config: SpotipyTrainingConfig, monitor: str = "val_loss"
+        self,
+        logdir: Union[str, Path],
+        train_config: SpotipyTrainingConfig,
+        monitor: str = "val_loss",
     ):
-        self._logdir = Path(logdir)
+        """
+
+        Args:
+            logdir (str): path to the directory where the model checkpoints will be saved.
+            train_config (SpotipyTrainingConfig): training configuration.
+            monitor (str, optional): metric to be minimized. Defaults to "val_loss".
+        """
+        self._logdir = Path(logdir) if isinstance(logdir, str) else logdir
         self._monitor = monitor
         self._best = float("inf")
         self._train_config = train_config
 
-    def on_fit_start(self, trainer, pl_module):
+    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        """Called when the training starts.
+
+        Args:
+            trainer (pl.Trainer): lightning trainer object.
+            pl_module (pl.LightningModule): lightning module object.
+        """
         if trainer.is_global_zero:
             log.info(f"Creating logdir {self._logdir} and saving training config...")
             self._logdir.mkdir(parents=True, exist_ok=True)
             self._train_config.save(self._logdir / "train_config.yaml")
 
-    def on_validation_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        """Called when each validation epoch ends.
+
+        Args:
+            trainer (pl.Trainer): lightning trainer object.
+            pl_module (pl.LightningModule): lightning module object.
+        """
         if trainer.is_global_zero:
             value = trainer.logged_metrics[self._monitor]
             if value < self._best:
@@ -357,7 +446,13 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 log.info(f"Saved best model with {self._monitor}={value:.3f}.")
                 pl_module.model.save(self._logdir, which="best")
 
-    def on_train_end(self, trainer, pl_module):
+    def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        """Called when the training ends.
+
+        Args:
+            trainer (pl.Trainer): lightning trainer object.
+            pl_module (pl.LightningModule): lightning module object.
+        """
         if trainer.is_global_zero:
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
