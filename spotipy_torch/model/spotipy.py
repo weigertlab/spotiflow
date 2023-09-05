@@ -58,6 +58,7 @@ class Spotipy(nn.Module):
                 kernel_sizes=self.config.kernel_sizes,
                 initial_fmaps=self.config.initial_fmaps,
                 fmap_inc_factor=self.config.fmap_inc_factor,
+                use_slim_mode=False,
             )
         elif config.mode == "slim":
             self._post = MultiHeadProcessor(
@@ -65,7 +66,7 @@ class Spotipy(nn.Module):
                 out_channels=self.config.out_channels,
                 kernel_sizes=self.config.kernel_sizes,
                 initial_fmaps=self.config.initial_fmaps,
-                fmap_inc_factor=1,
+                use_slim_mode=True,
             )
         elif config.mode == "fpn":
             self._post = FeaturePyramidNetwork(

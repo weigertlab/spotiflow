@@ -169,6 +169,7 @@ class UNetBackbone(nn.Module):
                     dropout=dropout,
                 )
             ]
+            print(l)
             self.up_blocks += [nn.Sequential(*curr_lv)]
 
         self.up_blocks = nn.ModuleList(self.up_blocks[::-1])
@@ -221,7 +222,13 @@ if __name__ == "__main__":
     import sys
 
     t = torch.randn(4, 1, 256, 256)
-    model = UNetBackbone(in_channels=1, initial_fmaps=16, padding="same")
+    model = UNetBackbone(
+        in_channels=1,
+        initial_fmaps=16,
+        padding="same",
+        downsample_factors=((2, 2), (2, 2), (2, 2)),
+        kernel_sizes=((3, 3), (3, 3)),
+    )
     print(f"Resolution levels: {model.levels}")
     print(f"Number of UNet parameters: {sum(p.numel() for p in model.parameters())}")
     pred = model(t)

@@ -104,6 +104,7 @@ class MultiHeadProcessor(nn.Module):
         padding: Union[str, int] = "same",
         padding_mode: str = "zeros",
         dropout: int = 0,
+        use_slim_mode: bool = False,
     ):
         super().__init__()
 
@@ -117,13 +118,16 @@ class MultiHeadProcessor(nn.Module):
 
         for h in range(self.n_heads):
             curr_head = []
+            in_channels = in_channels_list[h]
             for n in range(self.n_convs_per_head):
                 curr_head.append(
                     ConvBlock(
-                        in_channels=in_channels_list[h]
-                        if n == 0
+                        in_channels=in_channels
+                        if n == 0 or use_slim_mode
                         else initial_fmaps * fmap_inc_factor**h,
-                        out_channels=initial_fmaps * fmap_inc_factor**h,
+                        out_channels=in_channels
+                        if use_slim_mode
+                        else initial_fmaps * fmap_inc_factor**h,
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         padding=padding,
@@ -136,7 +140,9 @@ class MultiHeadProcessor(nn.Module):
             self.heads.append(nn.Sequential(*curr_head))
             self.last_convs.append(
                 ConvBlock(
-                    in_channels=initial_fmaps * fmap_inc_factor**h,
+                    in_channels=in_channels
+                    if use_slim_mode
+                    else initial_fmaps * fmap_inc_factor**h,
                     out_channels=out_channels,
                     kernel_size=1,
                     batch_norm=batch_norm,
