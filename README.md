@@ -11,7 +11,7 @@ Create and activate a fresh conda environment:
 (base) foo@bar:~$ conda activate spotipy-torch
 ```
 
-Then install pytorch using conda/mamba (refer to [pytorch.org](https://pytorch.org/get-started/locally/) for more info depending on your system):
+Then install PyTorch using conda/mamba (refer to [the official installation instructions](https://pytorch.org/get-started/locally/) for more info depending on your system):
 
 For MacOS:
 ```console
