@@ -33,6 +33,8 @@ def get_run_name(args: SimpleNamespace):
     name += f"_crop{int(args.crop_size)}"
     name += f"_posweight{int(args.pos_weight)}"
     name += f"_seed{int(args.seed)}"
+    name += f"_flow_{args.flow}"
+    name += f"_bn_{args.batch_norm}"
     name += f"_aug{args.augment_prob:.1f}"
     name += "_tormenter"  # !
     name += "_skipbgremover" if args.skip_bg_remover else ""
@@ -83,6 +85,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--in-channels", type=int, default=1, help="Number of input channels"
     )
+    parser.add_argument("--flow", action="store_true")
     parser.add_argument(
         "--levels", type=int, default=4, help="Number of levels in the model"
     )
@@ -217,7 +220,7 @@ if __name__ == "__main__":
         transforms.Crop(
             probability=1.0,
             size=(args.crop_size, args.crop_size),
-            smart=args.smart_crop,
+            point_priority=0.8 if args.smart_crop else 0,
         )
     )
     augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
@@ -235,7 +238,7 @@ if __name__ == "__main__":
         transforms.Crop(
             probability=1.0,
             size=(args.crop_size, args.crop_size),
-            smart=args.smart_crop,
+            point_priority=0.8 if args.smart_crop else 0,
         )
     )
 
@@ -272,6 +275,7 @@ if __name__ == "__main__":
         downsample_factor=args.downsample_factor,
         kernel_size=args.kernel_size,
         padding="same",
+        compute_flow=args.flow,
         levels=args.levels,
         mode=args.mode,
         background_remover=not args.skip_bg_remover,
@@ -340,6 +344,7 @@ if __name__ == "__main__":
         augmenter=augmenter,
         sigma=training_config.sigma,
         mode="max",
+        compute_flow=args.flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
@@ -352,6 +357,7 @@ if __name__ == "__main__":
         augmenter=augmenter_val,
         sigma=training_config.sigma,
         mode="max",
+        compute_flow=args.flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
