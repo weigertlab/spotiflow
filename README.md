@@ -15,12 +15,12 @@ Then install pytorch using conda/mamba (refer to [pytorch.org](https://pytorch.o
 
 For MacOS:
 ```console
-(spotipy-torch) foo@bar:~$ mamba install pytorch::pytorch torchvision -c pytorch # for MacOS
+(spotipy-torch) foo@bar:~$ conda install pytorch::pytorch torchvision -c pytorch # for MacOS
 ```
 
 For linux with a CUDA device (one might need to change the cuda version accordingly):
 ```console
-(spotipy-torch) foo@bar:~$ mamba conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
+(spotipy-torch) foo@bar:~$ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
 ```
 
 
