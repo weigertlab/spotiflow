@@ -33,6 +33,7 @@ def get_run_name(args: SimpleNamespace):
     name += f"_crop{int(args.crop_size)}"
     name += f"_posweight{int(args.pos_weight)}"
     name += f"_seed{int(args.seed)}"
+    name += f"_mode_{args.mode}"
     name += f"_flow_{args.flow}"
     name += f"_bn_{args.batch_norm}"
     name += f"_aug{args.augment_prob:.1f}"
@@ -78,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["direct", "fpn"],
+        choices=["direct", "fpn", "slim"],
         default="direct",
         help="Mode to use for the model",
     )

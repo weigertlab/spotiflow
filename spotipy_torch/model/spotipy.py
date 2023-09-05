@@ -54,6 +54,14 @@ class Spotipy(nn.Module):
                 initial_fmaps=self.config.initial_fmaps,
                 fmap_inc_factor=self.config.fmap_inc_factor,
             )
+        elif config.mode == "slim":
+            self._post = MultiHeadProcessor(
+                in_channels_list=self._backbone.out_channels_list,
+                out_channels=self.config.out_channels,
+                kernel_sizes=self.config.kernel_sizes,
+                initial_fmaps=self.config.initial_fmaps,
+                fmap_inc_factor=1,
+            )
         elif config.mode == "fpn":
             self._post = FeaturePyramidNetwork(
                 in_channels_list=self._backbone.out_channels_list,

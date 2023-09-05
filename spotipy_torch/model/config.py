@@ -92,7 +92,7 @@ class SpotipyModelConfig(SpotipyConfig):
         kernel_size: int = 3,
         padding: Union[int, str] = "same",
         levels: int = 4,
-        mode: Literal["direct", "fpn"] = "direct",
+        mode: Literal["direct", "fpn", "slim"] = "direct",
         background_remover: bool = True,
         compute_flow: bool = False,
         batch_norm: bool = False,
@@ -181,7 +181,11 @@ class SpotipyModelConfig(SpotipyConfig):
             isinstance(self.padding, str) or self.padding >= 0
         ), "padding must be greater than or equal to 0"
         assert self.levels > 0, "levels must be greater than 0"
-        assert self.mode in {"direct", "fpn"}, "mode must be either 'direct' or 'fpn'"
+        assert self.mode in {
+            "direct",
+            "fpn",
+            "slim",
+        }, "mode must be either 'direct', 'fpn', or 'slim'"
         assert 0.0 <= self.dropout <= 1.0, "dropout must be between 0 and 1"
 
 
@@ -197,7 +201,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         lr: float = 3e-4,
         optimizer: str = "adamw",
         batch_size: int = 4,
-        lr_reduce_patience:int = 10, 
+        lr_reduce_patience: int = 10,
         num_epochs: int = 200,
         **kwargs,
     ):

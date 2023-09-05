@@ -118,27 +118,28 @@ class MultiHeadProcessor(nn.Module):
         for h in range(self.n_heads):
             curr_head = []
             for n in range(self.n_convs_per_head):
-                curr_head += [
+                curr_head.append(
                     ConvBlock(
-                        in_channels=in_channels_list[h] if n == 0
-                        # else int(initial_fmaps * fmap_inc_factor**h),
-                        # out_channels=int(initial_fmaps * fmap_inc_factor**h),
-                        else initial_fmaps,
-                        out_channels=initial_fmaps,
+                        in_channels=in_channels_list[h]
+                        if n == 0
+                        else initial_fmaps * fmap_inc_factor**h,
+                        out_channels=initial_fmaps * fmap_inc_factor**h,
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
-                        batch_norm=batch_norm,
                         padding=padding,
                         padding_mode=padding_mode,
+                        batch_norm=batch_norm,
                         dropout=dropout,
                     )
-                ]
+                )
+
             self.heads.append(nn.Sequential(*curr_head))
             self.last_convs.append(
                 ConvBlock(
-                    in_channels=initial_fmaps,
+                    in_channels=initial_fmaps * fmap_inc_factor**h,
                     out_channels=out_channels,
                     kernel_size=1,
+                    batch_norm=batch_norm,
                     activation=nn.Identity,
                 )
             )
@@ -154,17 +155,19 @@ class MultiHeadProcessor(nn.Module):
                 )
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, nonlinearity=nonlinearity)
-                nn.init.zeros_(m.bias)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
         if activation is nn.ReLU or activation is nn.LeakyReLU:
             self.heads.apply(init_kaiming)
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         assert len(x) == self.n_heads, f"Expected {self.n_heads} inputs, got {len(x)}"
-        out = [None] * self.n_heads
-        for h in range(self.n_heads):
-            out[h] = self.heads[h](x[h])
-            out[h] = self.last_convs[h](out[h])
+        out = []
+        for _x, head, last in zip(x, self.heads, self.last_convs):
+            y = head(_x)
+            y = last(y)
+            out.append(y)
         return out
 
 
