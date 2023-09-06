@@ -287,7 +287,7 @@ if __name__ == "__main__":
     # Create model
     model = Spotipy(model_config)
 
-    # model = torch.compile(model)
+    model = torch.compile(model)
 
     callbacks = [
         pl.callbacks.LearningRateMonitor(logging_interval="epoch"),
