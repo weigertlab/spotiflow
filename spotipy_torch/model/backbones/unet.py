@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Literal, Tuple, Union
 
 
 class ConvBlock(nn.Module):
@@ -49,6 +49,7 @@ class UNetBackbone(nn.Module):
         batch_norm: bool = False,
         padding: Union[str, int] = 1,
         padding_mode: str = "zeros",
+        concat_mode: Literal['cat', 'add'] = "cat",
         dropout: float = 0,
         upsampling_mode: str = "nearest",
     ):
@@ -57,6 +58,7 @@ class UNetBackbone(nn.Module):
 
         self.levels = len(downsample_factors) + 1
         self.n_convs_per_level = len(kernel_sizes)
+        self.concat_mode = concat_mode
 
         # Down
         self.down_blocks = nn.ModuleList()
@@ -143,11 +145,18 @@ class UNetBackbone(nn.Module):
         for l in reversed(range(self.levels - 1)):
             curr_lv = []
             for n in range(self.n_convs_per_level - 1):
+                if n==0:
+                    if self.concat_mode=='cat':
+                        in_channels = 2* int(initial_fmaps * fmap_inc_factor**l)
+                    elif self.concat_mode=='add':
+                        in_channels = int(initial_fmaps * fmap_inc_factor **l)
+                    else: 
+                        raise ValueError(f'concat_mode {self.concat_mode} must be either "cat" or "add"')
+                else:
+                    in_channels = int(initial_fmaps * fmap_inc_factor**l)
                 curr_lv += [
                     ConvBlock(
-                        in_channels=2 * int(initial_fmaps * fmap_inc_factor**l)
-                        if n == 0
-                        else int(initial_fmaps * fmap_inc_factor**l),
+                        in_channels=in_channels,
                         out_channels=int(initial_fmaps * fmap_inc_factor**l),
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
@@ -169,7 +178,6 @@ class UNetBackbone(nn.Module):
                     dropout=dropout,
                 )
             ]
-            print(l)
             self.up_blocks += [nn.Sequential(*curr_lv)]
 
         self.up_blocks = nn.ModuleList(self.up_blocks[::-1])
@@ -211,7 +219,13 @@ class UNetBackbone(nn.Module):
         # Up in reverse
         for l in reversed(range(self.levels - 1)):
             x = self.upsamples[l](x)
-            x = torch.cat([x, skip_layers[l]], dim=1)
+            if self.concat_mode=='cat':
+                x = torch.cat([x, skip_layers[l]], dim=1)
+            elif self.concat_mode=='add':
+                x = x + skip_layers[l]
+            else:
+                raise ValueError(self.concat_mode)
+            
             x = self.up_blocks[l](x)
             out += [x]
 

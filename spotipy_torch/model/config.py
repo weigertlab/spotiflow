@@ -82,16 +82,16 @@ class SpotipyConfig(argparse.Namespace, abc.ABC):
 class SpotipyModelConfig(SpotipyConfig):
     def __init__(
         self,
-        backbone: Literal["resnet", "unet"] = "unet",
+        backbone: Literal["resnet", "unet", "unet_res"] = "unet",
         in_channels: int = 1,
         out_channels: int = 1,
         initial_fmaps: int = 32,
         fmap_inc_factor: Number = 2,
         n_convs_per_level: int = 3,
+        levels: int = 4,
         downsample_factor: int = 2,
         kernel_size: int = 3,
         padding: Union[int, str] = "same",
-        levels: int = 4,
         mode: Literal["direct", "fpn", "slim"] = "direct",
         background_remover: bool = True,
         compute_flow: bool = False,
@@ -142,7 +142,8 @@ class SpotipyModelConfig(SpotipyConfig):
         assert self.backbone in {
             "resnet",
             "unet",
-        }, "backbone must be either 'resnet' or 'unet'"
+            "unet_res"
+        }, "backbone must be either 'resnet', 'unet', or 'unet_res"
         assert (
             isinstance(self.in_channels, int) and self.in_channels > 0
         ), "in_channels must be greater than 0"
@@ -196,6 +197,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         crop_size: int = 512,
         smart_crop: bool = False,
         loss_f: str = "bce",
+        loss_levels: int = None,
         num_train_samples: Optional[int] = None,
         pos_weight: Number = 10.0,
         lr: float = 3e-4,
@@ -209,6 +211,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.crop_size = crop_size
         self.smart_crop = bool(smart_crop)
         self.loss_f = loss_f
+        self.loss_levels = loss_levels
         self.pos_weight = pos_weight
         self.lr = lr
         self.lr_reduce_patience = lr_reduce_patience
@@ -216,6 +219,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.num_train_samples = num_train_samples
+        
         super().__init__()
 
     def is_valid(self):

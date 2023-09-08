@@ -91,6 +91,13 @@ class FeaturePyramidNetwork(nn.Module):
         return smoothed_fpn_output
 
 
+# class MultiResMixed(nn.Module):
+#     def forward(self, xs: List[torch.Tensor]):
+#         interps = tuple(torch.cat(tuple(F.interpolate(_x, size=x.shape[-2:], mode="bilinear", align_corners=True) for _x in xs), dim=1) for x in xs)
+        
+        
+        
+        
 class MultiHeadProcessor(nn.Module):
     def __init__(
         self,
@@ -99,10 +106,11 @@ class MultiHeadProcessor(nn.Module):
         kernel_sizes: Tuple[Tuple[int, int]],
         initial_fmaps: int,
         fmap_inc_factor: float = 2,
-        activation: nn.Module = nn.ReLU,
+        activation: nn.Module = nn.LeakyReLU,
         batch_norm: bool = False,
         padding: Union[str, int] = "same",
         padding_mode: str = "zeros",
+        mix_last: bool = False,
         dropout: int = 0,
         use_slim_mode: bool = False,
     ):
@@ -112,22 +120,22 @@ class MultiHeadProcessor(nn.Module):
         self.n_convs_per_head = len(kernel_sizes)
         self.activation = activation
         self.heads = nn.ModuleList()
+        self.mix_last = mix_last
         self.last_convs = (
             nn.ModuleList()
         )  # Need to be separated to avoid kaiming init on blocks with non-relu activations
 
-        for h in range(self.n_heads):
+        out_channels_list_after = [] 
+        for h, in_channels in enumerate(in_channels_list):
             curr_head = []
-            in_channels = in_channels_list[h]
+            
             for n in range(self.n_convs_per_head):
+                in_chan = in_channels if n == 0 or use_slim_mode else initial_fmaps * fmap_inc_factor**h
+                out_chan = in_channels if use_slim_mode else initial_fmaps * fmap_inc_factor**h
                 curr_head.append(
                     ConvBlock(
-                        in_channels=in_channels
-                        if n == 0 or use_slim_mode
-                        else initial_fmaps * fmap_inc_factor**h,
-                        out_channels=in_channels
-                        if use_slim_mode
-                        else initial_fmaps * fmap_inc_factor**h,
+                        in_channels=in_chan,
+                        out_channels=out_chan,
                         kernel_size=kernel_sizes[n],
                         activation=self.activation,
                         padding=padding,
@@ -136,16 +144,21 @@ class MultiHeadProcessor(nn.Module):
                         dropout=dropout,
                     )
                 )
+            out_channels_list_after.append(out_chan)
 
             self.heads.append(nn.Sequential(*curr_head))
+            
+        if self.mix_last:
+            out_channels_list_after = [sum(out_channels_list_after)] * self.n_heads
+            
+        for h, in_channels in enumerate(out_channels_list_after):
             self.last_convs.append(
                 ConvBlock(
-                    in_channels=in_channels
-                    if use_slim_mode
-                    else initial_fmaps * fmap_inc_factor**h,
+                    in_channels=in_channels,
                     out_channels=out_channels,
                     kernel_size=1,
-                    batch_norm=batch_norm,
+                    bias=False,
+                    batch_norm=False,
                     activation=nn.Identity,
                 )
             )
@@ -169,12 +182,17 @@ class MultiHeadProcessor(nn.Module):
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         assert len(x) == self.n_heads, f"Expected {self.n_heads} inputs, got {len(x)}"
-        out = []
-        for _x, head, last in zip(x, self.heads, self.last_convs):
-            y = head(_x)
-            y = last(y)
-            out.append(y)
-        return out
+        x = tuple(head(_x) for _x, head in zip(x, self.heads))
+
+        if self.mix_last:
+            x = tuple(torch.cat(tuple(F.interpolate(_x2, size=_x.shape[-2:], mode="bilinear", align_corners=True) for _x2 in x), dim=1) for _x in x)
+
+        x = tuple(last(_x) for _x, last in zip(x, self.last_convs))
+            
+        return x
+
+
+
 
 
 class SimpleConv(nn.Module):
@@ -199,7 +217,6 @@ class SimpleConv(nn.Module):
                     out_channels if last else in_channels,
                     3,
                     padding=1,
-                    bias=True,
                     activation=nn.Identity if last else activation,
                 )
             )

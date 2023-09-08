@@ -45,6 +45,15 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self.model = model
 
         self.training_config = training_config
+        
+        if self.training_config.loss_levels is None:
+            self._loss_levels = self.model._levels
+        elif self.training_config.loss_levels <= model._levels:
+            self._loss_levels = self.training_config.loss_levels
+        else:
+            raise ValueError(
+                f"Loss levels ({self.training_config.loss_levels}) must be less than or equal to model levels ({model._levels})."
+            )
 
         self._loss_funcs = self._loss_switcher()
 
@@ -55,6 +64,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._valid_targets = []
         self._valid_outputs = []
         self._valid_flows = []
+        
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Forward pass of the model.
@@ -85,12 +95,12 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         def _loss(y, target):
             loss = func(y, target)
             if pos_weight == 0:
-                return loss.sum() / y.numel()
-            mask_pos_tgt = target > positive_threshold
-            mask_pos_y = y > positive_threshold
+                return loss.mean()
+            mask_pos_tgt = target >= positive_threshold
+            mask_pos_y = y >= positive_threshold
             mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
             wloss = (1 + pos_weight * mask_pos) * loss
-            return wloss.sum() / y.numel()
+            return wloss.mean()
 
         return _loss
 
@@ -135,7 +145,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         loss_heatmap = sum(
             tuple(
                 loss_f(pred_heatmap[lv], heatmap_lvs[lv]) / 4**lv
-                for lv, loss_f in zip(range(self.model._levels), self._loss_funcs)
+                for lv, loss_f in zip(range(self._loss_levels), self._loss_funcs)
             )
         )
         loss = loss_heatmap
@@ -396,6 +406,8 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         return train_dl, val_dl
 
 
+
+
 # a model checkpoint that uses Spotipy.save() to save the model
 class SpotipyModelCheckpoint(pl.callbacks.Callback):
     """Callback to save the best model according to a given metric.
@@ -454,6 +466,11 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             pl_module (pl.LightningModule): lightning module object.
         """
         if trainer.is_global_zero:
+            # save last 
+            pl_module.model.save(self._logdir, which="last")
+            log.info("Saved last model.")
+            # load best and optimize thresholds...
+            pl_module.model.load(self._logdir, which='best')
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
                 cutoff_distance=2 * self._train_config.sigma + 1,
@@ -462,5 +479,5 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 batch_size=1,
                 device=pl_module.device,
             )
-            pl_module.model.save(self._logdir, which="last", update_thresholds=True)
-            log.info("Saved last model with optimized threshold.")
+            pl_module.model.save(self._logdir, which="best", update_thresholds=True)
+            log.info("Savedoptimized threshold for best model.")

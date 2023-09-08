@@ -24,7 +24,7 @@ class SpotsDataset(Dataset):
         self,
         images: Sequence[np.ndarray],
         centers: Sequence[np.ndarray],
-        augmenter: Union[Callable, None] = None,
+        augmenter: Optional[Callable] = None,
         downsample_factors: Sequence[int] = (1,),
         sigma: float = 1.0,
         mode: str = "max",
@@ -56,7 +56,7 @@ class SpotsDataset(Dataset):
     def from_folder(
         cls,
         path: Union[Path, str],
-        augmenter: Union[Callable, None],
+        augmenter: Optional[Callable] = None,
         downsample_factors: Sequence[int] = (1,),
         sigma: float = 1.0,
         image_extensions: Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg"),

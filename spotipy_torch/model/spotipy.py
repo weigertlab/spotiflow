@@ -481,7 +481,7 @@ class Spotipy(nn.Module):
             for batch in tqdm(dataloader, desc="Predicting"):
                 imgs = batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = self._sigmoid(out[0].squeeze(1)).detach().cpu().numpy()
+                high_lv_preds = self._sigmoid(out['heatmaps'][0].squeeze(1)).detach().cpu().numpy()
                 for batch_elem in range(high_lv_preds.shape[0]):
                     preds += [high_lv_preds[batch_elem]]
                 del out, imgs, batch
@@ -522,6 +522,7 @@ class Spotipy(nn.Module):
             device (_type_, optional): computing device. Defaults to torch.device("cpu").
         """
         val_preds = []
+        val_gt_pts = []
         val_dataloader = torch.utils.data.DataLoader(
             val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
         )
@@ -529,15 +530,21 @@ class Spotipy(nn.Module):
         with torch.inference_mode():
             for val_batch in val_dataloader:
                 imgs = val_batch["img"].to(device)
+
                 out = self(imgs)
                 high_lv_preds = (
                     self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
                 )
+                for p in val_batch["heatmap_lv0"]:
+                    val_gt_pts.append(
+                        prob_to_points(p[0].detach().cpu().numpy(), prob_thresh=.8, 
+                                       exclude_border=exclude_border, 
+                                       min_distance=min_distance))
+                    
                 for batch_elem in range(high_lv_preds.shape[0]):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
 
-        val_gt_pts = val_ds.centers
 
         def _metric_at_threshold(thr):
             val_pred_pts = [
@@ -556,7 +563,7 @@ class Spotipy(nn.Module):
 
         def _grid_search(tmin, tmax):
             thr = np.linspace(tmin, tmax, niter)
-            ys = tuple(_metric_at_threshold(t) for t in thr)
+            ys = tuple(_metric_at_threshold(t) for t in tqdm(thr, desc='optimizing threshold'))
             i = np.argmax(ys)
             i1, i2 = max(0, i - 1), min(i + 1, len(thr) - 1)
             return thr[i], (thr[i1], thr[i2]), ys[i]
@@ -581,8 +588,20 @@ class Spotipy(nn.Module):
                 "batch_norm",
                 "padding",
             )
-            return UNetBackbone(**backbone_params)
-        if self.config.backbone == "resnet":
+            return UNetBackbone(concat_mode='cat', **backbone_params)
+        elif self.config.backbone == "unet_res":
+            backbone_params = pydash.pick(
+                self.config,
+                "in_channels",
+                "initial_fmaps",
+                "fmap_inc_factor",
+                "downsample_factors",
+                "kernel_sizes",
+                "batch_norm",
+                "padding",
+            )
+            return UNetBackbone(concat_mode='add', **backbone_params)
+        elif self.config.backbone == "resnet":
             backbone_params = pydash.pick(
                 self.config,
                 "in_channels",
