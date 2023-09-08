@@ -211,6 +211,7 @@ class Spotipy(nn.Module):
             which (Literal["best", "last"]): which checkpoint to save. Should be either "best" or "last".
             only_config (bool, optional): whether to log only the config (useful if re-saving only for threshold optimization). Defaults to False.
         """
+        assert which in ("best", "last"), "which must be either 'best' or 'last'"
         checkpoint_path = Path(path)
         torch.save(
             {
@@ -221,8 +222,21 @@ class Spotipy(nn.Module):
 
         self.config.save(checkpoint_path / "config.yaml")
         if update_thresholds:
-            with open(checkpoint_path / "thresholds.yaml", "w") as fb:
-                yaml.safe_dump({"prob_thresh": self._prob_thresh}, fb, indent=4)
+            thr_config_path = checkpoint_path / "thresholds.yaml"
+
+            # Load existing thresholds file
+            if thr_config_path.exists():
+                with open(thr_config_path, "r") as fb:
+                    threshold_dct = yaml.safe_load(fb)
+            else:
+                threshold_dct = {}
+
+            # Update thresholds object according to current model and which checkpoint is updated
+            threshold_dct.update({f"prob_thresh_{which}": self._prob_thresh})
+
+            # Save the updated thresholds file
+            with open(thr_config_path, "w") as fb:
+                yaml.safe_dump(threshold_dct, fb, indent=4)
         return
 
     @staticmethod
@@ -257,6 +271,7 @@ class Spotipy(nn.Module):
             inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
             map_location (str, optional): device string to load the model to. Defaults to 'cuda'.
         """
+        assert which in ("best", "last"), "which must be either 'best' or 'last'"
         thresholds_path = Path(path) / "thresholds.yaml"
         if thresholds_path.is_file():
             with open(thresholds_path, "r") as fb:
@@ -274,7 +289,10 @@ class Spotipy(nn.Module):
         model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
         self.load_state_dict(model_state)
 
-        self._prob_thresh = thresholds.get("prob_thresh", 0.5)
+        if f"prob_thresh_{which}" in thresholds.keys():
+            self._prob_thresh = thresholds[f"prob_thresh_{which}"]
+        else: # ! For retrocompatibility, remove in the future
+            self._prob_thresh = thresholds.get("prob_thresh", 0.5)
         if inference_mode:
             self.eval()
             return

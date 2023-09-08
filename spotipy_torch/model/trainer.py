@@ -467,8 +467,16 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
         """
         if trainer.is_global_zero:
             # save last 
-            pl_module.model.save(self._logdir, which="last")
-            log.info("Saved last model.")
+            pl_module.model.optimize_threshold(
+                val_ds=trainer.val_dataloaders.dataset,
+                cutoff_distance=2 * self._train_config.sigma + 1,
+                min_distance=1,
+                exclude_border=False,
+                batch_size=1,
+                device=pl_module.device,
+            )
+            pl_module.model.save(self._logdir, which="last", update_thresholds=True)
+            log.info("Saved last model with optimized thresholds.")
             # load best and optimize thresholds...
             pl_module.model.load(self._logdir, which='best')
             pl_module.model.optimize_threshold(
@@ -480,4 +488,4 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 device=pl_module.device,
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
-            log.info("Savedoptimized threshold for best model.")
+            log.info("Saved best model with optimized thresholds.")

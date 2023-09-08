@@ -1,10 +1,8 @@
-import logging
 import numpy as np
 import pytest
 import torch
 
 from spotipy_torch.model import Spotipy, SpotipyModelConfig
-from typing import Tuple
 from tempfile import TemporaryDirectory
 
 
