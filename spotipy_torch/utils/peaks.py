@@ -159,7 +159,7 @@ def prob_to_points(
             exclude_border=exclude_border,
         )
     else:
-        raise NotImplementedError(f'unknown mode {mode} (supported: "skimage")')
+        raise NotImplementedError(f'unknown mode {mode} (supported: "skimage", "fast")')
     return corners
 
 
@@ -194,7 +194,6 @@ def local_peaks(
     mask = _exclude_border(mask, border_width)
 
     coord = np.nonzero(mask)
-    image[coord]
     coord = np.stack(coord, axis=1)
 
     points = nms_points_2d(coord, min_distance=min_distance)
