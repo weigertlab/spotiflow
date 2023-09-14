@@ -227,7 +227,7 @@ if __name__ == "__main__":
     augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
     augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
     # augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
-    # augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
+    augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
     augmenter.add(
         transforms.IntensityScaleShift(
             probability=args.augment_prob, scale=(0.5, 2.0), shift=(-0.2, 0.2)
@@ -365,7 +365,7 @@ if __name__ == "__main__":
 
     if args.num_epochs > 0:
         # Train model
-        model.fit(
+        model.fit( # TODO Make fit accept img/coordinate pairs
             train_ds,
             val_ds,
             training_config,

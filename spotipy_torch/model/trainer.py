@@ -234,11 +234,11 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         Logs the F1 score and accuracy of the model on the validation set, as well as some sample images.
         """
         valid_tgt_centers = [
-            prob_to_points(t, exclude_border=False, min_distance=1)
+            prob_to_points(t, exclude_border=False, min_distance=1, mode="fast")
             for t in self._valid_targets
         ]
         valid_pred_centers = [
-            prob_to_points(p, exclude_border=False, min_distance=1)
+            prob_to_points(p, exclude_border=False, min_distance=1, mode="fast")
             for p in self._valid_outputs
         ]
         stats = points_matching_dataset(
