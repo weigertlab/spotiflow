@@ -4,7 +4,7 @@ from pathlib import Path
 from scipy.ndimage import zoom
 from tqdm.auto import tqdm
 from types import SimpleNamespace
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Literal, Optional, Sequence, Tuple, Union
 
 
 import lightning.pytorch as pl
@@ -15,7 +15,7 @@ import torch.nn as nn
 import numpy as np
 import yaml
 
-
+from ..data import SpotsDataset
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotipyModelConfig, SpotipyTrainingConfig
@@ -39,13 +39,17 @@ class Spotipy(nn.Module):
     to allow loss computation and optimization at different resolution levels.
     """
 
-    def __init__(self, config: SpotipyModelConfig) -> None:
+    def __init__(self, config: Optional[SpotipyModelConfig]=None) -> None:
         """Initialize the model.
 
         Args:
-            config (SpotipyModelConfig): model configuration object
+            config (Optional[SpotipyModelConfig]): model configuration object. If None, will use the default configuration.
         """
         super().__init__()
+        if config is None:
+            log.info("No model config given, using default.")
+            config = SpotipyModelConfig()
+            log.info(f"Default model config: {config}")
         self.config = config
         self._bg_remover = (
             BackgroundRemover() if config.background_remover else nn.Identity()
@@ -156,22 +160,23 @@ class Spotipy(nn.Module):
 
     def fit(
         self,
-        train_ds,
-        val_ds,
-        train_config: SpotipyTrainingConfig,
-        accelerator: str,
+        training_data: Union[torch.utils.data.Dataset, Tuple],
+        validation_data: Optional[Union[torch.utils.data.Dataset, Tuple]]=None,
+        train_config: Optional[SpotipyTrainingConfig]=None,
+        accelerator: str="cpu",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = [],
         deterministic: Optional[bool] = True,
         benchmark: Optional[bool] = False,
+        **kwargs,
     ):
         """Train the model.
 
         Args:
-            train_ds (torch.utils.data.Dataset): training dataset
-            val_ds (torch.utils.data.Dataset): validation dataset
+            training_data (Union[torch.utils.data.Dataset, Tuple]): training dataset. If a tuple is given, it should be (I, P) where I is a list of images and P is a list of points.
+            validation_data (Union[torch.utils.data.Dataset, Tuple]): validation dataset. If a tuple is given, it should be (I, P) where I is a list of images and P is a list of points.
             train_config (SpotipyTrainingConfig): training configuration
             accelerator (str): accelerator to use. Can be "cpu", "cuda", "mps" or "auto".
             logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to None.
@@ -181,6 +186,17 @@ class Spotipy(nn.Module):
             deterministic (Optional[bool], optional): whether to use deterministic training. Set to True for deterministic behaviour at a cost of performance. Defaults to True.
             benchmark (Optional[bool], optional): whether to use benchmarking. Set to False for deterministic behaviour at a cost of performance. Defaults to False.
         """
+        if train_config is None:
+            log.info("No training config given. Using default.")
+            train_config = SpotipyTrainingConfig()
+            log.info(f"Default training config: {train_config}")
+        assert validation_data is None or type(training_data) == type(validation_data), "Training and validation data must be of the same type"
+        if isinstance(training_data, torch.utils.data.Dataset):
+            train_ds, val_ds = training_data, validation_data
+        else:
+            if validation_data is None:
+                validation_data = [None, None]
+            train_ds, val_ds = self.generate_datasets(*training_data, *validation_data, **kwargs)
         trainer = pl.Trainer(
             accelerator=accelerator,
             devices=devices,
@@ -200,6 +216,43 @@ class Spotipy(nn.Module):
         )
         trainer.fit(training_wrapper, train_dl, val_dl)
         log.info("Training finished.")
+    
+    @staticmethod
+    def generate_datasets(X: Union[np.ndarray, Sequence], Y: Sequence,
+                          valX: Optional[Union[np.ndarray, Sequence]]=None, valY: Optional[Sequence]=None,
+                          val_frac: float=.15, seed: int=42, **kwargs) -> Tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
+        """Generate the training and validation datasets with default settings.
+
+        Args:
+            X (Union[np.ndarray, Sequence]): training images
+            Y (Sequence): training points
+            valX (Union[np.ndarray, Sequence]): validation images. Optional
+            valY (Sequence): validation labels. Optional
+            val_frac (float, optional): fraction of the training set to use for validation. Unused if validation data is explicitly given. Defaults to .15.
+            seed (int, optional): random seed for data splitting. Unused if validation data is explicitly given. Defaults to 42.
+            kwargs: additional arguments to pass to the SpotsDataset class
+        """
+        if isinstance(X, np.ndarray):
+            X = [X[i] for i in range(X.shape[0])]
+
+        if valX is not None and isinstance(valX, np.ndarray):
+            valX = [valX[i] for i in range(valX.shape[0])]
+        elif valX is None:
+            log.info(f"No validation data given, will use a subset of training data as validation ({val_frac:.2f}).")
+            rng = np.random.default_rng(seed)
+            val_idx = sorted(rng.choice(len(X), int(len(X) * val_frac), replace=False, shuffle=False))
+            valX = [X[i] for i in val_idx]
+            valY = [Y[i] for i in val_idx]
+            X = [X[i] for i in range(len(X)) if i not in val_idx]
+            Y = [Y[i] for i in range(len(Y)) if i not in val_idx]
+
+        train_ds = SpotsDataset(X, Y, **kwargs)
+
+        # Avoid augmenting validation data
+        kwargs_val = kwargs.copy()
+        kwargs_val["augmenter"] = None
+        val_ds = SpotsDataset(valX, valY, **kwargs)
+        return train_ds, val_ds
 
     def save(
         self, path: str, which: Literal["best", "last"], update_thresholds: bool = False
@@ -359,7 +412,7 @@ class Spotipy(nn.Module):
         ) + (1,)
         pad_shape = tuple(int(d * np.ceil(s / d)) for s, d in zip(x.shape, div_by))
         if verbose:
-            print(f"Padding to shape {pad_shape}")
+            log.info(f"Padding to shape {pad_shape}")
         x, padding = center_pad(x, pad_shape, mode="reflect")
 
         self.eval()
