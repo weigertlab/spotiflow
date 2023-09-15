@@ -39,6 +39,7 @@ def get_run_name(args: SimpleNamespace):
     name += f"_aug{args.augment_prob:.1f}"
     name += "_tormenter"  # !
     name += "_skipbgremover" if args.skip_bg_remover else ""
+    name += "_scaleaug" if args.scale_augmentation else ""
     name += "_dry" if args.dry else ""
     name = name.replace(".", "_")  # Remove dots to avoid confusion with file extensions
     return name
@@ -202,6 +203,12 @@ if __name__ == "__main__":
         default=False,
         help="If given, won't save any output files",
     )
+    parser.add_argument(
+        "--scale-augmentation",
+        action="store_true",
+        default=False,
+        help="If given, add scale augmentation to the augment pipeline",
+    )
 
     args = parser.parse_args()
 
@@ -226,7 +233,8 @@ if __name__ == "__main__":
     )
     augmenter.add(transforms.FlipRot90(probability=args.augment_prob))
     augmenter.add(transforms.Rotation(probability=args.augment_prob, order=1))
-    # augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
+    if args.scale_augmentation:
+        augmenter.add(transforms.IsotropicScale(probability=args.augment_prob, order=1, scaling_factor=(.5, 2.)))
     augmenter.add(transforms.GaussianNoise(probability=args.augment_prob, sigma=(0, 0.05)))
     augmenter.add(
         transforms.IntensityScaleShift(
