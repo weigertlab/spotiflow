@@ -1,13 +1,17 @@
-import numpy as np
-import warnings
-from csbdeep.utils import normalize_mi_ma
-import scipy.ndimage as ndi
-from pathlib import Path
-import pandas as pd
-
 import logging
+import numpy as np
 import os
+import pandas as pd
+import torch
+import scipy.ndimage as ndi
+import warnings
 import wandb
+
+from csbdeep.utils import normalize_mi_ma
+from pathlib import Path
+from typing import Optional, Sequence, Tuple, Union
+
+from ..data import SpotsDataset
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -255,3 +259,43 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
     df = pd.DataFrame(pts, columns=["y", "x"])
     df.to_csv(fname, index=False)
     return
+
+def generate_datasets(
+    X: Union[np.ndarray, Sequence],
+    Y: Sequence,
+    valX: Optional[Union[np.ndarray, Sequence]]=None,
+    valY: Optional[Sequence]=None,
+    val_frac: float=.15, seed: int=42, **kwargs
+) -> Tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
+    """Generate the training and validation datasets with default settings.
+
+    Args:
+        X (Union[np.ndarray, Sequence]): training images
+        Y (Sequence): training points
+        valX (Union[np.ndarray, Sequence]): validation images. Optional
+        valY (Sequence): validation labels. Optional
+        val_frac (float, optional): fraction of the training set to use for validation. Unused if validation data is explicitly given. Defaults to .15.
+        seed (int, optional): random seed for data splitting. Unused if validation data is explicitly given. Defaults to 42.
+        kwargs: additional arguments to pass to the SpotsDataset class
+    """
+    if isinstance(X, np.ndarray):
+        X = [X[i] for i in range(X.shape[0])]
+
+    if valX is not None and isinstance(valX, np.ndarray):
+        valX = [valX[i] for i in range(valX.shape[0])]
+    elif valX is None:
+        log.info(f"No validation data given, will use a subset of training data as validation ({val_frac:.2f}).")
+        rng = np.random.default_rng(seed)
+        val_idx = sorted(rng.choice(len(X), int(len(X) * val_frac), replace=False, shuffle=False))
+        valX = [X[i] for i in val_idx]
+        valY = [Y[i] for i in val_idx]
+        X = [X[i] for i in range(len(X)) if i not in val_idx]
+        Y = [Y[i] for i in range(len(Y)) if i not in val_idx]
+
+    train_ds = SpotsDataset(X, Y, **kwargs)
+
+    # Avoid augmenting validation data
+    kwargs_val = kwargs.copy()
+    kwargs_val["augmenter"] = None
+    val_ds = SpotsDataset(valX, valY, **kwargs)
+    return train_ds, val_ds
