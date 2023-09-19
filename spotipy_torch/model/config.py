@@ -205,6 +205,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         batch_size: int = 4,
         lr_reduce_patience: int = 10,
         num_epochs: int = 200,
+        finetuned_from: Optional[str] = None,
         **kwargs,
     ):
         self.sigma = sigma
@@ -219,7 +220,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.num_train_samples = num_train_samples
-        
+        self.finetuned_from = finetuned_from
         super().__init__()
 
     def is_valid(self):

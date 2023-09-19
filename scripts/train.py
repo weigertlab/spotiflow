@@ -40,6 +40,7 @@ def get_run_name(args: SimpleNamespace):
     name += "_tormenter"  # !
     name += "_skipbgremover" if args.skip_bg_remover else ""
     name += "_scaleaug" if args.scale_augmentation else ""
+    name += "_finetuned" if args.pretrained_model else ""
     name += "_dry" if args.dry else ""
     name = name.replace(".", "_")  # Remove dots to avoid confusion with file extensions
     return name
@@ -210,10 +211,20 @@ if __name__ == "__main__":
         help="If given, add scale augmentation to the augment pipeline",
     )
 
+    parser.add_argument(
+        "--pretrained-model",
+        type=str,
+        default="",
+        help="Path to a pretrained model to use for initialization",
+    )
+
     args = parser.parse_args()
 
     if args.in_channels > 1:
         args.skip_bg_remover = True
+
+    if args.pretrained_model is not None:
+        assert Path(args.pretrained_model).exists(), "Given pretrained model does not exist!"
 
     pl.seed_everything(args.seed, workers=True)
 
@@ -268,32 +279,49 @@ if __name__ == "__main__":
         optimizer="adamw",
         batch_size=args.batch_size,
         num_epochs=args.num_epochs,
+        finetuned_from=args.pretrained_model,
     )
 
     save_dir = Path(args.save_dir) / f"{run_name}"
     if not args.dry:
         save_dir.mkdir(parents=True, exist_ok=True)
 
-    model_config = SpotipyModelConfig(
-        backbone=args.backbone,
-        in_channels=args.in_channels,
-        out_channels=1,
-        initial_fmaps=args.initial_fmaps,
-        fmap_inc_factor=args.fmap_inc_factor,
-        n_convs_per_level=args.convs_per_level,
-        downsample_factor=args.downsample_factor,
-        kernel_size=args.kernel_size,
-        padding="same",
-        compute_flow=args.flow,
-        levels=args.levels,
-        mode=args.mode,
-        background_remover=not args.skip_bg_remover,
-        batch_norm=args.batch_norm,
-        dropout=args.dropout,
+    accelerator = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
     )
 
-    # Create model
-    model = Spotipy(model_config)
+    if args.pretrained_model is not None:
+        model = Spotipy.from_pretrained(
+            args.pretrained_model,
+            inference_mode=False,
+            map_location=accelerator,
+        )
+        print(f"Will finetune pretrained model loaded from {args.pretrained_model}")
+        model_config = model.config
+    else:
+        model_config = SpotipyModelConfig(
+            backbone=args.backbone,
+            in_channels=args.in_channels,
+            out_channels=1,
+            initial_fmaps=args.initial_fmaps,
+            fmap_inc_factor=args.fmap_inc_factor,
+            n_convs_per_level=args.convs_per_level,
+            downsample_factor=args.downsample_factor,
+            kernel_size=args.kernel_size,
+            padding="same",
+            compute_flow=args.flow,
+            levels=args.levels,
+            mode=args.mode,
+            background_remover=not args.skip_bg_remover,
+            batch_norm=args.batch_norm,
+            dropout=args.dropout,
+        )
+        # Create model
+        model = Spotipy(model_config)
 
     model = torch.compile(model)
 
@@ -334,14 +362,6 @@ if __name__ == "__main__":
         else:
             print(f"Unknown logger {args.logger}! Will not log to any logger.")
 
-    accelerator = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
-
     print(model_config)
     print(training_config)
 
@@ -356,6 +376,7 @@ if __name__ == "__main__":
         compute_flow=args.flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
+        random_state=args.seed,
     )
 
     val_ds = SpotsDataset.from_folder(
@@ -369,6 +390,7 @@ if __name__ == "__main__":
         compute_flow=args.flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
+        random_state=args.seed,
     )
 
     if args.num_epochs > 0:

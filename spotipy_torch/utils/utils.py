@@ -11,8 +11,6 @@ from csbdeep.utils import normalize_mi_ma
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
 
-from ..data import SpotsDataset
-
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
@@ -267,6 +265,7 @@ def generate_datasets(
     valY: Optional[Sequence]=None,
     val_frac: float=.15, seed: int=42, **kwargs
 ) -> Tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
+
     """Generate the training and validation datasets with default settings.
 
     Args:
@@ -278,6 +277,9 @@ def generate_datasets(
         seed (int, optional): random seed for data splitting. Unused if validation data is explicitly given. Defaults to 42.
         kwargs: additional arguments to pass to the SpotsDataset class
     """
+
+    from ..data import SpotsDataset
+
     if isinstance(X, np.ndarray):
         X = [X[i] for i in range(X.shape[0])]
 

@@ -64,6 +64,7 @@ class SpotsDataset(Dataset):
         max_files: Optional[int] = None,
         compute_flow: bool = False,
         normalizer: Callable = utils.normalize,
+        random_state: Optional[int] = None,
     ) -> None:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
@@ -86,10 +87,11 @@ class SpotsDataset(Dataset):
         center_files = sorted(path.glob("*.csv"))
 
         if max_files is not None:
-            # idx = np.arange(len(image_files))
-            # np.random.shuffle(idx)
-            image_files = image_files[:max_files]
-            center_files = center_files[:max_files]
+            rng = np.random.default_rng(random_state if random_state is not None else 42)
+            idx = np.arange(len(image_files))
+            rng.shuffle(idx)
+            image_files = [image_files[i] for i in idx[:max_files]]
+            center_files = [center_files[i] for i in idx[:max_files]]
 
         if not len(image_files) == len(center_files):
             raise ValueError(
