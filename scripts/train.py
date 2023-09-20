@@ -214,8 +214,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pretrained-model",
         type=str,
-        default="",
+        default=None,
         help="Path to a pretrained model to use for initialization",
+    )
+
+    parser.add_argument(
+        "--early-stopping-patience",
+        type=int,
+        default=0,
+        help="Early stopping patience (set to 0 to disable early stopping)",
     )
 
     args = parser.parse_args()
@@ -280,6 +287,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         num_epochs=args.num_epochs,
         finetuned_from=args.pretrained_model,
+        early_stopping_patience=args.early_stopping_patience,
     )
 
     save_dir = Path(args.save_dir) / f"{run_name}"
@@ -335,6 +343,16 @@ if __name__ == "__main__":
                 model_dir,
                 training_config,
                 monitor="val_loss",
+            )
+        )
+    
+    if training_config.early_stopping_patience > 0:
+        print(f"Using early stopping: will stop training after validation loss is not improving for {training_config.early_stopping_patience} epochs")
+        callbacks.append(
+            pl.callbacks.EarlyStopping(
+                monitor="val_loss",
+                patience=training_config.early_stopping_patience,
+                mode="min",
             )
         )
 

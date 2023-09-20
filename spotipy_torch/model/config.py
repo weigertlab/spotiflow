@@ -206,6 +206,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         lr_reduce_patience: int = 10,
         num_epochs: int = 200,
         finetuned_from: Optional[str] = None,
+        early_stopping_patience: int = 0,
         **kwargs,
     ):
         self.sigma = sigma
@@ -221,6 +222,7 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.num_epochs = num_epochs
         self.num_train_samples = num_train_samples
         self.finetuned_from = finetuned_from
+        self.early_stopping_patience = early_stopping_patience
         super().__init__()
 
     def is_valid(self):
@@ -249,3 +251,6 @@ class SpotipyTrainingConfig(SpotipyConfig):
         assert (
             isinstance(self.num_epochs, int) and self.num_epochs >= 0
         ), "num_epochs must be a positive integer or 0"
+        assert (
+            isinstance(self.early_stopping_patience, int) and self.early_stopping_patience >= 0
+        ), "early_stopping_patience must be >= 0"
