@@ -489,3 +489,39 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
             log.info("Saved best model with optimized thresholds.")
+
+
+
+class CustomEarlyStopping(pl.callbacks.early_stopping.EarlyStopping):
+    """Callback implementing early stopping starting at a certain epoch.
+    """
+
+    def __init__(
+        self,
+        min_epochs: int,
+        **kwargs,
+    ):
+        """
+
+        Args:
+            min_epochs (int): minimum number of epochs before early stopping is triggered.
+            **kwargs: arguments to be passed to the parent class. See https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.EarlyStopping.html
+        """
+        super().__init__(**kwargs)
+        self._min_epochs = min_epochs
+
+    def on_train_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        # looks like pl calls this method after each epoch, so we just need to pass.
+        pass
+
+    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+        """Called when each validation epoch ends.
+
+        Args:
+            trainer (pl.Trainer): lightning trainer object.
+            pl_module (pl.LightningModule): lightning module object.
+        """
+        if pl_module.current_epoch < self._min_epochs:
+            pass
+        else:
+            self._run_early_stopping_check(trainer)

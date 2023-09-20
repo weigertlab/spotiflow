@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from spotipy_torch import utils
 from spotipy_torch.data import SpotsDataset
 from spotipy_torch.model import (
+    CustomEarlyStopping,
     Spotipy,
     SpotipyModelCheckpoint,
     SpotipyModelConfig,
@@ -225,6 +226,13 @@ if __name__ == "__main__":
         help="Early stopping patience (set to 0 to disable early stopping)",
     )
 
+    parser.add_argument(
+        "--min-epochs",
+        type=int,
+        default=30,
+        help="Minimum number of epochs to be trained on. Only used if early stopping is enabled.",
+    )
+
     args = parser.parse_args()
 
     if args.in_channels > 1:
@@ -349,10 +357,12 @@ if __name__ == "__main__":
     if training_config.early_stopping_patience > 0:
         print(f"Using early stopping: will stop training after validation loss is not improving for {training_config.early_stopping_patience} epochs")
         callbacks.append(
-            pl.callbacks.EarlyStopping(
+            CustomEarlyStopping(
                 monitor="val_loss",
                 patience=training_config.early_stopping_patience,
                 mode="min",
+                min_epochs=max(args.min_epochs-args.early_stopping_patience, 0),
+                verbose=True
             )
         )
 
