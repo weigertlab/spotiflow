@@ -423,7 +423,7 @@ if __name__ == "__main__":
 
     if args.num_epochs > 0:
         # Train model
-        model.fit( # TODO Make fit accept img/coordinate pairs
+        model.fit(
             train_ds,
             val_ds,
             training_config,
