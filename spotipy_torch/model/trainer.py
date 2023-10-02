@@ -451,7 +451,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             trainer (pl.Trainer): lightning trainer object.
             pl_module (pl.LightningModule): lightning module object.
         """
-        if trainer.is_global_zero:
+        if trainer.is_global_zero and not trainer.sanity_checking:
             value = trainer.logged_metrics[self._monitor]
             if value < self._best:
                 self._best = value
