@@ -8,6 +8,7 @@ import logging
 import numpy as np
 import sys
 import torch
+import tifffile
 from itertools import chain
 import pandas as pd
 
