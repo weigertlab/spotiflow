@@ -21,6 +21,7 @@ def points_matching(p1, p2, cutoff_distance=3, eps=1e-8):
 
     i, j = linear_sum_assignment(D)
     valid = D[i, j] <= cutoff_distance**2
+
     i, j = i[valid], j[valid]
 
     res = SimpleNamespace()
@@ -39,9 +40,12 @@ def points_matching(p1, p2, cutoff_distance=3, eps=1e-8):
     res.precision = tp_eps / (tp_eps + fp) if tp_eps > 0 else 0
     res.recall = tp_eps / (tp_eps + fn) if tp_eps > 0 else 0
     res.f1 = (2 * tp_eps) / (2 * tp_eps + fp + fn) if tp_eps > 0 else 0
-
     res.dist = np.sqrt(D[i, j])
     res.mean_dist = np.mean(res.dist) if len(res.dist) > 0 else 0
+
+    pq_num = np.sum(cutoff_distance-res.dist)/cutoff_distance
+    pq_den = tp_eps + fp/2 + fn/2
+    res.panoptic_quality = pq_num/pq_den if tp_eps > 0 else 0
 
     res.false_negatives = tuple(set(range(len(p1))).difference(set(i)))
     res.false_positives = tuple(set(range(len(p2))).difference(set(j)))
