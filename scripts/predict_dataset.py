@@ -41,7 +41,7 @@ if args.opt_split is not None:
         mode="max",
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
-    model.optimize_threshold(opt_ds, min_distance=1, batch_size=1, device=device)
+    model.optimize_threshold(opt_ds, min_distance=1, batch_size=1, device=device, subpix=args.subpix)
     # model.save(args.model_dir, which=args.which)
 
 
