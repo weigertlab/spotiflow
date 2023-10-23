@@ -576,13 +576,14 @@ class Spotipy(nn.Module):
     def optimize_threshold(
         self,
         val_ds: torch.utils.data.Dataset,
-        cutoff_distance=3,
-        min_distance=2,
-        exclude_border=False,
+        cutoff_distance: int = 3,
+        min_distance: int = 2,
+        exclude_border: bool = False,
         threshold_range: Tuple[float, float] = (0.3, 0.7),
-        niter=11,
-        batch_size=2,
-        device=torch.device("cpu"),
+        niter: int = 11,
+        batch_size: int = 2,
+        device: torch.device = torch.device("cpu"),
+        subpix: bool = False,
     ) -> None:
         """Optimize the probability threshold on an annotated dataset.
 
@@ -596,7 +597,8 @@ class Spotipy(nn.Module):
             batch_size (int, optional): batch size to use. Defaults to 2.
             device (_type_, optional): computing device. Defaults to torch.device("cpu").
         """
-        val_preds = []
+        val_hm_preds = []
+        val_flow_preds = []
         val_gt_pts = []
         val_dataloader = torch.utils.data.DataLoader(
             val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
@@ -607,8 +609,15 @@ class Spotipy(nn.Module):
                 imgs = val_batch["img"].to(device)
 
                 out = self(imgs)
-                high_lv_preds = (
+                high_lv_hm_preds = (
                     self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
+                )
+                flow_preds = (
+                    F.normalize(out["flow"], dim=1)[0]
+                    .permute(1, 2, 0)
+                    .detach()
+                    .cpu()
+                    .numpy()
                 )
                 for p in val_batch["heatmap_lv0"]:
                     val_gt_pts.append(
@@ -620,9 +629,11 @@ class Spotipy(nn.Module):
                         )
                     )
 
-                for batch_elem in range(high_lv_preds.shape[0]):
-                    val_preds += [high_lv_preds[batch_elem]]
+                for batch_elem in range(high_lv_hm_preds.shape[0]):
+                    val_hm_preds += [high_lv_hm_preds[batch_elem]]
+                    val_flow_preds += [flow_to_vector(flow_preds[batch_elem], sigma=self.config.sigma)]
                 del out, imgs, val_batch
+
 
         def _metric_at_threshold(thr):
             val_pred_pts = [
@@ -632,8 +643,13 @@ class Spotipy(nn.Module):
                     exclude_border=exclude_border,
                     min_distance=min_distance,
                 )
-                for p in val_preds
+                for p in val_hm_preds
             ]
+            if subpix:
+                val_pred_pts = [
+                    pts + _subpix[tuple(pts.astype(int).T)]
+                    for pts, _subpix in zip(val_pred_pts, val_flow_preds)
+                ]
             stats = points_matching_dataset(
                 val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True
             )
