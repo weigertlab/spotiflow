@@ -126,7 +126,7 @@ def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
         )
 
 
-def flow_to_vector(flow: np.ndarray, sigma: float):
+def flow_to_vector(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     """from the 3d flow (z',y',x') compute back the 2d vector field (y,x) it corresponds to
 
     y = sigma*y'/(1+z')
@@ -134,7 +134,7 @@ def flow_to_vector(flow: np.ndarray, sigma: float):
 
     """
     z, y, x = flow.transpose(2, 0, 1)
-    s = sigma / (1 + z)
+    s = sigma / (1 + z + eps)
     return np.stack((y * s, x * s), axis=-1)
 
 

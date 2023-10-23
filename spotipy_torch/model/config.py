@@ -99,6 +99,7 @@ class SpotipyModelConfig(SpotipyConfig):
         downsample_factors: Optional[Tuple[Tuple[int, int]]] = None,
         kernel_sizes: Optional[Tuple[Tuple[int, int]]] = None,
         dropout: float = 0.0,
+        sigma: Number = 1.0,
         **kwargs,
     ):
         self.backbone = backbone
@@ -135,6 +136,7 @@ class SpotipyModelConfig(SpotipyConfig):
         self.compute_flow = bool(compute_flow)
         self.batch_norm = bool(batch_norm)
         self.dropout = dropout
+        self.sigma = sigma
 
         super().__init__()
 
@@ -188,6 +190,9 @@ class SpotipyModelConfig(SpotipyConfig):
             "slim",
         }, "mode must be either 'direct', 'fpn', or 'slim'"
         assert 0.0 <= self.dropout <= 1.0, "dropout must be between 0 and 1"
+        assert (
+            isinstance(self.sigma, Number) and self.sigma >= 0
+        ), "sigma must be a number >= 0."
 
 
 class SpotipyTrainingConfig(SpotipyConfig):

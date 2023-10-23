@@ -349,6 +349,7 @@ class Spotipy(nn.Module):
             min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.
             exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
+            subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. Defaults to False.
             peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
             normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
@@ -423,8 +424,9 @@ class Spotipy(nn.Module):
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
             _subpix = flow_to_vector(
-                flow, sigma=1.5
-            )  # FIXME: this has to be the correct sigma! (need to become model property)
+                flow,
+                sigma=self.config.sigma,
+            )
             _subpix = center_crop(_subpix, img.shape[:2])
             y = center_crop(y, img.shape[:2])
 

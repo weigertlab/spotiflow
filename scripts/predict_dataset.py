@@ -18,6 +18,8 @@ parser.add_argument("--pred-split", type=str, default="test")
 parser.add_argument("--cutoff-distance", type=float, default=3.)
 parser.add_argument("--which", type=str, choices=["best", "last"], default="last")
 parser.add_argument("--threshold", type=float, required=False, default=None)
+parser.add_argument("--subpix", action="store_true", required=False, default=False)
+
 args = parser.parse_args()
 
 
@@ -40,7 +42,7 @@ if args.opt_split is not None:
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
     )
     model.optimize_threshold(opt_ds, min_distance=1, batch_size=1, device=device)
-    model.save(args.model_dir, which=args.which, only_config=True)
+    # model.save(args.model_dir, which=args.which)
 
 
 print("Loading data...")
@@ -61,5 +63,5 @@ fnames = [Path(f).stem for f in pred_ds.image_files]
 
 for i, fname in tqdm(enumerate(fnames), desc="Predicting and writing", total=len(fnames)):
     normalized_img = pred_ds._images[i]
-    pts, _ = model.predict(normalized_img, prob_thresh=args.threshold, min_distance=1, verbose=False)
+    pts, _ = model.predict(normalized_img, prob_thresh=args.threshold, min_distance=1, verbose=False, subpix=args.subpix)
     utils.write_coords_csv(pts, out_dir_split/f"{fname}.csv")
