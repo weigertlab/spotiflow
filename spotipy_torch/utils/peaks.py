@@ -81,9 +81,7 @@ def points_to_prob(points, shape, sigma=1.5, mode="max"):
     """points are in (y,x) order"""
 
     x = np.zeros(shape, np.float32)
-    points = np.round(points).astype(np.int32)
     assert points.ndim == 2 and points.shape[1] == 2
-
     points = filter_shape(points, shape)
 
     if len(points) == 0:
@@ -96,26 +94,25 @@ def points_to_prob(points, shape, sigma=1.5, mode="max"):
             np.int32(shape[1]),
             np.float32(sigma),
         )
-        # D = cdist(points, points)
-        # A = D < 8*sigma+1
-        # np.fill_diagonal(A, False)
-        # G = nx.from_numpy_array(A)
-        # x = np.zeros(shape, np.float32)
-        # while len(G)>0:
-        #     inds = nx.maximal_independent_set(G)
-        #     gauss = np.zeros(shape, np.float32)
-        #     gauss[tuple(points[inds].T)] = 1
-        #     g = ndi.gaussian_filter(gauss, sigma, mode=  "constant")
-        #     g /= np.max(g)
-        #     x = np.maximum(x,g)
-        #     G.remove_nodes_from(inds)
     else:
         raise ValueError(mode)
 
     return x
 
 
-def points_to_flow(points, shape, sigma=1.5):
+def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
+    """
+    for each grid point in shape compute the vector d=(y,x) to the closest
+    point and return its flow embedding (z',y',x') onto S^3
+
+    z' = -(r^2 - sigma^2) / (r^2 + sigma^2);
+    y' = 2 * sigma * y / (r^2 + sigma^2);
+    x' = 2 * sigma * x / (r^2 + sigma^2);
+
+
+
+    with r = sqrt(x^2+y^2)
+    """
     if len(points) == 0:
         flow = np.zeros(shape[:2] + (3,), np.float32)
         flow[..., 0] = -1
@@ -127,6 +124,18 @@ def points_to_flow(points, shape, sigma=1.5):
             np.int32(shape[1]),
             np.float32(sigma),
         )
+
+
+def flow_to_vector(flow: np.ndarray, sigma: float):
+    """from the 3d flow (z',y',x') compute back the 2d vector field (y,x) it corresponds to
+
+    y = sigma*y'/(1+z')
+    x = sigma*x'/(1+z')
+
+    """
+    z, y, x = flow.transpose(2, 0, 1)
+    s = sigma / (1 + z)
+    return np.stack((y * s, x * s), axis=-1)
 
 
 def prob_to_points(

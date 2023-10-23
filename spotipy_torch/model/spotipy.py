@@ -12,6 +12,7 @@ import logging
 import pydash
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import yaml
 
@@ -27,6 +28,7 @@ from ..utils import (
     generate_datasets,
     points_matching_dataset,
     prob_to_points,
+    flow_to_vector,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +41,7 @@ class Spotipy(nn.Module):
     to allow loss computation and optimization at different resolution levels.
     """
 
-    def __init__(self, config: Optional[SpotipyModelConfig]=None) -> None:
+    def __init__(self, config: Optional[SpotipyModelConfig] = None) -> None:
         """Initialize the model.
 
         Args:
@@ -161,9 +163,9 @@ class Spotipy(nn.Module):
     def fit(
         self,
         training_data: Union[torch.utils.data.Dataset, Tuple],
-        validation_data: Optional[Union[torch.utils.data.Dataset, Tuple]]=None,
-        train_config: Optional[SpotipyTrainingConfig]=None,
-        accelerator: str="cpu",
+        validation_data: Optional[Union[torch.utils.data.Dataset, Tuple]] = None,
+        train_config: Optional[SpotipyTrainingConfig] = None,
+        accelerator: str = "cpu",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
@@ -191,13 +193,17 @@ class Spotipy(nn.Module):
             log.info("No training config given. Using default.")
             train_config = SpotipyTrainingConfig()
             log.info(f"Default training config: {train_config}")
-        assert validation_data is None or type(training_data) == type(validation_data), "Training and validation data must be of the same type"
+        assert validation_data is None or type(training_data) == type(
+            validation_data
+        ), "Training and validation data must be of the same type"
         if isinstance(training_data, torch.utils.data.Dataset):
             train_ds, val_ds = training_data, validation_data
         else:
             if validation_data is None:
                 validation_data = [None, None]
-            train_ds, val_ds = generate_datasets(*training_data, *validation_data, **kwargs)
+            train_ds, val_ds = generate_datasets(
+                *training_data, *validation_data, **kwargs
+            )
         trainer = pl.Trainer(
             accelerator=accelerator,
             devices=devices,
@@ -219,7 +225,10 @@ class Spotipy(nn.Module):
         log.info("Training finished.")
 
     def save(
-        self, path: str, which: Literal["best", "last"], update_thresholds: bool = False
+        self,
+        path: str,
+        which: Literal["best", "last"] = "best",
+        update_thresholds: bool = False,
     ) -> None:
         """Save the model to disk.
 
@@ -230,6 +239,7 @@ class Spotipy(nn.Module):
         """
         assert which in ("best", "last"), "which must be either 'best' or 'last'"
         checkpoint_path = Path(path)
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
                 "state_dict": self.state_dict(),
@@ -308,7 +318,7 @@ class Spotipy(nn.Module):
 
         if f"prob_thresh_{which}" in thresholds.keys():
             self._prob_thresh = thresholds[f"prob_thresh_{which}"]
-        else: # ! For retrocompatibility, remove in the future
+        else:  # ! For retrocompatibility, remove in the future
             self._prob_thresh = thresholds.get("prob_thresh", 0.5)
         if inference_mode:
             self.eval()
@@ -323,6 +333,7 @@ class Spotipy(nn.Module):
         min_distance: int = 1,
         exclude_border: bool = False,
         scale: Optional[int] = None,
+        subpix: bool = False,
         peak_mode: Literal["skimage", "fast"] = "skimage",
         normalizer: Optional[callable] = None,
         verbose: bool = True,
@@ -358,6 +369,7 @@ class Spotipy(nn.Module):
         if img.ndim == 2:
             img = img[..., None]
 
+        img = img.astype(np.float32)
         if scale is None or scale == 1:
             x = img
         else:
@@ -391,15 +403,29 @@ class Spotipy(nn.Module):
                     torch.from_numpy(x).to(device).unsqueeze(0)
                 )  # Add B and C dimensions
                 img_t = img_t.permute(0, 3, 1, 2)
+                out = self(img_t)
+
                 y = (
-                    self._sigmoid(self(img_t)["heatmaps"][0].squeeze(0).squeeze(0))
+                    self._sigmoid(out["heatmaps"][0].squeeze(0).squeeze(0))
                     .detach()
                     .cpu()
                     .numpy()
                 )
+                flow = (
+                    F.normalize(out["flow"], dim=1)[0]
+                    .permute(1, 2, 0)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
+            _subpix = flow_to_vector(
+                flow, sigma=1.5
+            )  # FIXME: this has to be the correct sigma! (need to become model property)
+            _subpix = center_crop(_subpix, img.shape[:2])
             y = center_crop(y, img.shape[:2])
 
             pts = prob_to_points(
@@ -465,6 +491,7 @@ class Spotipy(nn.Module):
                     p += np.array([s.start for s in s_dst[:2]])[None]
                     points.append(p)
                     y[s_dst[:2]] = y_tile_sub
+
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
@@ -476,8 +503,8 @@ class Spotipy(nn.Module):
             points = points - np.array((padding[0][0], padding[1][0]))[None]
 
             probs = np.array(probs)
-            if scale is not None and scale != 1:
-                points = np.round((points.astype(float) / scale)).astype(int)
+            # if scale is not None and scale != 1:
+            #     points = np.round((points.astype(float) / scale)).astype(int)
 
             probs = filter_shape(probs, img.shape[:2], idxr_array=points)
             pts = filter_shape(points, img.shape[:2], idxr_array=points)
@@ -485,7 +512,10 @@ class Spotipy(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        details = SimpleNamespace(prob=probs, heatmap=y)
+        if subpix:
+            pts = pts + _subpix[tuple(pts.astype(int).T)]
+
+        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix)
         return pts, details
 
     def predict_dataset(
@@ -522,7 +552,9 @@ class Spotipy(nn.Module):
             for batch in tqdm(dataloader, desc="Predicting"):
                 imgs = batch["img"].to(device)
                 out = self(imgs)
-                high_lv_preds = self._sigmoid(out['heatmaps'][0].squeeze(1)).detach().cpu().numpy()
+                high_lv_preds = (
+                    self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
+                )
                 for batch_elem in range(high_lv_preds.shape[0]):
                     preds += [high_lv_preds[batch_elem]]
                 del out, imgs, batch
@@ -578,14 +610,17 @@ class Spotipy(nn.Module):
                 )
                 for p in val_batch["heatmap_lv0"]:
                     val_gt_pts.append(
-                        prob_to_points(p[0].detach().cpu().numpy(), prob_thresh=.8, 
-                                       exclude_border=exclude_border, 
-                                       min_distance=min_distance))
-                    
+                        prob_to_points(
+                            p[0].detach().cpu().numpy(),
+                            prob_thresh=0.8,
+                            exclude_border=exclude_border,
+                            min_distance=min_distance,
+                        )
+                    )
+
                 for batch_elem in range(high_lv_preds.shape[0]):
                     val_preds += [high_lv_preds[batch_elem]]
                 del out, imgs, val_batch
-
 
         def _metric_at_threshold(thr):
             val_pred_pts = [
@@ -604,7 +639,9 @@ class Spotipy(nn.Module):
 
         def _grid_search(tmin, tmax):
             thr = np.linspace(tmin, tmax, niter)
-            ys = tuple(_metric_at_threshold(t) for t in tqdm(thr, desc='optimizing threshold'))
+            ys = tuple(
+                _metric_at_threshold(t) for t in tqdm(thr, desc="optimizing threshold")
+            )
             i = np.argmax(ys)
             i1, i2 = max(0, i - 1), min(i + 1, len(thr) - 1)
             return thr[i], (thr[i1], thr[i2]), ys[i]
@@ -629,7 +666,7 @@ class Spotipy(nn.Module):
                 "batch_norm",
                 "padding",
             )
-            return UNetBackbone(concat_mode='cat', **backbone_params)
+            return UNetBackbone(concat_mode="cat", **backbone_params)
         elif self.config.backbone == "unet_res":
             backbone_params = pydash.pick(
                 self.config,
@@ -641,7 +678,7 @@ class Spotipy(nn.Module):
                 "batch_norm",
                 "padding",
             )
-            return UNetBackbone(concat_mode='add', **backbone_params)
+            return UNetBackbone(concat_mode="add", **backbone_params)
         elif self.config.backbone == "resnet":
             backbone_params = pydash.pick(
                 self.config,

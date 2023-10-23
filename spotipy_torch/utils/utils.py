@@ -86,7 +86,7 @@ def center_crop(x, shape):
         return x
     if not all([s1 >= s2 for s1, s2 in zip(x.shape, shape)]):
         raise ValueError(f"shape of x {x.shape} is smaller than final shape {shape}")
-    diff = np.array(x.shape) - np.array(shape)
+    diff = np.array(x.shape[: len(shape)]) - np.array(shape)
     ss = tuple(
         slice(int(np.ceil(d / 2)), s - d + int(np.ceil(d / 2)))
         if d > 0
@@ -258,12 +258,15 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
     df.to_csv(fname, index=False)
     return
 
+
 def generate_datasets(
     X: Union[np.ndarray, Sequence],
     Y: Sequence,
-    valX: Optional[Union[np.ndarray, Sequence]]=None,
-    valY: Optional[Sequence]=None,
-    val_frac: float=.15, seed: int=42, **kwargs
+    valX: Optional[Union[np.ndarray, Sequence]] = None,
+    valY: Optional[Sequence] = None,
+    val_frac: float = 0.15,
+    seed: int = 42,
+    **kwargs,
 ) -> Tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
 
     """Generate the training and validation datasets with default settings.
@@ -286,9 +289,13 @@ def generate_datasets(
     if valX is not None and isinstance(valX, np.ndarray):
         valX = [valX[i] for i in range(valX.shape[0])]
     elif valX is None:
-        log.info(f"No validation data given, will use a subset of training data as validation ({val_frac:.2f}).")
+        log.info(
+            f"No validation data given, will use a subset of training data as validation ({val_frac:.2f})."
+        )
         rng = np.random.default_rng(seed)
-        val_idx = sorted(rng.choice(len(X), int(len(X) * val_frac), replace=False, shuffle=False))
+        val_idx = sorted(
+            rng.choice(len(X), int(len(X) * val_frac), replace=False, shuffle=False)
+        )
         valX = [X[i] for i in val_idx]
         valY = [Y[i] for i in val_idx]
         X = [X[i] for i in range(len(X)) if i not in val_idx]

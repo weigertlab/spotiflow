@@ -1,22 +1,9 @@
-import numpy as np
-from spotipy_torch.utils import points_to_prob
 from spotipy_torch.data import SpotsDataset
 from spotipy_torch.model import SpotipyModelConfig, SpotipyTrainingConfig, Spotipy
 import lightning.pytorch as pl
 from numerize.numerize import numerize
 import torch
-
-
-def example_data(n_samples: int = 64, size: int = 256):
-    def _single():
-        p = np.random.randint(0, 200, (20, 2))
-        x = points_to_prob(p, (256, 256))
-        x = x + 0.2 * np.random.normal(0, 1, x.shape).astype(np.float32)
-        return x, p
-
-    X, P = tuple(zip(*tuple(_single() for _ in range(n_samples))))
-    X, P = np.stack(X), np.stack(P)
-    return X, P
+from utils import example_data
 
 
 if __name__ == "__main__":
@@ -33,21 +20,19 @@ if __name__ == "__main__":
     compute_flow = True
     # compute_flow = False
 
-    n_levels = 4
+    n_levels = 2
 
     config = SpotipyModelConfig(
         backbone=backbone,
         levels=n_levels,
         compute_flow=compute_flow,
+        mode="slim",
         fmap_inc_factor=2,
         background_remover=False,
         batch_norm=batch_norm,
     )
-    train_config = SpotipyTrainingConfig(num_epochs=20)
 
-    model = Spotipy(config)
-
-    print(f"Total params: {numerize(sum(p.numel() for p in model.parameters()))}")
+    train_config = SpotipyTrainingConfig(num_epochs=20, sigma=1.5)
 
     data = SpotsDataset(
         X, P, compute_flow=compute_flow, downsample_factors=(1, 2, 4, 8)[:n_levels]
@@ -56,9 +41,18 @@ if __name__ == "__main__":
         Xv, Pv, compute_flow=compute_flow, downsample_factors=(1, 2, 4, 8)[:n_levels]
     )
 
+    model = Spotipy(config)
+
+    print(f"Total params: {numerize(sum(p.numel() for p in model.parameters()))}")
+
     logger = pl.loggers.TensorBoardLogger(
         save_dir="foo",
         name=f"{backbone}_batch_norm_{batch_norm}_flow_{compute_flow}",
     )
 
     model.fit(data, data_v, train_config, device, logger=logger, deterministic=False)
+
+    # model = Spotipy.from_pretrained(f"foo", map_location=device)
+    # model.to(device)
+    # p1, details1 = model.predict(data._images[0], device=device, subpix=False)
+    # p2, details2 = model.predict(data._images[0], device=device, subpix=True)

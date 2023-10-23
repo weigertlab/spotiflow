@@ -4,7 +4,7 @@ from spotipy_torch.utils import points_to_prob
 
 def example_data(n_samples: int = 10, size: int = 256):
     def _single():
-        p = np.random.randint(0, 200, (20, 2))
+        p = np.random.uniform(0, 200, (20, 2))
         x = points_to_prob(p, (256, 256))
         x = x + 0.2 * np.random.normal(0, 1, x.shape)
         return x, p
