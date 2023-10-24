@@ -612,13 +612,16 @@ class Spotipy(nn.Module):
                 high_lv_hm_preds = (
                     self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
                 )
-                flow_preds = (
-                    F.normalize(out["flow"], dim=1)[0]
-                    .permute(1, 2, 0)
-                    .detach()
-                    .cpu()
-                    .numpy()
-                )
+                curr_flow_preds = []
+                for flow in out["flow"]:
+                    curr_flow_preds += [
+                        F.normalize(flow, dim=1)
+                        .permute(1, 2, 0)
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    ]
+
                 for p in val_batch["heatmap_lv0"]:
                     val_gt_pts.append(
                         prob_to_points(
@@ -631,7 +634,7 @@ class Spotipy(nn.Module):
 
                 for batch_elem in range(high_lv_hm_preds.shape[0]):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
-                    val_flow_preds += [flow_to_vector(flow_preds[batch_elem], sigma=self.config.sigma)]
+                    val_flow_preds += [flow_to_vector(curr_flow_preds[batch_elem], sigma=self.config.sigma)]
                 del out, imgs, val_batch
 
 

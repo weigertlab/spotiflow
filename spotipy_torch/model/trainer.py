@@ -58,13 +58,15 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self._loss_funcs = self._loss_switcher()
 
         if self.model.config.compute_flow:
-            self._loss_func_flow = nn.MSELoss()
+            self._loss_func_flow = self._wrap_loss(
+                nn.MSELoss(reduction="none"),
+                self.training_config.pos_weight,
+            )
 
         self._valid_inputs = []
         self._valid_targets = []
         self._valid_outputs = []
         self._valid_flows = []
-        
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Forward pass of the model.
@@ -79,7 +81,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
     @staticmethod
     def _wrap_loss(
-        func: callable, pos_weight: float = 1.0, positive_threshold: float = 0.01
+        func: callable, pos_weight: float = 1.0, positive_threshold: float = 0.01,
     ) -> callable:
         """Wrap a loss function to add a weight to positive pixels.
 
@@ -89,19 +91,22 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             positive_threshold (float, optional): The threshold to consider a pixel as positive. Defaults to 0.01.
 
         Returns:
-            callable: The wrapped loss function.
+            callable: The wrapped loss function. The signature is the same as the original loss function with the addition of two optional arguments:
+                - y_to_mask: the tensor to be used to mask the prediction.
+                - target_to_mask: the tensor to be used to mask the target.
+                These are useful to avoid projecting the stereographic flow when computing the loss.
         """
-
-        def _loss(y, target):
+        # TODO: try to find a way to compute the norm of the original vectors
+        #       in 2D Cartesian coordinates using the stereographic coordinates
+        def _loss(y, target, y_to_mask=None, target_to_mask=None):
             loss = func(y, target)
             if pos_weight == 0:
                 return loss.mean()
-            mask_pos_tgt = target >= positive_threshold
-            mask_pos_y = y >= positive_threshold
+            mask_pos_tgt = target >= positive_threshold if target_to_mask is None else target_to_mask >= positive_threshold
+            mask_pos_y = y >= positive_threshold if y_to_mask is None else y_to_mask >= positive_threshold
             mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
             wloss = (1 + pos_weight * mask_pos) * loss
             return wloss.mean()
-
         return _loss
 
     def _loss_switcher(self, loss_kwargs: dict = {}) -> Tuple[callable]:
@@ -152,7 +157,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         if self.model.config.compute_flow:
             pred_flow = out["flow"]
-            loss_flow = self._loss_func_flow(pred_flow, flow)
+            loss_flow = self._loss_func_flow(pred_flow, flow, y_to_mask=heatmap_lvs[0], target_to_mask=heatmap_lvs[0])
             loss = loss + loss_flow
         else:
             pred_flow = None
@@ -474,6 +479,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
+                subpix=True, # !
             )
             pl_module.model.save(self._logdir, which="last", update_thresholds=True)
             log.info("Saved last model with optimized thresholds.")
@@ -486,6 +492,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
+                subpix=True, # !
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
             log.info("Saved best model with optimized thresholds.")

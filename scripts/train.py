@@ -43,6 +43,7 @@ def get_run_name(args: SimpleNamespace):
     name += "_scaleaug" if args.scale_augmentation else ""
     name += "_finetuned" if args.pretrained_model else ""
     name += "_dry" if args.dry else ""
+    name += "_subpix"
     name = name.replace(".", "_")  # Remove dots to avoid confusion with file extensions
     return name
 

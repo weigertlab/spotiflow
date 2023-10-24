@@ -85,7 +85,6 @@ class SpotsDataset(Dataset):
         image_files = sorted(
             tuple(chain(*tuple(path.glob(f"*.{ext}") for ext in image_extensions)))
         )
-        center_files = sorted(path.glob("*.csv"))
 
         if max_files is not None:
             rng = np.random.default_rng(random_state if random_state is not None else 42)
@@ -105,7 +104,7 @@ class SpotsDataset(Dataset):
         ]
 
         centers = [
-            utils.read_coords_csv(center).astype(np.int32)
+            utils.read_coords_csv(center).astype(np.float32)
             for center in tqdm(center_files, desc="Loading centers")
         ]
 

@@ -27,6 +27,7 @@ device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is
 model = Spotipy.from_pretrained(
     pretrained_path=args.model_dir,
     inference_mode=True,
+    map_location=device,
 ).to(torch.device(device))
 
 model = torch.compile(model)
@@ -40,6 +41,7 @@ if args.opt_split is not None:
         sigma=1.,
         mode="max",
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
+
     )
     model.optimize_threshold(opt_ds, min_distance=1, batch_size=1, device=device, subpix=args.subpix)
     # model.save(args.model_dir, which=args.which)
@@ -63,5 +65,5 @@ fnames = [Path(f).stem for f in pred_ds.image_files]
 
 for i, fname in tqdm(enumerate(fnames), desc="Predicting and writing", total=len(fnames)):
     normalized_img = pred_ds._images[i]
-    pts, _ = model.predict(normalized_img, prob_thresh=args.threshold, min_distance=1, verbose=False, subpix=args.subpix)
+    pts, _ = model.predict(normalized_img, prob_thresh=args.threshold, min_distance=1, verbose=False, subpix=args.subpix, device=device)
     utils.write_coords_csv(pts, out_dir_split/f"{fname}.csv")
