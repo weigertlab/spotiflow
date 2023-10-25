@@ -10,8 +10,8 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "mps"
 
-    X, P = example_data(64)
-    Xv, Pv = example_data(4)
+    X, P = example_data(64, sigma=3, noise=0.01)
+    Xv, Pv = example_data(4, sigma=3, noise=0.01)
 
     backbone = "unet"
     batch_norm = False
@@ -27,12 +27,14 @@ if __name__ == "__main__":
         levels=n_levels,
         compute_flow=compute_flow,
         mode="slim",
+        sigma=1.5,
         fmap_inc_factor=2,
         background_remover=False,
         batch_norm=batch_norm,
     )
 
-    train_config = SpotipyTrainingConfig(num_epochs=20, sigma=1.5)
+    sigma = 2
+    train_config = SpotipyTrainingConfig(num_epochs=40, pos_weight=10)
 
     data = SpotsDataset(
         X, P, compute_flow=compute_flow, downsample_factors=(1, 2, 4, 8)[:n_levels]
@@ -51,8 +53,3 @@ if __name__ == "__main__":
     )
 
     model.fit(data, data_v, train_config, device, logger=logger, deterministic=False)
-
-    # model = Spotipy.from_pretrained(f"foo", map_location=device)
-    # model.to(device)
-    # p1, details1 = model.predict(data._images[0], device=device, subpix=False)
-    # p2, details2 = model.predict(data._images[0], device=device, subpix=True)

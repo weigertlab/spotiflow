@@ -45,7 +45,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         self.model = model
 
         self.training_config = training_config
-        
+
         if self.training_config.loss_levels is None:
             self._loss_levels = self.model._levels
         elif self.training_config.loss_levels <= model._levels:
@@ -56,12 +56,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             )
 
         self._loss_funcs = self._loss_switcher()
-
-        if self.model.config.compute_flow:
-            self._loss_func_flow = self._wrap_loss(
-                nn.MSELoss(reduction="none"),
-                self.training_config.pos_weight,
-            )
+        self._loss_func_flow = nn.L1Loss(reduction="none")
 
         self._valid_inputs = []
         self._valid_targets = []
@@ -79,35 +74,22 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         """
         return self.model(x)
 
-    @staticmethod
-    def _wrap_loss(
-        func: callable, pos_weight: float = 1.0, positive_threshold: float = 0.01,
-    ) -> callable:
-        """Wrap a loss function to add a weight to positive pixels.
-
-        Args:
-            func (callable): The loss function to be wrapped.
-            pos_weight (float, optional): The weight to be added to positive pixels. Defaults to 1.0.
-            positive_threshold (float, optional): The threshold to consider a pixel as positive. Defaults to 0.01.
-
-        Returns:
-            callable: The wrapped loss function. The signature is the same as the original loss function with the addition of two optional arguments:
-                - y_to_mask: the tensor to be used to mask the prediction.
-                - target_to_mask: the tensor to be used to mask the target.
-                These are useful to avoid projecting the stereographic flow when computing the loss.
-        """
-        # TODO: try to find a way to compute the norm of the original vectors
-        #       in 2D Cartesian coordinates using the stereographic coordinates
-        def _loss(y, target, y_to_mask=None, target_to_mask=None):
-            loss = func(y, target)
-            if pos_weight == 0:
-                return loss.mean()
-            mask_pos_tgt = target >= positive_threshold if target_to_mask is None else target_to_mask >= positive_threshold
-            mask_pos_y = y >= positive_threshold if y_to_mask is None else y_to_mask >= positive_threshold
-            mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
-            wloss = (1 + pos_weight * mask_pos) * loss
-            return wloss.mean()
-        return _loss
+    def _loss_weight(
+        self,
+        y: torch.Tensor,
+        target: torch.Tensor,
+        pos_weight: float = 1.0,
+        positive_threshold: float = 0.01,
+    ):
+        """compute the loss weight mask for a given prediction and target"""
+        weight = torch.ones(y.shape, dtype=torch.float32, device=y.device)
+        if pos_weight == 0:
+            return weight
+        mask_pos_tgt = target >= positive_threshold
+        mask_pos_y = y >= positive_threshold
+        mask_pos = torch.max(mask_pos_tgt, mask_pos_y)
+        weight = (1 + pos_weight * mask_pos) * weight
+        return weight
 
     def _loss_switcher(self, loss_kwargs: dict = {}) -> Tuple[callable]:
         """Helper function to switch between loss functions.
@@ -130,10 +112,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         else:
             raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
         return tuple(
-            self._wrap_loss(
-                loss_cls(reduction="none", **loss_kwargs),
-                self.training_config.pos_weight if level == 0 else 0,
-            )
+            loss_cls(reduction="none", **loss_kwargs)
             for level in range(self.model._levels)
         )
 
@@ -147,17 +126,25 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         out = self(imgs)
         pred_heatmap = out["heatmaps"]
 
-        loss_heatmap = sum(
-            tuple(
-                loss_f(pred_heatmap[lv], heatmap_lvs[lv]) / 4**lv
-                for lv, loss_f in zip(range(self._loss_levels), self._loss_funcs)
-            )
+        loss_heatmaps = list(
+            loss_f(pred_heatmap[lv], heatmap_lvs[lv]) / 4**lv
+            for lv, loss_f in zip(range(self._loss_levels), self._loss_funcs)
         )
+
+        # reweight first
+        loss_weight = self._loss_weight(
+            pred_heatmap[0], heatmap_lvs[0], pos_weight=self.training_config.pos_weight
+        )
+        loss_heatmaps[0] = loss_heatmaps[0] * loss_weight
+
+        loss_heatmap = sum([_loss.mean() for _loss in loss_heatmaps])
+
         loss = loss_heatmap
 
         if self.model.config.compute_flow:
             pred_flow = out["flow"]
-            loss_flow = self._loss_func_flow(pred_flow, flow, y_to_mask=heatmap_lvs[0], target_to_mask=heatmap_lvs[0])
+            loss_flow = self._loss_func_flow(pred_flow, flow)
+            loss_flow = (loss_flow * loss_weight).mean()
             loss = loss + loss_flow
         else:
             pred_flow = None
@@ -411,8 +398,6 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         return train_dl, val_dl
 
 
-
-
 # a model checkpoint that uses Spotipy.save() to save the model
 class SpotipyModelCheckpoint(pl.callbacks.Callback):
     """Callback to save the best model according to a given metric.
@@ -471,7 +456,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             pl_module (pl.LightningModule): lightning module object.
         """
         if trainer.is_global_zero:
-            # save last 
+            # save last
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
                 cutoff_distance=2 * self._train_config.sigma + 1,
@@ -479,12 +464,12 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
-                subpix=True, # !
+                subpix=True,  # !
             )
             pl_module.model.save(self._logdir, which="last", update_thresholds=True)
             log.info("Saved last model with optimized thresholds.")
             # load best and optimize thresholds...
-            pl_module.model.load(self._logdir, which='best')
+            pl_module.model.load(self._logdir, which="best")
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
                 cutoff_distance=2 * self._train_config.sigma + 1,
@@ -492,16 +477,14 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
-                subpix=True, # !
+                subpix=True,  # !
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
             log.info("Saved best model with optimized thresholds.")
 
 
-
 class CustomEarlyStopping(pl.callbacks.early_stopping.EarlyStopping):
-    """Callback implementing early stopping starting at a certain epoch.
-    """
+    """Callback implementing early stopping starting at a certain epoch."""
 
     def __init__(
         self,
@@ -521,7 +504,9 @@ class CustomEarlyStopping(pl.callbacks.early_stopping.EarlyStopping):
         # looks like pl calls this method after each epoch, so we just need to pass.
         pass
 
-    def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+    def on_validation_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ):
         """Called when each validation epoch ends.
 
         Args:

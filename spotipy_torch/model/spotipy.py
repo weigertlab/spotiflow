@@ -422,6 +422,7 @@ class Spotipy(nn.Module):
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
+                raise NotImplementedError("flow")
 
             _subpix = flow_to_vector(
                 flow,
@@ -515,9 +516,23 @@ class Spotipy(nn.Module):
             log.info(f"Found {len(pts)} spots")
 
         if subpix:
+            # _weight = np.zeros((len(pts),1))
+            # _add = np.zeros((len(pts),2), np.float32)
+            # radius = 0
+            # for i in range(-radius,radius+1):
+            #     for j in range(-radius,radius+1):
+            #         dp = np.array([[i,j]])
+            #         p = pts + dp
+            #         _w = y[tuple(p.astype(int).T)][:,None]
+            #         _correct  = _subpix[tuple(p.astype(int).T)] + dp
+            #         _weight += _w
+            #         _add += _w * _correct
+            # _add /= _weight
+            # pts = pts + _add
+
             pts = pts + _subpix[tuple(pts.astype(int).T)]
 
-        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix)
+        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
         return pts, details
 
     def predict_dataset(
@@ -615,11 +630,7 @@ class Spotipy(nn.Module):
                 curr_flow_preds = []
                 for flow in out["flow"]:
                     curr_flow_preds += [
-                        F.normalize(flow, dim=1)
-                        .permute(1, 2, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
+                        F.normalize(flow, dim=1).permute(1, 2, 0).detach().cpu().numpy()
                     ]
 
                 for p in val_batch["heatmap_lv0"]:
@@ -634,9 +645,12 @@ class Spotipy(nn.Module):
 
                 for batch_elem in range(high_lv_hm_preds.shape[0]):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
-                    val_flow_preds += [flow_to_vector(curr_flow_preds[batch_elem], sigma=self.config.sigma)]
+                    val_flow_preds += [
+                        flow_to_vector(
+                            curr_flow_preds[batch_elem], sigma=self.config.sigma
+                        )
+                    ]
                 del out, imgs, val_batch
-
 
         def _metric_at_threshold(thr):
             val_pred_pts = [
