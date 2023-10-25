@@ -38,7 +38,7 @@ def read_coords_csv(fname: str):
     return points
 
 
-def filter_shape(points, shape, idxr_array=None):
+def filter_shape(points, shape, idxr_array=None, return_mask=False):
     """returns all values in "points" that are inside the shape as given by the indexer array
     if the indexer array is None, then the array to be filtered itself is used
     """
@@ -46,6 +46,8 @@ def filter_shape(points, shape, idxr_array=None):
         idxr_array = points.copy()
     assert idxr_array.ndim == 2 and idxr_array.shape[1] == 2
     idx = np.all(np.logical_and(idxr_array >= 0, idxr_array < np.array(shape)), axis=1)
+    if return_mask:
+        return points[idx], idx
     return points[idx]
 
 

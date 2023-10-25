@@ -51,15 +51,23 @@ def _subpixel_offset(
     )
     n, _ = pts.shape
     _weight = np.zeros((n, 1), np.float32)
-    _add = np.zeros((len(pts), 2), np.float32)
+    _add = np.zeros((n, 2), np.float32)
     for i, j in product(range(-radius, radius + 1), repeat=2):
         dp = np.array([[i, j]])
         p = pts + dp
+        # filter points outside of the image (boundary)
+        p, mask = filter_shape(p, prob.shape, return_mask=True)
         _p = tuple(p.astype(int).T)
-        _w = prob[_p][:, None]
-        _correct = subpix[_p] + dp
+
+        _w = np.zeros((n, 1), np.float32)
+        _w[mask] = prob[_p][:, None]
+
+        _correct = np.zeros((n, 2), np.float32)
+        _correct[mask] = subpix[_p] + dp
+
         _weight += _w
         _add += _w * _correct
+
     _add /= _weight
     return _add
 
@@ -483,6 +491,8 @@ class Spotipy(nn.Module):
             probs = y[tuple(pts.astype(int).T)].tolist()
         else:  # Predict with tiling
             y = np.empty(x.shape[:2], np.float32)
+            _subpix = np.empty(x.shape[:2] + (2,), np.float32)
+            flow = np.empty(x.shape[:2] + (3,), np.float32) # ! Check dimensions
             points = []
             probs = []
             iter_tiles = tile_iterator(
@@ -510,11 +520,11 @@ class Spotipy(nn.Module):
                         torch.from_numpy(tile).to(device).unsqueeze(0)
                     )  # Add B and C dimensions
                     img_t = img_t.permute(0, 3, 1, 2)
+                    out = self(img_t)
                     y_tile = self._sigmoid(
-                        self(img_t)["heatmaps"][0].squeeze(0).squeeze(0)
+                        out["heatmaps"][0].squeeze(0).squeeze(0)
                     )
                     y_tile = y_tile.detach().cpu().numpy()
-
                     p = prob_to_points(
                         y_tile,
                         prob_thresh=self._prob_thresh
@@ -536,6 +546,22 @@ class Spotipy(nn.Module):
                     p += np.array([s.start for s in s_dst[:2]])[None]
                     points.append(p)
                     y[s_dst[:2]] = y_tile_sub
+
+                    # Flow
+                    flow_tile = (
+                        F.normalize(out["flow"], dim=1)[0]
+                        .permute(1, 2, 0)
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
+                    flow_tile_sub = flow_tile[s_src[:2]]
+                    flow[s_dst[:2]] = flow_tile_sub
+
+                    # Cartesian coordinates
+                    subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
+                    subpix_tile_sub = subpix_tile[s_src[:2]]
+                    _subpix[s_dst[:2]] = subpix_tile_sub
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
