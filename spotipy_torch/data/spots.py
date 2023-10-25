@@ -27,7 +27,7 @@ class SpotsDataset(Dataset):
         centers: Sequence[np.ndarray],
         augmenter: Optional[Callable] = None,
         downsample_factors: Sequence[int] = (1,),
-        sigma: float = 1.0,
+        sigma: float = 1.5,
         mode: str = "max",
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
@@ -87,7 +87,9 @@ class SpotsDataset(Dataset):
         )
 
         if max_files is not None:
-            rng = np.random.default_rng(random_state if random_state is not None else 42)
+            rng = np.random.default_rng(
+                random_state if random_state is not None else 42
+            )
             idx = np.arange(len(image_files))
             rng.shuffle(idx)
             image_files = [image_files[i] for i in idx[:max_files]]
@@ -138,7 +140,7 @@ class SpotsDataset(Dataset):
 
         if self._compute_flow:
             flow = utils.points_to_flow(
-                centers.numpy(), img.shape[-2:], sigma=2 * self._sigma
+                centers.numpy(), img.shape[-2:], sigma=self._sigma
             ).transpose((2, 0, 1))
             flow = torch.from_numpy(flow).float()
 
@@ -153,7 +155,7 @@ class SpotsDataset(Dataset):
         ]
 
         # Cast to tensor and add channel dimension
-        ret_obj = {"img": img.float()}
+        ret_obj = {"img": img.float(), "pts": centers.float()}
 
         if self._compute_flow:
             ret_obj.update({"flow": flow})
@@ -201,3 +203,21 @@ class SpotsDataset(Dataset):
         ):
             tifffile.imwrite(path / f"{prefix}{i:05d}.tif", x)
             pd.DataFrame(y, columns=("Y", "X")).to_csv(path / f"{prefix}{i:05d}.csv")
+
+
+def collate_spots(batch):
+    """custom collate that doesnt stack points (as they might have different length)"""
+
+    keys_to_ignore = ("pts",)
+    batch_new = dict(
+        (
+            k,
+            torch.stack([x[k] for x in batch], dim=0),
+        )
+        for k, v in batch[0].items()
+        if k not in keys_to_ignore
+    )
+
+    for k in keys_to_ignore:
+        batch_new[k] = [x[k] for x in batch]
+    return batch_new

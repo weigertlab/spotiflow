@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from itertools import product
 from csbdeep.internals.predict import tile_iterator
 from pathlib import Path
 from scipy.ndimage import zoom
@@ -33,6 +34,34 @@ from ..utils import (
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+
+def _subpixel_offset(
+    pts: np.ndarray, subpix: np.ndarray, prob: np.ndarray, radius: int
+):
+    """compute offset for subpixel localization at given locations by aggregating within a radius the
+    2d offset field `subpix` around each point in `pts` weighted by the probability `prob`
+    """
+    assert (
+        pts.ndim == 2
+        and pts.shape[1] == 2
+        and subpix.ndim == 3
+        and subpix.shape[2] == 2
+        and prob.ndim == 2
+    )
+    n, _ = pts.shape
+    _weight = np.zeros((n, 1), np.float32)
+    _add = np.zeros((len(pts), 2), np.float32)
+    for i, j in product(range(-radius, radius + 1), repeat=2):
+        dp = np.array([[i, j]])
+        p = pts + dp
+        _p = tuple(p.astype(int).T)
+        _w = prob[_p][:, None]
+        _correct = subpix[_p] + dp
+        _weight += _w
+        _add += _w * _correct
+    _add /= _weight
+    return _add
 
 
 class Spotipy(nn.Module):
@@ -204,6 +233,12 @@ class Spotipy(nn.Module):
             train_ds, val_ds = generate_datasets(
                 *training_data, *validation_data, **kwargs
             )
+
+        if not training_data._sigma == validation_data._sigma == self.config.sigma:
+            raise ValueError(
+                "Different sigma values given for training/validation data and model!"
+            )
+
         trainer = pl.Trainer(
             accelerator=accelerator,
             devices=devices,
@@ -333,7 +368,7 @@ class Spotipy(nn.Module):
         min_distance: int = 1,
         exclude_border: bool = False,
         scale: Optional[int] = None,
-        subpix: bool = False,
+        subpix: Optional[Union[bool, int]] = False,
         peak_mode: Literal["skimage", "fast"] = "skimage",
         normalizer: Optional[callable] = None,
         verbose: bool = True,
@@ -359,6 +394,13 @@ class Spotipy(nn.Module):
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
         """
+
+        if subpix is False:
+            subpix_radius = -1
+        elif subpix is True:
+            subpix_radius = 0
+        else:
+            subpix_radius = int(subpix)
 
         assert img.ndim in (2, 3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
         device = torch.device(device)
@@ -515,22 +557,9 @@ class Spotipy(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        if subpix:
-            # _weight = np.zeros((len(pts),1))
-            # _add = np.zeros((len(pts),2), np.float32)
-            # radius = 0
-            # for i in range(-radius,radius+1):
-            #     for j in range(-radius,radius+1):
-            #         dp = np.array([[i,j]])
-            #         p = pts + dp
-            #         _w = y[tuple(p.astype(int).T)][:,None]
-            #         _correct  = _subpix[tuple(p.astype(int).T)] + dp
-            #         _weight += _w
-            #         _add += _w * _correct
-            # _add /= _weight
-            # pts = pts + _add
-
-            pts = pts + _subpix[tuple(pts.astype(int).T)]
+        if subpix_radius >= 0:
+            _offset = _subpixel_offset(pts, _subpix, y, radius=subpix_radius)
+            pts = pts + _offset
 
         details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
         return pts, details

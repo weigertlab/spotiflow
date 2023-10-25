@@ -20,27 +20,36 @@ if __name__ == "__main__":
     compute_flow = True
     # compute_flow = False
 
-    n_levels = 2
+    n_levels = 3
+
+    sigma = 1.5
 
     config = SpotipyModelConfig(
         backbone=backbone,
         levels=n_levels,
         compute_flow=compute_flow,
         mode="slim",
-        sigma=1.5,
+        sigma=sigma,
         fmap_inc_factor=2,
         background_remover=False,
         batch_norm=batch_norm,
     )
 
-    sigma = 2
-    train_config = SpotipyTrainingConfig(num_epochs=40, pos_weight=10)
+    train_config = SpotipyTrainingConfig(num_epochs=100, pos_weight=10, batch_size=4)
 
     data = SpotsDataset(
-        X, P, compute_flow=compute_flow, downsample_factors=(1, 2, 4, 8)[:n_levels]
+        X,
+        P,
+        compute_flow=compute_flow,
+        sigma=sigma,
+        downsample_factors=(1, 2, 4, 8)[:n_levels],
     )
     data_v = SpotsDataset(
-        Xv, Pv, compute_flow=compute_flow, downsample_factors=(1, 2, 4, 8)[:n_levels]
+        Xv,
+        Pv,
+        compute_flow=compute_flow,
+        sigma=sigma,
+        downsample_factors=(1, 2, 4, 8)[:n_levels],
     )
 
     model = Spotipy(config)

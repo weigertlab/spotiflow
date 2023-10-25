@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from .config import SpotipyTrainingConfig
 from .losses import AdaptiveWingLoss
+from ..data import collate_spots
 from ..utils import prob_to_points, points_matching_dataset
 
 logging.basicConfig(level=logging.INFO)
@@ -181,6 +182,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             prog_bar=True,
             logger=True,
         )
+
         return out["loss"]
 
     def validation_step(self, batch, batch_idx) -> None:
@@ -207,7 +209,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             flow = None
 
         self._valid_inputs.append(img[0].detach().cpu().numpy())
-        self._valid_targets.append(batch["heatmap_lv0"][0, 0].detach().cpu().numpy())
+        self._valid_targets.append(batch["pts"][0].detach().cpu().numpy())
         self._valid_outputs.append(heatmap)
         self._valid_flows.append(flow)
 
@@ -225,20 +227,22 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         """Called when the validation epoch ends.
         Logs the F1 score and accuracy of the model on the validation set, as well as some sample images.
         """
-        valid_tgt_centers = [
-            prob_to_points(t, exclude_border=False, min_distance=1, mode="fast")
-            for t in self._valid_targets
-        ]
         valid_pred_centers = [
-            prob_to_points(p, exclude_border=False, min_distance=1, mode="fast")
+            prob_to_points(
+                p,
+                exclude_border=False,
+                min_distance=self.model.config.sigma,
+                mode="fast",
+            )
             for p in self._valid_outputs
         ]
         stats = points_matching_dataset(
-            valid_tgt_centers,
+            self._valid_targets,
             valid_pred_centers,
             cutoff_distance=2 * self.training_config.sigma + 1,
             by_image=True,
         )
+
         val_f1, val_acc = stats.f1, stats.accuracy
         self.log_dict(
             {
@@ -386,6 +390,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             else None,
             shuffle=True if num_train_samples is None else False,
             num_workers=num_workers,
+            collate_fn=collate_spots,
             pin_memory=True,
         )
         val_dl = torch.utils.data.DataLoader(
@@ -394,6 +399,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
+            collate_fn=collate_spots,
         )
         return train_dl, val_dl
 
