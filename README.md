@@ -83,6 +83,7 @@ Then `cd` into the cloned repository and run the tests:
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [ ] First docs prototype
 - [x] Tests
+- [ ] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True) 
 
 ## Contributors
 
