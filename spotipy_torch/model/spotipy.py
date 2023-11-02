@@ -326,6 +326,7 @@ class Spotipy(nn.Module):
         peak_mode: Literal["skimage", "fast"] = "skimage",
         normalizer: Optional[callable] = None,
         verbose: bool = True,
+        progress_bar_wrapper: Optional[callable] = None,
         device: str = "cuda",
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
@@ -340,6 +341,7 @@ class Spotipy(nn.Module):
             peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
             normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
+            progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (str, optional): Device to use for prediction. Defaults to "cuda".
 
         Returns:
@@ -420,10 +422,14 @@ class Spotipy(nn.Module):
                 block_sizes=div_by,
                 n_block_overlaps=(4, 4) if x.ndim == 2 else (4, 4, 0),
             )
-            if verbose:
+
+            if verbose and callable(progress_bar_wrapper):
+                iter_tiles = progress_bar_wrapper(iter_tiles)
+            elif verbose:
                 iter_tiles = tqdm(
                     iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles)
                 )
+
             for tile, s_src, s_dst in iter_tiles:
                 # assert all(s%t == 0 for s, t in zip(tile.shape, n_tiles)), "Currently, tile shape must be divisible by n_tiles"
                 if normalizer is not None and callable(normalizer):
