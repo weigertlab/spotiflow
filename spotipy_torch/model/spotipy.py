@@ -480,6 +480,8 @@ class Spotipy(nn.Module):
             )
             _subpix = center_crop(_subpix, img.shape[:2])
             y = center_crop(y, img.shape[:2])
+            flow = center_crop(flow, img.shape[:2])
+            _subpix = center_crop(_subpix, img.shape[:2])
 
             pts = prob_to_points(
                 y,
@@ -489,10 +491,11 @@ class Spotipy(nn.Module):
                 min_distance=min_distance,
             )
             probs = y[tuple(pts.astype(int).T)].tolist()
+
         else:  # Predict with tiling
             y = np.empty(x.shape[:2], np.float32)
             _subpix = np.empty(x.shape[:2] + (2,), np.float32)
-            flow = np.empty(x.shape[:2] + (3,), np.float32) # ! Check dimensions
+            flow = np.empty(x.shape[:2] + (3,), np.float32)  # ! Check dimensions
             points = []
             probs = []
             iter_tiles = tile_iterator(
@@ -521,9 +524,7 @@ class Spotipy(nn.Module):
                     )  # Add B and C dimensions
                     img_t = img_t.permute(0, 3, 1, 2)
                     out = self(img_t)
-                    y_tile = self._sigmoid(
-                        out["heatmaps"][0].squeeze(0).squeeze(0)
-                    )
+                    y_tile = self._sigmoid(out["heatmaps"][0].squeeze(0).squeeze(0))
                     y_tile = y_tile.detach().cpu().numpy()
                     p = prob_to_points(
                         y_tile,
@@ -567,6 +568,8 @@ class Spotipy(nn.Module):
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
             y = center_crop(y, img.shape[:2])
+            flow = center_crop(flow, img.shape[:2])
+            _subpix = center_crop(_subpix, img.shape[:2])
 
             points = np.concatenate(points, axis=0)
 
