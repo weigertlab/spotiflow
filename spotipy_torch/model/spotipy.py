@@ -49,6 +49,7 @@ def _subpixel_offset(
         and subpix.shape[2] == 2
         and prob.ndim == 2
     )
+    subpix = np.clip(subpix, -1, 1)
     n, _ = pts.shape
     _weight = np.zeros((n, 1), np.float32)
     _add = np.zeros((n, 2), np.float32)
