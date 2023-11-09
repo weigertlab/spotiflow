@@ -31,6 +31,8 @@ from ..utils import (
     prob_to_points,
     flow_to_vector,
 )
+from .pretrained import get_pretrained_model_path
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -152,7 +154,7 @@ class Spotipy(nn.Module):
         self._prob_thresh = 0.5
 
     @classmethod
-    def from_pretrained(
+    def from_folder(
         cls,
         pretrained_path: str,
         inference_mode=True,
@@ -177,6 +179,19 @@ class Spotipy(nn.Module):
             map_location=map_location,
         )
         return model
+
+    @classmethod
+    def from_pretrained(cls, pretrained_name: str, **kwargs) -> None:
+        """Load a pretrained model with given name
+
+        Args:
+            pretrained_name (str): path to the pretrained model
+            kwargs: additional arguments to pass to the from_folder method
+        """
+        print(f"Loading pretrained model {pretrained_name}")
+        pretrained_path = get_pretrained_model_path(pretrained_name)
+        if pretrained_path is not None:
+            return cls.from_folder(pretrained_path, **kwargs)
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Forward pass
