@@ -137,6 +137,7 @@ class SpotipyModelConfig(SpotipyConfig):
         self.batch_norm = bool(batch_norm)
         self.dropout = dropout
         self.sigma = sigma
+        self.downsample_factor = downsample_factor
 
         super().__init__()
 
@@ -193,14 +194,16 @@ class SpotipyModelConfig(SpotipyConfig):
         assert (
             isinstance(self.sigma, Number) and self.sigma >= 0
         ), "sigma must be a number >= 0."
+        assert (
+            isinstance(self.downsample_factor, int) and self.downsample_factor > 0
+        ), "downsample_factor must be a positive integer"
 
 
 class SpotipyTrainingConfig(SpotipyConfig):
     def __init__(
         self,
-        sigma: Number = 1.0,
         crop_size: int = 512,
-        smart_crop: bool = True,
+        smart_crop: bool = False,
         heatmap_loss_f: str = "bce",
         flow_loss_f: str = "l1",
         loss_levels: Optional[int] = None,
@@ -215,10 +218,14 @@ class SpotipyTrainingConfig(SpotipyConfig):
         early_stopping_patience: int = 0,
         **kwargs,
     ):
-        self.sigma = sigma
         self.crop_size = crop_size
         self.smart_crop = bool(smart_crop)
         self.heatmap_loss_f = heatmap_loss_f
+
+        # FIXME DEPRECATED. Remove in future versions
+        if (loss_f := kwargs.get("loss_f", None)) is not None:
+            self.heatmap_loss_f = loss_f
+
         self.flow_loss_f = flow_loss_f
         self.loss_levels = loss_levels
         self.pos_weight = pos_weight
@@ -233,9 +240,6 @@ class SpotipyTrainingConfig(SpotipyConfig):
         super().__init__()
 
     def is_valid(self):
-        assert (
-            isinstance(self.sigma, Number) and self.sigma >= 0
-        ), "sigma must be a number >= 0."
         assert (
             isinstance(self.crop_size, int) and self.crop_size > 0
         ), "crop_size must be an integer > 0."

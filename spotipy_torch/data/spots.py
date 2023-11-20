@@ -27,10 +27,11 @@ class SpotsDataset(Dataset):
         centers: Sequence[np.ndarray],
         augmenter: Optional[Callable] = None,
         downsample_factors: Sequence[int] = (1,),
-        sigma: float = 1.5,
+        sigma: float = 1.,
         mode: str = "max",
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
+        normalizer: Callable = utils.normalize,
     ) -> None:
         super().__init__()
 
@@ -41,6 +42,9 @@ class SpotsDataset(Dataset):
 
         self._centers = centers
         self._images = images
+
+        if callable(normalizer):
+            self._images = [normalizer(img) for img in tqdm(self._images, desc="Normalizing images")]
 
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")

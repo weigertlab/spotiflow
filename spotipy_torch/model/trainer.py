@@ -197,6 +197,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=self.training_config.batch_size,
         )
 
         return out["loss"]
@@ -237,6 +238,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=self.training_config.batch_size,
         )
 
     def on_validation_epoch_end(self) -> None:
@@ -255,7 +257,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         stats = points_matching_dataset(
             self._valid_targets,
             valid_pred_centers,
-            cutoff_distance=2 * self.training_config.sigma + 1,
+            cutoff_distance=2 * self.model.config.sigma + 1,
             by_image=True,
         )
 
@@ -269,6 +271,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=self.training_config.batch_size,
         )
 
         if not self.trainer.sanity_checking:

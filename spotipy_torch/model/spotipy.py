@@ -1,38 +1,33 @@
+import logging
 from collections import OrderedDict
+from copy import deepcopy
 from itertools import product
-from csbdeep.internals.predict import tile_iterator
 from pathlib import Path
-from scipy.ndimage import zoom
-from tqdm.auto import tqdm
 from types import SimpleNamespace
 from typing import Literal, Optional, Sequence, Tuple, Union
 
-
 import lightning.pytorch as pl
-import logging
+import numpy as np
 import pydash
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 import yaml
+from csbdeep.internals.predict import tile_iterator
+from scipy.ndimage import zoom
+from tormenter import transforms
+from tormenter.pipeline import Pipeline as AugmentationPipeline
+from tqdm.auto import tqdm
 
+from ..data import SpotsDataset
+from ..utils import (center_crop, center_pad, filter_shape, flow_to_vector,
+                     points_matching_dataset, prob_to_points)
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotipyModelConfig, SpotipyTrainingConfig
 from .post import FeaturePyramidNetwork, MultiHeadProcessor
-from .trainer import SpotipyTrainingWrapper
-from ..utils import (
-    center_crop,
-    center_pad,
-    filter_shape,
-    generate_datasets,
-    points_matching_dataset,
-    prob_to_points,
-    flow_to_vector,
-)
 from .pretrained import get_pretrained_model_path
-
+from .trainer import SpotipyModelCheckpoint, SpotipyTrainingWrapper
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -213,11 +208,11 @@ class Spotipy(nn.Module):
         else:
             return dict(heatmaps=heatmaps)
 
-    def fit(
+    def fit_dataset(
         self,
-        training_data: Union[torch.utils.data.Dataset, Tuple],
-        validation_data: Optional[Union[torch.utils.data.Dataset, Tuple]] = None,
-        train_config: Optional[SpotipyTrainingConfig] = None,
+        train_ds: torch.utils.data.Dataset,
+        val_ds: torch.utils.data.Dataset,
+        train_config: SpotipyTrainingConfig,
         accelerator: str = "cpu",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
@@ -225,13 +220,12 @@ class Spotipy(nn.Module):
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = [],
         deterministic: Optional[bool] = True,
         benchmark: Optional[bool] = False,
-        **kwargs,
     ):
-        """Train the model.
+        """Train the model using torch Datasets as input.
 
         Args:
-            training_data (Union[torch.utils.data.Dataset, Tuple]): training dataset. If a tuple is given, it should be (I, P) where I is a list of images and P is a list of points.
-            validation_data (Union[torch.utils.data.Dataset, Tuple]): validation dataset. If a tuple is given, it should be (I, P) where I is a list of images and P is a list of points.
+            train_ds (torch.utils.data.Dataset): training dataset. 
+            val_ds (torch.utils.data.Dataset): validation dataset.
             train_config (SpotipyTrainingConfig): training configuration
             accelerator (str): accelerator to use. Can be "cpu", "cuda", "mps" or "auto".
             logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to None.
@@ -240,25 +234,9 @@ class Spotipy(nn.Module):
             callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
             deterministic (Optional[bool], optional): whether to use deterministic training. Set to True for deterministic behaviour at a cost of performance. Defaults to True.
             benchmark (Optional[bool], optional): whether to use benchmarking. Set to False for deterministic behaviour at a cost of performance. Defaults to False.
-            kwargs: additional arguments to pass to the SpotsDataset class. Only used if training_data is input as tuples.
         """
-        if train_config is None:
-            log.info("No training config given. Using default.")
-            train_config = SpotipyTrainingConfig()
-            log.info(f"Default training config: {train_config}")
-        assert validation_data is None or type(training_data) == type(
-            validation_data
-        ), "Training and validation data must be of the same type"
-        if isinstance(training_data, torch.utils.data.Dataset):
-            train_ds, val_ds = training_data, validation_data
-        else:
-            if validation_data is None:
-                validation_data = [None, None]
-            train_ds, val_ds = generate_datasets(
-                *training_data, *validation_data, **kwargs
-            )
 
-        if not training_data._sigma == validation_data._sigma == self.config.sigma:
+        if not (train_ds._sigma == val_ds._sigma == self.config.sigma):
             raise ValueError(
                 "Different sigma values given for training/validation data and model!"
             )
@@ -282,7 +260,147 @@ class Spotipy(nn.Module):
         )
         trainer.fit(training_wrapper, train_dl, val_dl)
         log.info("Training finished.")
+        return
+    
 
+    def fit(
+        self,
+        train_images: Sequence[np.ndarray],
+        train_spots: Sequence[np.ndarray],
+        val_images: Sequence[np.ndarray],
+        val_spots: Sequence[np.ndarray],
+        augment_train: bool = True,
+        save_dir: Optional[str] = None,
+        train_config: Optional[SpotipyTrainingConfig] = None,
+        accelerator: Literal["cpu", "cuda", "mps"] = "cpu",
+        logger: Optional[pl.loggers.Logger] = None,
+        devices: Optional[int] = 1,
+        num_workers: Optional[int] = 0,
+        callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], # !
+        deterministic: Optional[bool] = True,
+        benchmark: Optional[bool] = False,
+        **dataset_kwargs,
+    ):
+        """Train a Spotipy model.
+
+        Args:
+            train_images (Sequence[np.ndarray]): training images
+            train_spots (Sequence[np.ndarray]): training spots
+            val_images (Sequence[np.ndarray]): validation images
+            val_spots (Sequence[np.ndarray]): validation spots
+            augment_train (bool, optional): whether to augment the training data. Defaults to True.
+            save_dir (Optional[str], optional): directory to save the model to. Must be given if no checkpoint logger is given as a callback. Defaults to None.
+            train_config (Optional[SpotipyTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
+            accelerator (Literal["cpu", "cuda", "mps"], optional): accelerator to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
+            logger (Optional[pl.loggers.Logger], optional): logger to use. If not given, will use TensorBoard. Defaults to None.
+            devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
+            num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0 (main process only).
+            callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
+            deterministic (Optional[bool], optional): whether to use deterministic training. Set to True for deterministic behaviour at a cost of performance. Defaults to True.
+            benchmark (Optional[bool], optional): whether to use benchmarking. Set to False for deterministic behaviour at a cost of performance. Defaults to False.
+            dataset_kwargs: additional arguments to pass to the SpotsDataset class. Defaults to no additional arguments.
+        """
+        # Make sure data is OK
+        self._validate_fit_inputs(train_images, train_spots, val_images, val_spots)
+
+        # Generate default training config if none is given
+        if train_config is None:
+            log.info("No training config given. Using default.")
+            train_config = SpotipyTrainingConfig()
+            log.info(f"Default training config: {train_config}")
+
+        # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
+        if "compute_flow" in dataset_kwargs.keys():
+            log.warning("'compute_flow' argument given to Spotipy.fit(). This argument is ignored.")
+        if "downsample_factors" in dataset_kwargs.keys():
+            log.warning("'downsample_factors' argument given to Spotipy.fit(). This argument is ignored.")        
+        dataset_kwargs["compute_flow"] = self.config.compute_flow
+        dataset_kwargs["downsample_factors"] = [self.config.downsample_factor**lv for lv in range(self.config.levels)]
+        
+        # Generate dataset kwargs for training and validation
+        train_dataset_kwargs = deepcopy(dataset_kwargs)
+        val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
+
+        # Build augmenters
+        if augment_train:
+            tr_augmenter = self.build_image_augmenter(train_config, crop_first=True)
+        else:
+            tr_augmenter = self.build_image_cropper(train_config)
+        val_augmenter = self.build_image_cropper(train_config)
+        
+
+        # Generate datasets
+        train_ds = SpotsDataset(train_images, train_spots, augmenter=tr_augmenter, **train_dataset_kwargs)
+        val_ds = SpotsDataset(val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs)
+
+        # Add model checkpoint callback if not given (to save the model)
+        if not any(isinstance(c, SpotipyModelCheckpoint) for c in callbacks):
+            if not save_dir:
+                raise ValueError("save_dir argument must be given if no SpotipyModelCheckpoint callback is given")
+            callbacks = [
+                SpotipyModelCheckpoint(
+                    logdir=save_dir,
+                    train_config=train_config,
+                    monitor="val_loss"),
+                *callbacks]
+
+        self.fit_dataset(
+            train_ds,
+            val_ds,
+            train_config,
+            accelerator,
+            logger,
+            devices,
+            num_workers,
+            callbacks,
+            deterministic,
+            benchmark,
+        )
+        return
+    
+    def _validate_fit_inputs(
+        self, train_images, train_spots, val_images, val_spots
+    ) -> None:
+        for imgs, pts, split in zip((train_images, val_images), (train_spots, val_spots), ("train", "validation")):
+            assert len(imgs) == len(pts), f"Number of images and points must be equal for {split} set"
+            assert all(img.ndim in (2, 3) for img in imgs), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
+            if self.config.in_channels > 1:
+                assert all(img.ndim == 3 and img.shape[-1] == self.in_channels for img in imgs), f"All images must be 2D (Y,X) for {split} set"
+            assert all(pts.ndim == 2 and pts.shape[1] == 2 for pts in pts), f"Points must be 2D (Y,X) for {split} set"
+        return
+
+    def build_image_cropper(self, train_config):
+        """Build default cropper for a dataset.
+            train_config: training configuration object
+        """
+        cropper = AugmentationPipeline()
+        cropper.add(transforms.Crop(
+            probability=1.0,
+            size=(train_config.crop_size, train_config.crop_size),
+            point_priority=0)
+        )
+        return cropper
+
+    def build_image_augmenter(self,
+                        train_config: SpotipyTrainingConfig,
+                        crop_first: bool = True,
+    ) -> AugmentationPipeline:
+        """Build default augmenter for training data.
+            train_config: training configuration object
+            split: split to build the augmenter for. Must be "train" or "val".
+        """
+        augmenter = self.build_image_cropper(train_config) if crop_first else AugmentationPipeline()
+        augmenter.add(transforms.FlipRot90(probability=0.5))
+        augmenter.add(transforms.Rotation(probability=0.5, order=1))
+        augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
+        augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
+        augmenter.add(
+            transforms.IntensityScaleShift(
+                probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
+            )
+        )
+        return augmenter
+        
     def save(
         self,
         path: str,
@@ -672,11 +790,11 @@ class Spotipy(nn.Module):
         self,
         val_ds: torch.utils.data.Dataset,
         cutoff_distance: int = 3,
-        min_distance: int = 2,
+        min_distance: int = 1,
         exclude_border: bool = False,
         threshold_range: Tuple[float, float] = (0.3, 0.7),
         niter: int = 11,
-        batch_size: int = 2,
+        batch_size: int = 1,
         device: torch.device = torch.device("cpu"),
         subpix: bool = False,
     ) -> None:
