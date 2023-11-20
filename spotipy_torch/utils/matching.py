@@ -78,6 +78,8 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
         for s in stats:
             for k in ("tp", "fp", "fn"):
                 setattr(res, k, getattr(res, k) + getattr(s, k))
+        
+        dists = np.concatenate([s.dist for s in stats])
 
         tp_eps = res.tp + eps
         res.accuracy = tp_eps / (tp_eps + res.fp + res.fn) if tp_eps > 0 else 0
@@ -85,4 +87,9 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
         res.recall = tp_eps / (tp_eps + res.fn) if tp_eps > 0 else 0
         res.f1 = (2 * tp_eps) / (2 * tp_eps + res.fp + res.fn) if tp_eps > 0 else 0
 
+        pq_num = np.sum(cutoff_distance-dists)/cutoff_distance
+        pq_den = tp_eps + res.fp/2 + res.fn/2
+
+        res.panoptic_quality = pq_num/pq_den if tp_eps > 0 else 0
+        res.mean_dist = np.mean(dists) if len(dists) > 0 else 0
         return res

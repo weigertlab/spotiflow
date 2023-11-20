@@ -19,7 +19,6 @@ parser.add_argument("--cutoff-distance", type=float, default=3.)
 parser.add_argument("--which", type=str, choices=["best", "last"], default="last")
 parser.add_argument("--threshold", type=float, required=False, default=None)
 parser.add_argument("--subpix", action="store_true", required=False, default=False)
-
 args = parser.parse_args()
 
 

@@ -136,3 +136,8 @@ stat/
 
 # wandb
 **/wandb/**
+
+
+# Logs
+**/logs/**
+**/lightning_logs/**

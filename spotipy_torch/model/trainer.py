@@ -114,11 +114,11 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
         return tuple(
             loss_cls(reduction="none", **loss_kwargs)
-            for level in range(self.model._levels)
+            for _ in range(self._loss_levels)
         )
 
     def _common_step(self, batch):
-        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self.model._levels)]
+        heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._loss_levels)]
         imgs = batch["img"]
 
         if self.model.config.compute_flow:
@@ -470,7 +470,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
-                subpix=True,  # !
+                subpix=trainer.model.model.config.compute_flow,
             )
             pl_module.model.save(self._logdir, which="last", update_thresholds=True)
             log.info("Saved last model with optimized thresholds.")
@@ -483,7 +483,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 device=pl_module.device,
-                subpix=True,  # !
+                subpix=trainer.model.model.config.compute_flow,
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
             log.info("Saved best model with optimized thresholds.")

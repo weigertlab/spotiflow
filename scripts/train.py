@@ -43,6 +43,7 @@ def get_run_name(args: SimpleNamespace):
     name += "_scaleaug" if args.scale_augmentation else ""
     name += "_finetuned" if args.pretrained_model else ""
     name += "_dry" if args.dry else ""
+    name += "_single_scale_loss" if args.single_scale_loss else ""
     name += "_subpix"
     name = name.replace(".", "_")  # Remove dots to avoid confusion with file extensions
     return name
@@ -234,6 +235,13 @@ if __name__ == "__main__":
         help="Minimum number of epochs to be trained on. Only used if early stopping is enabled.",
     )
 
+    parser.add_argument(
+        "--single-scale-loss",
+        action="store_true",
+        default=False,
+        help="Whether to use a single-scale loss function",
+    )
+
     args = parser.parse_args()
 
     if args.in_channels > 1:
@@ -297,6 +305,7 @@ if __name__ == "__main__":
         num_epochs=args.num_epochs,
         finetuned_from=args.pretrained_model,
         early_stopping_patience=args.early_stopping_patience,
+        loss_levels=None if not args.single_scale_loss else 1,
     )
 
     save_dir = Path(args.save_dir) / f"{run_name}"
@@ -394,10 +403,11 @@ if __name__ == "__main__":
     print(model_config)
     print(training_config)
 
+    effective_levels = model_config.levels if not args.single_scale_loss else 1
     train_ds = SpotsDataset.from_folder(
         data_dir / "train",
         downsample_factors=[
-            args.downsample_factor**lv for lv in range(model_config.levels)
+            args.downsample_factor**lv for lv in range(effective_levels)
         ],  # ! model.downsample_factors
         augmenter=augmenter,
         sigma=training_config.sigma,

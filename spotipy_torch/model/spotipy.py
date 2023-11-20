@@ -463,26 +463,27 @@ class Spotipy(nn.Module):
                     .cpu()
                     .numpy()
                 )
-                flow = (
-                    F.normalize(out["flow"], dim=1)[0]
-                    .permute(1, 2, 0)
-                    .detach()
-                    .cpu()
-                    .numpy()
-                )
+                if subpix:
+                    flow = (
+                        F.normalize(out["flow"], dim=1)[0]
+                        .permute(1, 2, 0)
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
                 raise NotImplementedError("flow")
+            if subpix:
+                _subpix = flow_to_vector(
+                    flow,
+                    sigma=self.config.sigma,
+                )
+                flow = center_crop(flow, img.shape[:2])
+                _subpix = center_crop(_subpix, img.shape[:2])
 
-            _subpix = flow_to_vector(
-                flow,
-                sigma=self.config.sigma,
-            )
-            _subpix = center_crop(_subpix, img.shape[:2])
             y = center_crop(y, img.shape[:2])
-            flow = center_crop(flow, img.shape[:2])
-            _subpix = center_crop(_subpix, img.shape[:2])
 
             pts = prob_to_points(
                 y,
@@ -495,7 +496,8 @@ class Spotipy(nn.Module):
 
         else:  # Predict with tiling
             y = np.empty(x.shape[:2], np.float32)
-            _subpix = np.empty(x.shape[:2] + (2,), np.float32)
+            if subpix:
+                _subpix = np.empty(x.shape[:2] + (2,), np.float32)
             flow = np.empty(x.shape[:2] + (3,), np.float32)  # ! Check dimensions
             points = []
             probs = []
@@ -550,27 +552,29 @@ class Spotipy(nn.Module):
                     y[s_dst[:2]] = y_tile_sub
 
                     # Flow
-                    flow_tile = (
-                        F.normalize(out["flow"], dim=1)[0]
-                        .permute(1, 2, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    flow_tile_sub = flow_tile[s_src[:2]]
-                    flow[s_dst[:2]] = flow_tile_sub
+                    if subpix:
+                        flow_tile = (
+                            F.normalize(out["flow"], dim=1)[0]
+                            .permute(1, 2, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
+                        flow_tile_sub = flow_tile[s_src[:2]]
+                        flow[s_dst[:2]] = flow_tile_sub
 
-                    # Cartesian coordinates
-                    subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
-                    subpix_tile_sub = subpix_tile[s_src[:2]]
-                    _subpix[s_dst[:2]] = subpix_tile_sub
+                        # Cartesian coordinates
+                        subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
+                        subpix_tile_sub = subpix_tile[s_src[:2]]
+                        _subpix[s_dst[:2]] = subpix_tile_sub
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
             y = center_crop(y, img.shape[:2])
-            flow = center_crop(flow, img.shape[:2])
-            _subpix = center_crop(_subpix, img.shape[:2])
+            if subpix:
+                flow = center_crop(flow, img.shape[:2])
+                _subpix = center_crop(_subpix, img.shape[:2])
 
             points = np.concatenate(points, axis=0)
 
@@ -587,10 +591,12 @@ class Spotipy(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        if subpix_radius >= 0:
+        if subpix and subpix_radius >= 0:
             _offset = _subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
-
+        else:
+            _subpix = None
+            flow = None
         details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
         return pts, details
 
@@ -686,11 +692,12 @@ class Spotipy(nn.Module):
                 high_lv_hm_preds = (
                     self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
                 )
-                curr_flow_preds = []
-                for flow in out["flow"]:
-                    curr_flow_preds += [
-                        F.normalize(flow, dim=1).permute(1, 2, 0).detach().cpu().numpy()
-                    ]
+                if subpix:
+                    curr_flow_preds = []
+                    for flow in out["flow"]:
+                        curr_flow_preds += [
+                            F.normalize(flow, dim=1).permute(1, 2, 0).detach().cpu().numpy()
+                        ]
 
                 for p in val_batch["heatmap_lv0"]:
                     val_gt_pts.append(
@@ -704,10 +711,11 @@ class Spotipy(nn.Module):
 
                 for batch_elem in range(high_lv_hm_preds.shape[0]):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
-                    val_flow_preds += [
-                        flow_to_vector(
-                            curr_flow_preds[batch_elem], sigma=self.config.sigma
-                        )
+                    if subpix:
+                        val_flow_preds += [
+                            flow_to_vector(
+                                curr_flow_preds[batch_elem], sigma=self.config.sigma
+                            )
                     ]
                 del out, imgs, val_batch
 
