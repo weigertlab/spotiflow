@@ -92,10 +92,10 @@ class SpotipyModelConfig(SpotipyConfig):
         downsample_factor: int = 2,
         kernel_size: int = 3,
         padding: Union[int, str] = "same",
-        mode: Literal["direct", "fpn", "slim"] = "direct",
-        background_remover: bool = True,
-        compute_flow: bool = False,
-        batch_norm: bool = False,
+        mode: Literal["direct", "fpn", "slim"] = "slim",
+        background_remover: bool = False,
+        compute_flow: bool = True,
+        batch_norm: bool = True,
         downsample_factors: Optional[Tuple[Tuple[int, int]]] = None,
         kernel_sizes: Optional[Tuple[Tuple[int, int]]] = None,
         dropout: float = 0.0,
@@ -200,9 +200,10 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self,
         sigma: Number = 1.0,
         crop_size: int = 512,
-        smart_crop: bool = False,
-        loss_f: str = "bce",
-        loss_levels: int = None,
+        smart_crop: bool = True,
+        heatmap_loss_f: str = "bce",
+        flow_loss_f: str = "l1",
+        loss_levels: Optional[int] = None,
         num_train_samples: Optional[int] = None,
         pos_weight: Number = 10.0,
         lr: float = 3e-4,
@@ -217,7 +218,8 @@ class SpotipyTrainingConfig(SpotipyConfig):
         self.sigma = sigma
         self.crop_size = crop_size
         self.smart_crop = bool(smart_crop)
-        self.loss_f = loss_f
+        self.heatmap_loss_f = heatmap_loss_f
+        self.flow_loss_f = flow_loss_f
         self.loss_levels = loss_levels
         self.pos_weight = pos_weight
         self.lr = lr
@@ -237,12 +239,15 @@ class SpotipyTrainingConfig(SpotipyConfig):
         assert (
             isinstance(self.crop_size, int) and self.crop_size > 0
         ), "crop_size must be an integer > 0."
-        assert self.loss_f in {
+        assert self.heatmap_loss_f in {
             "bce",
             "mse",
             "smoothl1",
             "adawing",
-        }, "loss_f must be either 'bce', 'mse', 'smoothl1', or 'adawing'"
+        }, "heatmap_loss_f must be either 'bce', 'mse', 'smoothl1', or 'adawing'"
+        assert self.flow_loss_f in {
+            "l1",
+        }, "flow_loss_f must be 'l1'"
         assert (
             isinstance(self.pos_weight, Number) and self.pos_weight > 0
         ), "pos_weight must be a number greater than 0."

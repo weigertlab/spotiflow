@@ -56,8 +56,8 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 f"Loss levels ({self.training_config.loss_levels}) must be less than or equal to model levels ({model._levels})."
             )
 
-        self._loss_funcs = self._loss_switcher()
-        self._loss_func_flow = nn.L1Loss(reduction="none")
+        self._heatmap_loss_funcs = self._heatmap_loss_switcher()
+        self._flow_loss_func = self._flow_loss_switcher()
 
         self._valid_inputs = []
         self._valid_targets = []
@@ -92,8 +92,8 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         weight = (1 + pos_weight * mask_pos) * weight
         return weight
 
-    def _loss_switcher(self, loss_kwargs: dict = {}) -> Tuple[callable]:
-        """Helper function to switch between loss functions.
+    def _heatmap_loss_switcher(self, loss_kwargs: dict = {}) -> Tuple[callable]:
+        """Helper function to switch between loss functions for the multiscale heatmap regression.
 
         Args:
             loss_kwargs (dict, optional): The keyword arguments to be passed to the loss function. Defaults to no arguments.
@@ -101,21 +101,37 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         Returns:
             Tuple[callable]: The loss functions to be applied at different resolution levels (from highest to lowest).
         """
-        loss_f_str = self.training_config.loss_f.lower()
-        if loss_f_str == "bce":
+        heatmap_loss_f_str = self.training_config.heatmap_loss_f.lower()
+        if heatmap_loss_f_str == "bce":
             loss_cls = nn.BCEWithLogitsLoss
-        elif loss_f_str == "adawing":
+        elif heatmap_loss_f_str == "adawing":
             loss_cls = AdaptiveWingLoss
-        elif loss_f_str == "mse":
+        elif heatmap_loss_f_str == "mse":
             loss_cls = nn.MSELoss
-        elif loss_f_str == "smoothl1":
+        elif heatmap_loss_f_str == "smoothl1":
             loss_cls = nn.SmoothL1Loss
         else:
-            raise NotImplementedError(f"Loss function {loss_f_str} not implemented.")
+            raise NotImplementedError(f"Loss function {heatmap_loss_f_str} not implemented.")
         return tuple(
             loss_cls(reduction="none", **loss_kwargs)
             for _ in range(self._loss_levels)
         )
+
+    def _flow_loss_switcher(self, loss_kwargs: dict = {}) -> callable:
+        """Helper function to switch between loss functions for the stereographic flow regression.
+
+        Args:
+            loss_kwargs (dict, optional): The keyword arguments to be passed to the loss function. Defaults to no arguments.
+
+        Returns:
+            callable: The loss function to be applied to the stereographic flow.
+        """
+        flow_loss_f_str = self.training_config.flow_loss_f.lower()
+        if flow_loss_f_str == "l1":
+            loss_cls = nn.L1Loss
+        else:
+            raise NotImplementedError(f"Loss function {flow_loss_f_str} not implemented.")
+        return loss_cls(reduction="none", **loss_kwargs)
 
     def _common_step(self, batch):
         heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._loss_levels)]
@@ -129,7 +145,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         loss_heatmaps = list(
             loss_f(pred_heatmap[lv], heatmap_lvs[lv]) / 4**lv
-            for lv, loss_f in zip(range(self._loss_levels), self._loss_funcs)
+            for lv, loss_f in zip(range(self._loss_levels), self._heatmap_loss_funcs)
         )
 
         # reweight first
@@ -144,7 +160,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         if self.model.config.compute_flow:
             pred_flow = out["flow"]
-            loss_flow = self._loss_func_flow(pred_flow, flow)
+            loss_flow = self._flow_loss_func(pred_flow, flow)
             loss_flow = (loss_flow * loss_weight).mean()
             loss = loss + loss_flow
         else:
