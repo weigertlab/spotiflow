@@ -534,8 +534,7 @@ class Spotipy(nn.Module):
             normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
-            device (str, optional): Device to use for prediction. Defaults to "cuda".
-
+            device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
         """
@@ -763,7 +762,7 @@ class Spotipy(nn.Module):
             batch_size (int, optional): Batch size to use for prediction. Defaults to 4.
             prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
             return_heatmaps (bool, optional): Whether to return the heatmaps. Defaults to False.
-            device (str, optional): Device to use for prediction. Defaults to 'cpu'.
+            device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
         """
         preds = []
         dataloader = torch.utils.data.DataLoader(
@@ -828,7 +827,7 @@ class Spotipy(nn.Module):
             threshold_range (Tuple[float, float], optional): Range of thresholds to consider. Defaults to (.3, .7).
             niter (int, optional): number of iterations for both coarse- and fine-grained search. Defaults to 11.
             batch_size (int, optional): batch size to use. Defaults to 2.
-            device (_type_, optional): computing device. Defaults to torch.device("cpu").
+            device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
         """
         val_hm_preds = []
         val_flow_preds = []
@@ -920,7 +919,8 @@ class Spotipy(nn.Module):
         """Retrieve the device string to use for the model.
 
         Args:
-            device_str (Union[None, str]): device string to use. If None, will infer from model location. If "auto", will infer from available hardware and move the model. Defaults to None.
+            device_str (Union[None, Literal["auto", "cpu", "cuda", "mps"]]): device string to use.
+                If None, will use the location of the model parameters. If "auto", will infer from available hardware. Defaults to None.
 
         Returns:
             str: device string to use
