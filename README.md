@@ -79,11 +79,14 @@ Then `cd` into the cloned repository and run the tests:
 
 - [x] Refactor datasets
 - [x] Refactor `spotipy_torch/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
-- [ ] Add fast peak detection mode
+- [x] Add fast peak detection mode
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [ ] First docs prototype
 - [x] Tests
-- [ ] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True) 
+- [x] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True) 
+- [ ] Register all models
+- [ ] Register all datasets?
+- [ ] Add example notebooks (train, inference)
 
 ## Contributors
 
