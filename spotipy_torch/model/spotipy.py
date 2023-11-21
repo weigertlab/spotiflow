@@ -271,7 +271,7 @@ class Spotipy(nn.Module):
         val_spots: Sequence[np.ndarray],
         augment_train: bool = True,
         save_dir: Optional[str] = None,
-        train_config: Optional[SpotipyTrainingConfig] = None,
+        train_config: Optional[Union[dict, SpotipyTrainingConfig]] = None,
         device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         logger: Optional[pl.loggers.Logger] = None,
         number_of_devices: Optional[int] = 1,
@@ -291,7 +291,7 @@ class Spotipy(nn.Module):
             augment_train (bool, optional): whether to augment the training data. Defaults to True.
             save_dir (Optional[str], optional): directory to save the model to. Must be given if no checkpoint logger is given as a callback. Defaults to None.
             train_config (Optional[SpotipyTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
-            accelerator (Literal["cpu", "cuda", "mps"], optional): accelerator to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
+            device (Literal["cpu", "cuda", "mps"], optional): computing device to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
             logger (Optional[pl.loggers.Logger], optional): logger to use. If not given, will use TensorBoard. Defaults to None.
             number_of_devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
             num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0 (main process only).
@@ -307,7 +307,9 @@ class Spotipy(nn.Module):
         if train_config is None:
             log.info("No training config given. Using default.")
             train_config = SpotipyTrainingConfig()
-            log.info(f"Default training config: {train_config}")
+        elif isinstance(train_config, dict):
+            train_config = SpotipyTrainingConfig(**train_config)
+        log.info(f"Training config is: {train_config}")
 
         # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
         if "compute_flow" in dataset_kwargs.keys():
@@ -418,7 +420,7 @@ class Spotipy(nn.Module):
         Args:
             path (str): folder to save the model to
             which (Literal["best", "last"]): which checkpoint to save. Should be either "best" or "last".
-            only_config (bool, optional): whether to log only the config (useful if re-saving only for threshold optimization). Defaults to False.
+            update_thresholds (bool, optional): whether to update the thresholds file. Defaults to False.
         """
         assert which in ("best", "last"), "which must be either 'best' or 'last'"
         checkpoint_path = Path(path)

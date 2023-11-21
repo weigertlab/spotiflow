@@ -75,18 +75,32 @@ Then `cd` into the cloned repository and run the tests:
 (spotipy-torch) foo@bar:~$ cd spotipy-torch
 (spotipy-torch) foo@bar:~/spotipy-torch$ pytest -v --color=yes --cov=spotipy_torch
 ```
+
+## Docs
+
+Install `sphinx` and `sphinx-immaterial`:
+```console
+(spotipy-torch) foo@bar:~$ pip install sphinx sphinx-immaterial
+```
+
+and then `cd` into the `docs` folder of the clone repository and build the docs:
+```console
+(spotipy-torch) foo@bar:~$ cd spotipy-torch/docs
+(spotipy-torch) foo@bar:~/spotipy-torch/docs$ sphinx-build -M html source build
+```
 ## TODO
 
 - [x] Refactor datasets
 - [x] Refactor `spotipy_torch/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
 - [x] Add fast peak detection mode
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
-- [ ] First docs prototype
+- [x] First docs prototype
 - [x] Tests
 - [x] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True) 
 - [ ] Register all models
 - [ ] Register all datasets?
 - [ ] Add example notebooks (train, inference)
+- [ ] Improve docs (order, etc.)
 
 ## Contributors
 

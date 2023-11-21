@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-def read_coords_csv(fname: str):
+def read_coords_csv(fname: str) -> np.ndarray:
     """parses a csv file and returns correctly ordered points array"""
     try:
         df = pd.read_csv(fname)
@@ -38,7 +38,7 @@ def read_coords_csv(fname: str):
     return points
 
 
-def filter_shape(points, shape, idxr_array=None, return_mask=False):
+def filter_shape(points, shape, idxr_array=None, return_mask=False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """returns all values in "points" that are inside the shape as given by the indexer array
     if the indexer array is None, then the array to be filtered itself is used
     """
@@ -51,7 +51,7 @@ def filter_shape(points, shape, idxr_array=None, return_mask=False):
     return points[idx]
 
 
-def multiscale_decimate(y, decimate=(4, 4), sigma=1):
+def multiscale_decimate(y, decimate=(4, 4), sigma=1) -> np.ndarray:
     if decimate == (1, 1):
         return y
     assert y.ndim == len(decimate)
@@ -63,7 +63,7 @@ def multiscale_decimate(y, decimate=(4, 4), sigma=1):
     return y
 
 
-def center_pad(x, shape, mode="reflect"):
+def center_pad(x, shape, mode="reflect") -> Tuple[np.ndarray, Sequence[Tuple[int, int]]]:
     """pads x to shape , inverse of center_crop"""
     if x.shape == shape:
         return x, tuple((0, 0) for _ in x.shape)
@@ -77,7 +77,7 @@ def center_pad(x, shape, mode="reflect"):
     return np.pad(x, pads, mode=mode), pads
 
 
-def center_crop(x, shape):
+def center_crop(x, shape) -> np.ndarray:
     """crops x to shape, inverse of center_pad
 
     y = center_pad(x,shape)
@@ -98,7 +98,7 @@ def center_crop(x, shape):
     return x[ss]
 
 
-def str2bool(v):
+def str2bool(v) -> bool:
     if v.lower() in ("yes", "true", "True", "t", "y", "1"):
         return True
     elif v.lower() in ("no", "false", "False", "f", "n", "0"):
@@ -107,7 +107,7 @@ def str2bool(v):
         raise ValueError("Boolean value expected.")
 
 
-def str2scalar(dtype):
+def str2scalar(dtype) -> callable:
     def _f(v):
         if v.lower() == "none":
             return None
@@ -119,7 +119,7 @@ def str2scalar(dtype):
 
 def normalize(
     x: np.ndarray, pmin=1, pmax=99.8, subsample: int = 1, clip=False, ignore_val=None
-):
+) -> np.ndarray:
     """
     normalizes a 2d image with the additional option to ignore a value
     """
@@ -154,7 +154,7 @@ def normalize_fast2d(
     blocksize=None,
     order=1,
     ignore_val=None,
-):
+) -> np.ndarray:
     """
     normalizes a 2d image
     if blocksize is not None (e.g. 512), computes adaptive/blockwise percentiles
@@ -228,7 +228,7 @@ def normalize_fast2d(
     return x
 
 
-def initialize_wandb(options, train_dataset, val_dataset, silent=True):
+def initialize_wandb(options, train_dataset, val_dataset, silent=True) -> None:
     if options.get("skip_logging"):
         log.info("Run won't be logged to wandb")
         return None
@@ -259,3 +259,6 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
     df = pd.DataFrame(pts, columns=["y", "x"])
     df.to_csv(fname, index=False)
     return
+
+def remove_device_id_from_device_str(device_str):
+    return device_str.split(":")[0].strip()

@@ -13,7 +13,7 @@ import torch.nn as nn
 from .config import SpotipyTrainingConfig
 from .losses import AdaptiveWingLoss
 from ..data import collate_spots
-from ..utils import prob_to_points, points_matching_dataset
+from ..utils import prob_to_points, points_matching_dataset, remove_device_id_from_device_str
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -484,7 +484,7 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             # save last
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=2 * self._train_config.sigma + 1,
+                cutoff_distance=2 * trainer.model.model.config.sigma + 1,
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
@@ -494,14 +494,14 @@ class SpotipyModelCheckpoint(pl.callbacks.Callback):
             pl_module.model.save(self._logdir, which="last", update_thresholds=True)
             log.info("Saved last model with optimized thresholds.")
             # load best and optimize thresholds...
-            pl_module.model.load(self._logdir, which="best")
+            device_str = remove_device_id_from_device_str(str(pl_module.device))
+            pl_module.model.load(self._logdir, which="best", map_location=device_str)
             pl_module.model.optimize_threshold(
                 val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=2 * self._train_config.sigma + 1,
+                cutoff_distance=2 * trainer.model.model.config.sigma + 1,
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
-                device=pl_module.device,
                 subpix=trainer.model.model.config.compute_flow,
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
