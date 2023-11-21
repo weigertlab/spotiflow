@@ -23,6 +23,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    'sphinx_exec_code',
     'sphinx_immaterial.apidoc.python.apigen',
 ]
 templates_path = ['_templates']

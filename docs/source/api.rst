@@ -1,5 +1,5 @@
-API
----
+API Reference
+-------------
 
 .. automodule:: spotipy_torch.model.spotipy
     :members:
