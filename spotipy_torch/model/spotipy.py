@@ -568,6 +568,8 @@ class Spotipy(nn.Module):
         if scale is None or scale == 1:
             x = img
         else:
+            if subpix:
+                raise NotImplementedError("Subpixel prediction is not supported yet when scale != 1.")
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
             if scale < 1:
@@ -617,7 +619,6 @@ class Spotipy(nn.Module):
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
-                raise NotImplementedError("flow")
             if subpix:
                 _subpix = flow_to_vector(
                     flow,
@@ -737,9 +738,11 @@ class Spotipy(nn.Module):
         if subpix and subpix_radius >= 0:
             _offset = _subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
+            pts = pts.clip(0, np.array(img.shape[:2]) - 1) # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
         else:
             _subpix = None
             flow = None
+
         details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
         return pts, details
 

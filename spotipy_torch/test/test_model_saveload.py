@@ -43,9 +43,9 @@ def test_save_load(
 
     with TemporaryDirectory() as tmpdir:
         model.save(tmpdir, which="best", update_thresholds=True)
-        model_same = Spotipy.from_pretrained(tmpdir, map_location=DEVICE_STR)
-        with pytest.raises(FileNotFoundError):
-            model_last_noex = Spotipy.from_pretrained(tmpdir, map_location=DEVICE_STR, which="notexist")
+        model_same = Spotipy.from_folder(tmpdir, map_location=DEVICE_STR)
+        with pytest.raises(AssertionError):
+            _ = Spotipy.from_folder(tmpdir, map_location=DEVICE_STR, which="notexist")
 
     assert model_same.config == model.config, "Model configs are not equal"
     assert equal_states_dict(model.state_dict(), model_same.state_dict()), "Model states are not equal"
