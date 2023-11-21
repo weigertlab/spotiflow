@@ -321,12 +321,17 @@ class Spotipy(nn.Module):
         train_dataset_kwargs = deepcopy(dataset_kwargs)
         val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
 
+        min_img_size = min(min(img.shape[:2]) for img in train_images)
+        min_crop_size = int(2**np.floor(np.log2(min_img_size)))
+
+        crop_size = tuple(2*[min(train_config.crop_size, min_crop_size)])
+
         # Build augmenters
         if augment_train:
-            tr_augmenter = self.build_image_augmenter(train_config, crop_first=True)
+            tr_augmenter = self.build_image_augmenter(crop_size)
         else:
-            tr_augmenter = self.build_image_cropper(train_config)
-        val_augmenter = self.build_image_cropper(train_config)
+            tr_augmenter = self.build_image_cropper(crop_size)
+        val_augmenter = self.build_image_cropper(crop_size)
         
 
         # Generate datasets
@@ -372,27 +377,25 @@ class Spotipy(nn.Module):
             assert all(pts.ndim == 2 and pts.shape[1] == 2 for pts in pts), f"Points must be 2D (Y,X) for {split} set"
         return
 
-    def build_image_cropper(self, train_config):
+    def build_image_cropper(self, crop_size):
         """Build default cropper for a dataset.
             train_config: training configuration object
         """
         cropper = AugmentationPipeline()
         cropper.add(transforms.Crop(
             probability=1.0,
-            size=(train_config.crop_size, train_config.crop_size),
+            size=crop_size,
             point_priority=0)
         )
         return cropper
 
     def build_image_augmenter(self,
-                        train_config: SpotipyTrainingConfig,
-                        crop_first: bool = True,
+                              crop_size: Optional[Tuple[int, int]]=None,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
-            train_config: training configuration object
-            split: split to build the augmenter for. Must be "train" or "val".
+            crop_size: if given, will add cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
         """
-        augmenter = self.build_image_cropper(train_config) if crop_first else AugmentationPipeline()
+        augmenter = self.build_image_cropper(crop_size) if crop_size is not None else AugmentationPipeline()
         augmenter.add(transforms.FlipRot90(probability=0.5))
         augmenter.add(transforms.Rotation(probability=0.5, order=1))
         augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
