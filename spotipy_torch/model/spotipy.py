@@ -213,7 +213,7 @@ class Spotipy(nn.Module):
         train_ds: torch.utils.data.Dataset,
         val_ds: torch.utils.data.Dataset,
         train_config: SpotipyTrainingConfig,
-        accelerator: str = "cpu",
+        accelerator: Literal["auto", "cpu", "cuda", "mps"]="auto",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
@@ -227,7 +227,7 @@ class Spotipy(nn.Module):
             train_ds (torch.utils.data.Dataset): training dataset. 
             val_ds (torch.utils.data.Dataset): validation dataset.
             train_config (SpotipyTrainingConfig): training configuration
-            accelerator (str): accelerator to use. Can be "cpu", "cuda", "mps" or "auto".
+            accelerator (str): accelerator to use. Can be "auto" (automatically infered from available hardware), "cpu", "cuda", "mps".
             logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to None.
             devices (Optional[int], optional): number of accelerating devices to use. Defaults to 1.
             num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0.
@@ -272,11 +272,11 @@ class Spotipy(nn.Module):
         augment_train: bool = True,
         save_dir: Optional[str] = None,
         train_config: Optional[SpotipyTrainingConfig] = None,
-        accelerator: Literal["cpu", "cuda", "mps"] = "cpu",
+        device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         logger: Optional[pl.loggers.Logger] = None,
-        devices: Optional[int] = 1,
+        number_of_devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
-        callbacks: Optional[Sequence[pl.callbacks.Callback]] = [], # !
+        callbacks: Optional[Sequence[pl.callbacks.Callback]] = None, # !
         deterministic: Optional[bool] = True,
         benchmark: Optional[bool] = False,
         **dataset_kwargs,
@@ -293,7 +293,7 @@ class Spotipy(nn.Module):
             train_config (Optional[SpotipyTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
             accelerator (Literal["cpu", "cuda", "mps"], optional): accelerator to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
             logger (Optional[pl.loggers.Logger], optional): logger to use. If not given, will use TensorBoard. Defaults to None.
-            devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
+            number_of_devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
             num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0 (main process only).
             callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
             deterministic (Optional[bool], optional): whether to use deterministic training. Set to True for deterministic behaviour at a cost of performance. Defaults to True.
@@ -334,6 +334,9 @@ class Spotipy(nn.Module):
         val_ds = SpotsDataset(val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs)
 
         # Add model checkpoint callback if not given (to save the model)
+        if callbacks is None:
+            callbacks = []
+
         if not any(isinstance(c, SpotipyModelCheckpoint) for c in callbacks):
             if not save_dir:
                 raise ValueError("save_dir argument must be given if no SpotipyModelCheckpoint callback is given")
@@ -348,13 +351,13 @@ class Spotipy(nn.Module):
             train_ds,
             val_ds,
             train_config,
-            accelerator,
-            logger,
-            devices,
-            num_workers,
-            callbacks,
-            deterministic,
-            benchmark,
+            accelerator=device,
+            logger=logger,
+            devices=number_of_devices,
+            num_workers=num_workers,
+            callbacks=callbacks,
+            deterministic=deterministic,
+            benchmark=benchmark,
         )
         return
     
@@ -515,7 +518,7 @@ class Spotipy(nn.Module):
         normalizer: Optional[callable] = None,
         verbose: bool = True,
         progress_bar_wrapper: Optional[callable] = None,
-        device: str = "cuda",
+        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -545,7 +548,15 @@ class Spotipy(nn.Module):
             subpix_radius = int(subpix)
 
         assert img.ndim in (2, 3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
-        device = torch.device(device)
+
+        if device is None or isinstance(device, str):
+            device = self._retrieve_device_str(device)
+            device = torch.device(device)
+            if device is not None:
+                self.to(device)
+
+        log.info(f"Will use device: {str(device)}")
+
         if verbose:
             log.info(
                 f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}"
@@ -736,12 +747,12 @@ class Spotipy(nn.Module):
     def predict_dataset(
         self,
         ds: torch.utils.data.Dataset,
-        min_distance=1,
-        exclude_border=False,
-        batch_size=4,
-        prob_thresh=None,
-        return_heatmaps=False,
-        device: str = "cpu",
+        min_distance: int=1,
+        exclude_border: bool=False,
+        batch_size: int=4,
+        prob_thresh: Optional[float]=None,
+        return_heatmaps: bool=False,
+        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
     ):
         """Predict spots from a torch dataset.
 
@@ -758,6 +769,15 @@ class Spotipy(nn.Module):
         dataloader = torch.utils.data.DataLoader(
             ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
         )
+
+        if device is None or isinstance(device, str):
+            device = self._retrieve_device_str(device)
+            device = torch.device(device)
+            if device is not None:
+                self.to(device)
+
+        log.info(f"Will use device: {device}")
+    
         device = torch.device(device)
         log.info(
             f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}"
@@ -795,7 +815,7 @@ class Spotipy(nn.Module):
         threshold_range: Tuple[float, float] = (0.3, 0.7),
         niter: int = 11,
         batch_size: int = 1,
-        device: torch.device = torch.device("cpu"),
+        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
         subpix: bool = False,
     ) -> None:
         """Optimize the probability threshold on an annotated dataset.
@@ -816,6 +836,14 @@ class Spotipy(nn.Module):
         val_dataloader = torch.utils.data.DataLoader(
             val_ds, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True
         )
+        if device is None or isinstance(device, str):
+            device = self._retrieve_device_str(device)
+            device = torch.device(device)
+            if device is not None:
+                self.to(device)
+
+        log.info(f"Will use device: {str(device)}")
+
         self.eval()
         with torch.inference_mode():
             for val_batch in val_dataloader:
@@ -887,6 +915,25 @@ class Spotipy(nn.Module):
         log.info(f"Best F1-score: {best_f1:.3f}")
         self._prob_thresh = float(best_thr)
         return
+    
+    def _retrieve_device_str(self, device_str: Union[None, Literal["auto", "cpu", "cuda", "mps"]]) -> str:
+        """Retrieve the device string to use for the model.
+
+        Args:
+            device_str (Union[None, str]): device string to use. If None, will infer from model location. If "auto", will infer from available hardware and move the model. Defaults to None.
+
+        Returns:
+            str: device string to use
+        """
+        if device_str is not None and device_str not in ("auto", "cpu", "cuda", "mps"):
+            raise ValueError(
+                f"device must be one of 'auto', 'cpu', 'cuda', 'mps', got {device_str}"
+            )
+        if device_str is None:
+            return str(next(self.parameters()).device)
+        elif device_str == "auto":
+            return "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
+        return device_str
 
     def _backbone_switcher(self) -> nn.Module:
         """Switcher function to build the backbone."""
