@@ -1,15 +1,15 @@
 import logging
-import numpy as np
 import os
-import pandas as pd
-import torch
-import scipy.ndimage as ndi
 import warnings
-import wandb
-
-from csbdeep.utils import normalize_mi_ma
 from pathlib import Path
-from typing import Optional, Sequence, Tuple, Union
+from typing import Sequence, Tuple, Union
+
+import numpy as np
+import pandas as pd
+import scipy.ndimage as ndi
+import wandb
+from csbdeep.utils import normalize_mi_ma
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -262,3 +262,42 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
 
 def remove_device_id_from_device_str(device_str):
     return device_str.split(":")[0].strip()
+
+def get_data(path: Union[Path, str], normalize: bool=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Get data from a given path. The path should contain a 'train' and 'val' folder.
+
+    Args:
+        path (Union[Path, str]): Path to the data.
+        normalize (bool, optional): Whether to normalize the data. Defaults to True.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: A 4-length tuple of arrays corresponding to the training images, training spots, validation images and validation spots.
+    """
+    from ..data import SpotsDataset
+
+    if isinstance(path, str):
+        path = Path(path)
+    
+    assert path.exists(), f"Given data path {path} does not exist!"
+
+    train_path = path/"train"
+    val_path = path/"val"
+    assert (train_path).exists(), f"Given data path {path} does not contain a 'train' folder!"
+    assert (val_path).exists(), f"Given data path {path} does not contain a 'val' folder!"
+
+    if normalize:
+        tr_ds = SpotsDataset.from_folder(train_path)
+        val_ds = SpotsDataset.from_folder(val_path)
+    else:
+        tr_ds = SpotsDataset.from_folder(train_path, normalizer=None)
+        val_ds = SpotsDataset.from_folder(val_path, normalizer=None)
+    
+    tr_imgs = tr_ds.images
+    val_imgs = val_ds.images
+
+    tr_pts = tr_ds.centers
+    val_pts = val_ds.centers
+
+    del tr_ds, val_ds
+
+    return tr_imgs, tr_pts, val_imgs, val_pts

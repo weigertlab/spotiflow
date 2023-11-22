@@ -23,11 +23,13 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinx_exec_code',
+    'sphinx.ext.autosectionlabel',
     'sphinx_immaterial.apidoc.python.apigen',
 ]
 templates_path = ['_templates']
 exclude_patterns = []
+
+autosectionlabel_prefix_document = True
 
 python_apigen_modules = {
       "spotipy_torch": "api",

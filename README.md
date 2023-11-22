@@ -78,16 +78,18 @@ Then `cd` into the cloned repository and run the tests:
 
 ## Docs
 
-Install `sphinx` and `sphinx-immaterial`:
+Install the `docs` extras:
+
 ```console
-(spotipy-torch) foo@bar:~$ pip install sphinx sphinx-immaterial
+(spotipy-torch) foo@bar:~$ pip install -e "./spotipy-torch[docs]"
 ```
 
-and then `cd` into the `docs` folder of the clone repository and build the docs:
+and then `cd` into the `docs` folder of the cloned repository and build them:
 ```console
 (spotipy-torch) foo@bar:~$ cd spotipy-torch/docs
 (spotipy-torch) foo@bar:~/spotipy-torch/docs$ sphinx-build -M html source build
 ```
+
 ## TODO
 
 - [x] Refactor datasets

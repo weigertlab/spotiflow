@@ -68,7 +68,7 @@ You can then load it by simply calling:
 Customizing the training
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that through the `` For more information, see the documentation of the `fit` method as well as the `SpotipyTrainingConfig` class. As an example, let's change the number of epochs and the learning rate:
+You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that through the `` For more information on the arguments, see the documentation of :py:func:`spotipy_torch.model.spotipy.Spotipy.fit` method as well as :py:mod:`spotipy_torch.model.config.SpotipyTrainingConfig`. As an example, let's change the number of epochs and the learning rate:
 
 .. code-block:: python
     
@@ -89,7 +89,7 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
     )
 
 
-In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a ``SpotipyModelConfig`` object and populate it accordingly (see the documentation of ``SpotipyModelConfig``). Then you can pass it to the `Spotipy` constructor. For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
+In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotipy_torch.model.config.SpotipyModelConfig` object and populate it accordingly. Then you can pass it to the `Spotipy` constructor. For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
 
 .. code-block:: python
 

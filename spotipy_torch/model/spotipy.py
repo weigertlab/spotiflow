@@ -5,6 +5,7 @@ from itertools import product
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal, Optional, Sequence, Tuple, Union
+from typing_extensions import Self
 
 import lightning.pytorch as pl
 import numpy as np
@@ -154,33 +155,36 @@ class Spotipy(nn.Module):
         pretrained_path: str,
         inference_mode=True,
         which: str = "best",
-        map_location: str = "cuda",
-    ) -> None:
+        map_location: Literal["auto", "cpu", "cuda", "mps"] = "auto",
+    ) -> Self:
         """Load a pretrained model.
 
         Args:
             pretrained_path (str): path to the pretrained model
             inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
-            map_location (str, optional): device string to load the model to. Defaults to 'cuda'.
+            which (str, optional): which checkpoint to load. Defaults to "best".
+            map_location (str, optional): device string to load the model to. Defaults to 'auto' (hardware-based).
         """
         model_config = SpotipyModelConfig.from_config_file(
             Path(pretrained_path) / "config.yaml"
         )
+        assert map_location is not None, "map_location must be one of ('auto', 'cpu', 'cuda', 'mps')"
+        device = cls._retrieve_device_str(None, map_location)
         model = cls(model_config)
         model.load(
             pretrained_path,
             which=which,
             inference_mode=inference_mode,
-            map_location=map_location,
+            map_location=device,
         )
         return model
 
     @classmethod
-    def from_pretrained(cls, pretrained_name: str, **kwargs) -> None:
+    def from_pretrained(cls, pretrained_name: str, **kwargs) -> Self:
         """Load a pretrained model with given name
 
         Args:
-            pretrained_name (str): path to the pretrained model
+            pretrained_name (str): name of the pretrained model to be loaded
             kwargs: additional arguments to pass to the from_folder method
         """
         print(f"Loading pretrained model {pretrained_name}")

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Callable, Dict, Optional, Sequence, Union
+from typing_extensions import Self
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
@@ -31,7 +32,7 @@ class SpotsDataset(Dataset):
         mode: str = "max",
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
-        normalizer: Callable = utils.normalize,
+        normalizer: Union[Callable, None] = utils.normalize,
     ) -> None:
         super().__init__()
 
@@ -44,7 +45,7 @@ class SpotsDataset(Dataset):
         self._images = images
 
         if callable(normalizer):
-            self._images = [normalizer(img) for img in tqdm(self._images, desc="Normalizing images")]
+            self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
 
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")
@@ -68,9 +69,9 @@ class SpotsDataset(Dataset):
         mode: str = "max",
         max_files: Optional[int] = None,
         compute_flow: bool = False,
-        normalizer: Callable = utils.normalize,
+        normalizer: Union[Callable, None] = utils.normalize,
         random_state: Optional[int] = None,
-    ) -> None:
+    ) -> Self:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
         Args:
@@ -80,6 +81,9 @@ class SpotsDataset(Dataset):
             sigma (float, optional): Sigma of Gaussian kernel to generate heatmap. Defaults to 1.
             mode (str, optional): Mode of heatmap generation. Defaults to "max".
             normalizer (Callable, optional): Normalizer function. Defaults to percentile normalization with p=(1, 99.8).
+        
+        Returns:
+            Self: Dataset instance.
         """
         if isinstance(path, str):
             path = Path(path)
@@ -104,10 +108,7 @@ class SpotsDataset(Dataset):
                 f"Different number of images and centers found! {len(image_files)} images, {len(center_files)} centers."
             )
 
-        images = [
-            normalizer(io.imread(img))
-            for img in tqdm(image_files, desc="Loading images")
-        ]
+        images = [io.imread(img) for img in tqdm(image_files, desc="Loading images")]
 
         centers = [
             utils.read_coords_csv(center).astype(np.float32)
@@ -123,13 +124,14 @@ class SpotsDataset(Dataset):
             mode=mode,
             compute_flow=compute_flow,
             image_files=image_files,
+            normalizer=normalizer,
         )
 
     def __len__(self) -> int:
         return len(self._centers)
 
     def __getitem__(self, idx: int) -> Dict:
-        img, centers = self._images[idx], self._centers[idx]
+        img, centers = self.images[idx], self._centers[idx]
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
@@ -189,6 +191,15 @@ class SpotsDataset(Dataset):
             Sequence[np.ndarray]: Sequence of center coordinates.
         """
         return self._centers
+    
+    @property
+    def images(self) -> Sequence[np.ndarray]:
+        """Return images in dataset.
+
+        Returns:
+            Sequence[np.ndarray]: Sequence of images.
+        """
+        return self._images
 
     @property
     def image_files(self) -> Sequence[str]:
@@ -203,7 +214,7 @@ class SpotsDataset(Dataset):
         path = Path(path)
         path.mkdir(exist_ok=True, parents=True)
         for i, (x, y) in tqdm(
-            enumerate(zip(self._images, self._centers)), desc="Saving", total=len(self)
+            enumerate(zip(self.images, self._centers)), desc="Saving", total=len(self)
         ):
             tifffile.imwrite(path / f"{prefix}{i:05d}.tif", x)
             pd.DataFrame(y, columns=("Y", "X")).to_csv(path / f"{prefix}{i:05d}.csv")
