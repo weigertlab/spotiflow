@@ -164,6 +164,9 @@ class Spotipy(nn.Module):
             inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
             which (str, optional): which checkpoint to load. Defaults to "best".
             map_location (str, optional): device string to load the model to. Defaults to 'auto' (hardware-based).
+
+        Returns:
+            Self: loaded model
         """
         model_config = SpotipyModelConfig.from_config_file(
             Path(pretrained_path) / "config.yaml"
@@ -186,6 +189,9 @@ class Spotipy(nn.Module):
         Args:
             pretrained_name (str): name of the pretrained model to be loaded
             kwargs: additional arguments to pass to the from_folder method
+
+        Returns:
+            Self: loaded model
         """
         print(f"Loading pretrained model {pretrained_name}")
         pretrained_path = get_pretrained_model_path(pretrained_name)
@@ -375,6 +381,8 @@ class Spotipy(nn.Module):
     def _validate_fit_inputs(
         self, train_images, train_spots, val_images, val_spots
     ) -> None:
+        """Validate the inputs given to the fit method.
+        """
         for imgs, pts, split in zip((train_images, val_images), (train_spots, val_spots), ("train", "validation")):
             assert len(imgs) == len(pts), f"Number of images and points must be equal for {split} set"
             assert all(img.ndim in (2, 3) for img in imgs), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
@@ -383,9 +391,11 @@ class Spotipy(nn.Module):
             assert all(pts.ndim == 2 and pts.shape[1] == 2 for pts in pts), f"Points must be 2D (Y,X) for {split} set"
         return
 
-    def build_image_cropper(self, crop_size):
+    def build_image_cropper(self, crop_size: Tuple[int, int]):
         """Build default cropper for a dataset.
-            train_config: training configuration object
+
+        Args:
+            crop_size (Tuple[int, int]): tuple of (height, width) to randomly crop the images to
         """
         cropper = AugmentationPipeline()
         cropper.add(transforms.Crop(
@@ -399,7 +409,7 @@ class Spotipy(nn.Module):
                               crop_size: Optional[Tuple[int, int]]=None,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
-            crop_size: if given, will add cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
+            crop_size: if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
         """
         augmenter = self.build_image_cropper(crop_size) if crop_size is not None else AugmentationPipeline()
         augmenter.add(transforms.FlipRot90(probability=0.5))
@@ -522,7 +532,7 @@ class Spotipy(nn.Module):
         min_distance: int = 1,
         exclude_border: bool = False,
         scale: Optional[int] = None,
-        subpix: Optional[Union[bool, int]] = False,
+        subpix: Optional[Union[bool, int]] = None,
         peak_mode: Literal["skimage", "fast"] = "skimage",
         normalizer: Optional[callable] = None,
         verbose: bool = True,
@@ -538,20 +548,24 @@ class Spotipy(nn.Module):
             min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.
             exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
-            subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. Defaults to False.
+            subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
             peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
             normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
+
         Returns:
-            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities and the heatmap.
+            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
+
 
         if subpix is False:
             subpix_radius = -1
         elif subpix is True:
             subpix_radius = 0
+        elif subpix is None:
+            subpix_radius = 0 if self.config.compute_flow else -1
         else:
             subpix_radius = int(subpix)
 
@@ -764,8 +778,8 @@ class Spotipy(nn.Module):
         prob_thresh: Optional[float]=None,
         return_heatmaps: bool=False,
         device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
-    ):
-        """Predict spots from a torch dataset.
+    ) -> Sequence[Tuple[np.ndarray, SimpleNamespace]]:
+        """Predict spots from a SpotsDataset object.
 
         Args:
             ds (torch.utils.data.Dataset): dataset to predict
@@ -775,6 +789,9 @@ class Spotipy(nn.Module):
             prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
             return_heatmaps (bool, optional): Whether to return the heatmaps. Defaults to False.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
+
+        Returns:
+            Sequence[Tuple[np.ndarray, SimpleNamespace]]: Sequence of (points, details) tuples. Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
         preds = []
         dataloader = torch.utils.data.DataLoader(
@@ -827,9 +844,10 @@ class Spotipy(nn.Module):
         niter: int = 11,
         batch_size: int = 1,
         device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
-        subpix: bool = False,
+        subpix: Optional[bool] = None,
     ) -> None:
         """Optimize the probability threshold on an annotated dataset.
+           The metric used to optimize is the F1 score.
 
         Args:
             val_ds (torch.utils.data.Dataset): dataset to optimize on
@@ -840,6 +858,7 @@ class Spotipy(nn.Module):
             niter (int, optional): number of iterations for both coarse- and fine-grained search. Defaults to 11.
             batch_size (int, optional): batch size to use. Defaults to 2.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
+            subpix (Optional[bool], optional): whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
         """
         val_hm_preds = []
         val_flow_preds = []
@@ -871,15 +890,8 @@ class Spotipy(nn.Module):
                             F.normalize(flow, dim=1).permute(1, 2, 0).detach().cpu().numpy()
                         ]
 
-                for p in val_batch["heatmap_lv0"]:
-                    val_gt_pts.append(
-                        prob_to_points(
-                            p[0].detach().cpu().numpy(),
-                            prob_thresh=0.8,
-                            exclude_border=exclude_border,
-                            min_distance=min_distance,
-                        )
-                    )
+                for p in val_batch["pts"]:
+                    val_gt_pts.append(p.numpy())
 
                 for batch_elem in range(high_lv_hm_preds.shape[0]):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
