@@ -956,7 +956,7 @@ class Spotipy(nn.Module):
         if device_str is None:
             return str(next(self.parameters()).device)
         elif device_str == "auto":
-            return "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
+            return "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         return device_str
 
     def _backbone_switcher(self) -> nn.Module:
