@@ -35,16 +35,16 @@ def get_run_name(args: SimpleNamespace):
     name += f"_posweight{int(args.pos_weight)}"
     name += f"_seed{int(args.seed)}"
     name += f"_mode_{args.mode}"
-    name += f"_flow_{args.flow}"
-    name += f"_bn_{args.batch_norm}"
+    name += f"_flow_{not args.skip_flow}"
+    name += f"_bn_{not args.skip_batch_norm}"
     name += f"_aug{args.augment_prob:.1f}"
     name += "_tormenter"  # !
-    name += "_skipbgremover" if args.skip_bg_remover else ""
+    name += "_skipbgremover" if not args.bg_remover else ""
     name += "_scaleaug" if args.scale_augmentation else ""
     name += "_finetuned" if args.pretrained_model else ""
     name += "_dry" if args.dry else ""
     name += "_single_scale_loss" if args.single_scale_loss else ""
-    name += "_subpix"
+    name += "_subpix" if not args.skip_flow else ""
     name = name.replace(".", "_")  # Remove dots to avoid confusion with file extensions
     return name
 
@@ -85,13 +85,13 @@ if __name__ == "__main__":
         "--mode",
         type=str,
         choices=["direct", "fpn", "slim"],
-        default="direct",
+        default="slim",
         help="Mode to use for the model",
     )
     parser.add_argument(
         "--in-channels", type=int, default=1, help="Number of input channels"
     )
-    parser.add_argument("--flow", action="store_true")
+    parser.add_argument("--skip-flow", action="store_true")
     parser.add_argument(
         "--levels", type=int, default=4, help="Number of levels in the model"
     )
@@ -119,10 +119,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("--dropout", type=float, default=0, help="Dropout probability")
     parser.add_argument(
-        "--skip-bg-remover",
+        "--bg-remover",
         action="store_true",
         default=False,
-        help="If given, won't use a background remover module",
+        help="If given, will use a background remover module",
     )
     # training
     parser.add_argument("--crop-size", type=int, default=512, help="Size of the crops")
@@ -145,10 +145,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument(
-        "--batch-norm",
+        "--skip-batch-norm",
         action="store_true",
         default=False,
-        help="If given, will use batch normalization",
+        help="If given, will not use batch normalization",
     )
     parser.add_argument(
         "--num-epochs", type=int, default=200, help="Number of epochs to train for"
@@ -242,10 +242,25 @@ if __name__ == "__main__":
         help="Whether to use a single-scale loss function",
     )
 
+    parser.add_argument(
+        "--skip-train",
+        action="store_true",
+        default=False,
+        help="Whether to skip training and only predict and evaluate on the test data",
+    )
+
+    parser.add_argument(
+        "--skip-test",
+        action="store_true",
+        default=False,
+        help="Whether to skip predicting and evaluating on the test data",
+    )
+
+
     args = parser.parse_args()
 
     if args.in_channels > 1:
-        args.skip_bg_remover = True
+        args.bg_remover = False
 
     if args.pretrained_model is not None:
         assert Path(args.pretrained_model).exists(), "Given pretrained model does not exist!"
@@ -339,11 +354,11 @@ if __name__ == "__main__":
             downsample_factor=args.downsample_factor,
             kernel_size=args.kernel_size,
             padding="same",
-            compute_flow=args.flow,
+            compute_flow=not args.skip_flow,
             levels=args.levels,
             mode=args.mode,
-            background_remover=not args.skip_bg_remover,
-            batch_norm=args.batch_norm,
+            background_remover=args.bg_remover,
+            batch_norm=not args.skip_batch_norm,
             dropout=args.dropout,
         )
         # Create model
@@ -412,7 +427,7 @@ if __name__ == "__main__":
         augmenter=augmenter,
         sigma=training_config.sigma,
         mode="max",
-        compute_flow=args.flow,
+        compute_flow=not args.skip_flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
         random_state=args.seed,
@@ -426,13 +441,13 @@ if __name__ == "__main__":
         augmenter=augmenter_val,
         sigma=training_config.sigma,
         mode="max",
-        compute_flow=args.flow,
+        compute_flow=not args.skip_flow,
         max_files=args.max_files,
         normalizer=lambda img: utils.normalize(img, 1, 99.8),
         random_state=args.seed,
     )
 
-    if args.num_epochs > 0:
+    if args.num_epochs > 0 and not args.skip_train:
         # Train model
         model.fit(
             train_ds,
@@ -446,3 +461,77 @@ if __name__ == "__main__":
             deterministic=True,
             benchmark=False,
         )
+        del model
+
+    if not args.skip_test:
+        # Load the best checkpoint of the model we trained
+        device = torch.device(accelerator)
+
+        model = Spotipy.from_folder(
+            model_dir,
+            inference_mode=True,
+            map_location=accelerator,
+            which="best",
+        ).to(device)
+
+        model = torch.compile(model)
+
+        # Load the test data
+        test_ds = SpotsDataset.from_folder(
+            path=data_dir / "test",
+            augmenter=None,
+            downsample_factors=[2**lv for lv in range(model._levels)],
+            sigma=1.,
+            mode="max",
+            normalizer=lambda img: utils.normalize(img, 1, 99.8),
+            random_state=args.seed,
+        )
+
+        fnames = [Path(f).stem for f in test_ds.image_files]
+
+        preds_out_dir = save_dir / "test_predictions"
+        preds_out_dir.mkdir(exist_ok=True, parents=True)
+
+        from tqdm.auto import tqdm
+        test_preds = []
+        for i, fname in tqdm(enumerate(fnames), desc="Predicting and writing", total=len(fnames)):
+            normalized_img = test_ds.images[i]
+            pts, _ = model.predict(
+                normalized_img,
+                min_distance=1,
+                verbose=False,
+                subpix=not args.skip_flow,
+                device=device,
+            )
+            utils.write_coords_csv(pts, preds_out_dir/f"{fname}.csv")
+            test_preds += [pts]
+        
+        # Compute the scores @3 and save
+        metrics = utils.points_matching_dataset(
+            test_ds._centers,
+            test_preds,
+            cutoff_distance=3.,
+            by_image=False,
+        )
+
+        print("Test_metrics (Agg.):")
+        print(metrics)
+
+        metrics_save_dir = save_dir/"metrics"
+        metrics_save_dir.mkdir(exist_ok=True, parents=True)
+        import json
+
+        with open(metrics_save_dir/"metrics.json", "w") as f:
+            json.dump(vars(metrics), f)
+
+        metrics_single = utils.points_matching_dataset(
+            test_ds._centers,
+            test_preds,
+            cutoff_distance=3.,
+            by_image=True,
+        )
+
+        print("Test metrics (single):")
+        print(metrics_single)
+        with open(metrics_save_dir/"metrics_single.json", "w") as f:
+            json.dump(vars(metrics_single), f)

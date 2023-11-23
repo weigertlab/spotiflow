@@ -63,6 +63,6 @@ out_dir_split.mkdir(exist_ok=True, parents=True)
 fnames = [Path(f).stem for f in pred_ds.image_files]
 
 for i, fname in tqdm(enumerate(fnames), desc="Predicting and writing", total=len(fnames)):
-    normalized_img = pred_ds._images[i]
+    normalized_img = pred_ds.images[i]
     pts, _ = model.predict(normalized_img, prob_thresh=args.threshold, min_distance=1, verbose=False, subpix=args.subpix, device=device)
     utils.write_coords_csv(pts, out_dir_split/f"{fname}.csv")

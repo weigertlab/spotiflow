@@ -180,7 +180,7 @@ class Spotipy(nn.Module):
             inference_mode=inference_mode,
             map_location=device,
         )
-        return model
+        return model.to(torch.device(device))
 
     @classmethod
     def from_pretrained(cls, pretrained_name: str, **kwargs) -> Self:
@@ -197,6 +197,8 @@ class Spotipy(nn.Module):
         pretrained_path = get_pretrained_model_path(pretrained_name)
         if pretrained_path is not None:
             return cls.from_folder(pretrained_path, **kwargs)
+        else:
+            raise ValueError(f"Pretrained model {pretrained_name} not found.")
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Forward pass
@@ -279,7 +281,7 @@ class Spotipy(nn.Module):
         train_spots: Sequence[np.ndarray],
         val_images: Sequence[np.ndarray],
         val_spots: Sequence[np.ndarray],
-        augment_train: bool = True,
+        augment_train: Union[bool, AugmentationPipeline] = True,
         save_dir: Optional[str] = None,
         train_config: Optional[Union[dict, SpotipyTrainingConfig]] = None,
         device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
@@ -298,7 +300,7 @@ class Spotipy(nn.Module):
             train_spots (Sequence[np.ndarray]): training spots
             val_images (Sequence[np.ndarray]): validation images
             val_spots (Sequence[np.ndarray]): validation spots
-            augment_train (bool, optional): whether to augment the training data. Defaults to True.
+            augment_train (Union[bool, AugmentationPipeline]): whether to augment the training data. Defaults to True.
             save_dir (Optional[str], optional): directory to save the model to. Must be given if no checkpoint logger is given as a callback. Defaults to None.
             train_config (Optional[SpotipyTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
             device (Literal["cpu", "cuda", "mps"], optional): computing device to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
@@ -414,7 +416,6 @@ class Spotipy(nn.Module):
         augmenter = self.build_image_cropper(crop_size) if crop_size is not None else AugmentationPipeline()
         augmenter.add(transforms.FlipRot90(probability=0.5))
         augmenter.add(transforms.Rotation(probability=0.5, order=1))
-        augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
         augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
         augmenter.add(
             transforms.IntensityScaleShift(

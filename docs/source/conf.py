@@ -42,6 +42,7 @@ python_apigen_order_tiebreaker = "definition_order"
 
 html_theme = 'sphinx_immaterial'
 html_static_path = ['_static']
+html_logo = "_static/spotipy_transp_small.png"
 
 
 html_theme_options = {

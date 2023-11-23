@@ -82,6 +82,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   napari
    train
    finetune
    api
