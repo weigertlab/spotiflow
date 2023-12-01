@@ -285,7 +285,7 @@ class Spotipy(nn.Module):
         save_dir: Optional[str] = None,
         train_config: Optional[Union[dict, SpotipyTrainingConfig]] = None,
         device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
-        logger: Optional[pl.loggers.Logger] = None,
+        logger: Literal["none", "tensorboard", "wandb"] = "tensorboard",
         number_of_devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = None, # !
@@ -366,6 +366,15 @@ class Spotipy(nn.Module):
                     monitor="val_loss"),
                 *callbacks]
 
+        if logger == "tensorboard":
+            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir, name="logs")
+        elif logger == "wandb":
+            logger = pl.loggers.WandbLogger(save_dir=save_dir, name="logs")
+        else:
+            if logger != "none":
+                log.warning(f"Logger {logger} not implemented. Using no logger.")
+            logger = None
+
         self.fit_dataset(
             train_ds,
             val_ds,
@@ -389,7 +398,7 @@ class Spotipy(nn.Module):
             assert len(imgs) == len(pts), f"Number of images and points must be equal for {split} set"
             assert all(img.ndim in (2, 3) for img in imgs), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
             if self.config.in_channels > 1:
-                assert all(img.ndim == 3 and img.shape[-1] == self.in_channels for img in imgs), f"All images must be 2D (Y,X) for {split} set"
+                assert all(img.ndim == 3 and img.shape[-1] == self.config.in_channels for img in imgs), f"All images must be 2D (Y,X) for {split} set"
             assert all(pts.ndim == 2 and pts.shape[1] == 2 for pts in pts), f"Points must be 2D (Y,X) for {split} set"
         return
 
