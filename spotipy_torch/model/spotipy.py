@@ -367,9 +367,9 @@ class Spotipy(nn.Module):
                 *callbacks]
 
         if logger == "tensorboard":
-            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir, name="logs")
+            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
         elif logger == "wandb":
-            logger = pl.loggers.WandbLogger(save_dir=save_dir, name="logs")
+            logger = pl.loggers.WandbLogger(save_dir=save_dir)
         else:
             if logger != "none":
                 log.warning(f"Logger {logger} not implemented. Using no logger.")
