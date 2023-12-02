@@ -7,7 +7,6 @@ from pathlib import Path
 from skimage import io
 from itertools import chain
 
-import torch
 from spotipy_torch.model import Spotipy
 from spotipy_torch import utils
 import lightning.pytorch as pl
@@ -34,8 +33,6 @@ if __name__ == "__main__":
 
     pl.seed_everything(args.seed, workers=True)
 
-    device_str = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-
     print("Loading training data...")
     train_images, train_spots = get_data(args.data_dir / "train")
     print(f"Training data loaded (N={len(train_images)}).")
@@ -45,7 +42,7 @@ if __name__ == "__main__":
     print(f"Validation data loaded (N={len(val_images)}).")
 
     print("Instantiating model...")
-    model = Spotipy().to(torch.device(device_str))
+    model = Spotipy()
 
     print("Launching training...")
     model.fit(
@@ -54,6 +51,6 @@ if __name__ == "__main__":
         val_images,
         val_spots,
         save_dir=args.save_dir,
-        accelerator=device_str,
+        device="auto",
     )
     print("Done!")

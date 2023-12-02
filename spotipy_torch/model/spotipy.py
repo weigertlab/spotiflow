@@ -22,7 +22,7 @@ from tqdm.auto import tqdm
 
 from ..data import SpotsDataset
 from ..utils import (center_crop, center_pad, filter_shape, flow_to_vector,
-                     points_matching_dataset, prob_to_points)
+                     normalize, points_matching_dataset, prob_to_points)
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotipyModelConfig, SpotipyTrainingConfig
@@ -544,7 +544,7 @@ class Spotipy(nn.Module):
         scale: Optional[int] = None,
         subpix: Optional[Union[bool, int]] = None,
         peak_mode: Literal["skimage", "fast"] = "skimage",
-        normalizer: Optional[callable] = None,
+        normalizer: Optional[callable] = normalize,
         verbose: bool = True,
         progress_bar_wrapper: Optional[callable] = None,
         device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
@@ -560,7 +560,7 @@ class Spotipy(nn.Module):
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
             subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
             peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
-            normalizer (Optional[callable], optional): Normalization function to apply to the image. If n_tiles is different than (1,1), then normalization is applied tile-wise. If None, no normalization is applied. Defaults to None.
+            normalizer (Optional[callable], optional): Normalization function to apply to the image. If None, no normalization is applied. Defaults to percentile-based (1, 99.8) normalization.
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
@@ -623,11 +623,11 @@ class Spotipy(nn.Module):
             log.info(f"Padding to shape {pad_shape}")
         x, padding = center_pad(x, pad_shape, mode="reflect")
 
+        if normalizer is not None and callable(normalizer):
+            x = normalizer(x)
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
-            if normalizer is not None and callable(normalizer):
-                x = normalizer(x)
             with torch.inference_mode():
                 img_t = (
                     torch.from_numpy(x).to(device).unsqueeze(0)
@@ -695,9 +695,6 @@ class Spotipy(nn.Module):
                 )
 
             for tile, s_src, s_dst in iter_tiles:
-                # assert all(s%t == 0 for s, t in zip(tile.shape, n_tiles)), "Currently, tile shape must be divisible by n_tiles"
-                if normalizer is not None and callable(normalizer):
-                    tile = normalizer(tile)
                 with torch.inference_mode():
                     img_t = (
                         torch.from_numpy(tile).to(device).unsqueeze(0)
