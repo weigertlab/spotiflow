@@ -61,6 +61,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         self._valid_inputs = []
         self._valid_targets = []
+        self._valid_targets_hm = []
         self._valid_outputs = []
         self._valid_flows = []
 
@@ -227,6 +228,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
 
         self._valid_inputs.append(img[0].detach().cpu().numpy())
         self._valid_targets.append(batch["pts"][0].detach().cpu().numpy())
+        self._valid_targets_hm.append(batch["heatmap_lv0"][0,0].detach().cpu().numpy())
         self._valid_outputs.append(heatmap)
         self._valid_flows.append(flow)
 
@@ -278,6 +280,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             self.log_images()
         self._valid_inputs.clear()
         self._valid_targets.clear()
+        self._valid_targets_hm.clear()
         self._valid_outputs.clear()
         self._valid_flows.clear()
 
@@ -295,7 +298,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
             )
             self.logger.log_image(
                 key="target",
-                images=[cm.magma(v) for v in self._valid_targets[:n_images_to_log]],
+                images=[cm.magma(v) for v in self._valid_targets_hm[:n_images_to_log]],
                 step=self.global_step,
             )
             self.logger.log_image(
@@ -325,7 +328,7 @@ class SpotipyTrainingWrapper(pl.LightningModule):
                 )
                 self.logger.experiment.add_image(
                     f"images/target/{i}",
-                    cm.magma(self._valid_targets[i]),
+                    cm.magma(self._valid_targets_hm[i]),
                     self.current_epoch,
                     dataformats="HWC",
                 )

@@ -307,7 +307,6 @@ if __name__ == "__main__":
     model_dir = Path(args.save_dir) / f"{run_name}"
 
     training_config = SpotipyTrainingConfig(
-        sigma=args.sigma,
         crop_size=args.crop_size,
         loss_f=args.loss,
         pos_weight=args.pos_weight,
@@ -360,6 +359,7 @@ if __name__ == "__main__":
             background_remover=args.bg_remover,
             batch_norm=not args.skip_batch_norm,
             dropout=args.dropout,
+            sigma=args.sigma,
         )
         # Create model
         model = Spotipy(model_config)
@@ -425,7 +425,7 @@ if __name__ == "__main__":
             args.downsample_factor**lv for lv in range(effective_levels)
         ],  # ! model.downsample_factors
         augmenter=augmenter,
-        sigma=training_config.sigma,
+        sigma=model_config.sigma,
         mode="max",
         compute_flow=not args.skip_flow,
         max_files=args.max_files,
@@ -439,7 +439,7 @@ if __name__ == "__main__":
             args.downsample_factor**lv for lv in range(model_config.levels)
         ],
         augmenter=augmenter_val,
-        sigma=training_config.sigma,
+        sigma=model_config.sigma,
         mode="max",
         compute_flow=not args.skip_flow,
         max_files=args.max_files,
