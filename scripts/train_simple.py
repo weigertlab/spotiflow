@@ -7,7 +7,7 @@ from pathlib import Path
 from skimage import io
 from itertools import chain
 
-from spotipy_torch.model import Spotipy
+from spotipy_torch.model import Spotipy, SpotipyModelConfig
 from spotipy_torch import utils
 import lightning.pytorch as pl
 
@@ -28,6 +28,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default="/data/spots/datasets/hybiss_spots_v4")
     parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotipy_simple_train_debug")
+    parser.add_argument("--sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -42,7 +43,7 @@ if __name__ == "__main__":
     print(f"Validation data loaded (N={len(val_images)}).")
 
     print("Instantiating model...")
-    model = Spotipy()
+    model = Spotipy(SpotipyModelConfig(sigma=args.sigma))
 
     print("Launching training...")
     model.fit(
@@ -52,5 +53,6 @@ if __name__ == "__main__":
         val_spots,
         save_dir=args.save_dir,
         device="auto",
+        sigma=args.sigma,
     )
     print("Done!")
