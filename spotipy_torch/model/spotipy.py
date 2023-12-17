@@ -327,9 +327,12 @@ class Spotipy(nn.Module):
         if "compute_flow" in dataset_kwargs.keys():
             log.warning("'compute_flow' argument given to Spotipy.fit(). This argument is ignored.")
         if "downsample_factors" in dataset_kwargs.keys():
-            log.warning("'downsample_factors' argument given to Spotipy.fit(). This argument is ignored.")        
+            log.warning("'downsample_factors' argument given to Spotipy.fit(). This argument is ignored.")
+        if "sigma" in dataset_kwargs.keys():
+            log.warning("'sigma' argument given to Spotipy.fit(). This argument is ignored.")
         dataset_kwargs["compute_flow"] = self.config.compute_flow
         dataset_kwargs["downsample_factors"] = [self.config.downsample_factor**lv for lv in range(self.config.levels)]
+        dataset_kwargs["sigma"] = self.config.sigma
         
         # Generate dataset kwargs for training and validation
         train_dataset_kwargs = deepcopy(dataset_kwargs)

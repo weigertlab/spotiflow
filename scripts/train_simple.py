@@ -53,6 +53,5 @@ if __name__ == "__main__":
         val_spots,
         save_dir=args.save_dir,
         device="auto",
-        sigma=args.sigma,
     )
     print("Done!")
