@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Callable, Dict, Optional, Sequence, Union
+from typing import Callable, Dict, Literal, Optional, Sequence, Union
 from typing_extensions import Self
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
@@ -32,8 +32,21 @@ class SpotsDataset(Dataset):
         mode: str = "max",
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
-        normalizer: Union[Callable, None] = utils.normalize,
-    ) -> None:
+        normalizer: Union[Literal["auto"], Callable, None] = "auto",
+    ) -> Self:
+        """ Constructor
+
+        Args:
+            images (Sequence[np.ndarray]): Sequence of images.
+            centers (Sequence[np.ndarray]): Sequence of center coordinates.
+            augmenter (Optional[Callable], optional): Augmenter function. If given, function arguments should two (first image, second spots). Defaults to None.
+            downsample_factors (Sequence[int], optional): Downsample factors. Defaults to (1,).
+            sigma (float, optional): Sigma of Gaussian kernel to generate heatmap. Defaults to 1.
+            mode (str, optional): Mode of heatmap generation. Defaults to "max".
+            compute_flow (bool, optional): Whether to compute flow from centers. Defaults to False.
+            image_files (Optional[Sequence[str]], optional): Sequence of image filenames. If the dataset was not constructed from a folder, this will be None. Defaults to None.
+            normalizer (Union[Literal["auto"], Callable, None], optional): Normalizer function. Defaults to "auto" (percentile-based normalization with p_min=1 and p_max=99.8).
+        """
         super().__init__()
 
         # Build downsample factors as tuple in case input list contains integers
@@ -43,6 +56,9 @@ class SpotsDataset(Dataset):
 
         self._centers = centers
         self._images = images
+
+        if isinstance(normalizer, str) and normalizer == "auto":
+            normalizer = utils.normalize
 
         if callable(normalizer):
             self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
@@ -69,7 +85,7 @@ class SpotsDataset(Dataset):
         mode: str = "max",
         max_files: Optional[int] = None,
         compute_flow: bool = False,
-        normalizer: Union[Callable, None] = utils.normalize,
+        normalizer: Optional[Union[Callable, Literal["auto"]]] = "auto",
         random_state: Optional[int] = None,
     ) -> Self:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
@@ -79,8 +95,12 @@ class SpotsDataset(Dataset):
             augmenter (Callable): Augmenter function.
             downsample_factors (Sequence[int], optional): Downsample factors. Defaults to (1,).
             sigma (float, optional): Sigma of Gaussian kernel to generate heatmap. Defaults to 1.
+            image_extensions (Sequence[str], optional): Image extensions to look for in images. Defaults to ("tif", "tiff", "png", "jpg", "jpeg").
             mode (str, optional): Mode of heatmap generation. Defaults to "max".
-            normalizer (Callable, optional): Normalizer function. Defaults to percentile normalization with p=(1, 99.8).
+            max_files (Optional[int], optional): Maximum number of files to load. Defaults to None (all of them).
+            compute_flow (bool, optional): Whether to compute flow from centers. Defaults to False.
+            normalizer (Optional[Union[Callable, Literal["auto"]]], optional): Normalizer function. Defaults to "auto" (percentile-based normalization with p_min=1 and p_max=99.8).
+            random_state (Optional[int], optional): Random state used when shuffling file names when "max_files" is not None. Defaults to None.
         
         Returns:
             Self: Dataset instance.

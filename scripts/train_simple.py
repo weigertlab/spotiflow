@@ -7,8 +7,8 @@ from pathlib import Path
 from skimage import io
 from itertools import chain
 
-from spotipy_torch.model import Spotipy, SpotipyModelConfig
-from spotipy_torch import utils
+from spotiflow.model import Spotipy, SpotipyModelConfig
+from spotiflow import utils
 import lightning.pytorch as pl
 
 IMAGE_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg")

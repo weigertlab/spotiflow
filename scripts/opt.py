@@ -1,6 +1,6 @@
-from spotipy_torch.data import SpotsDataset
-from spotipy_torch.model import Spotipy
-from spotipy_torch.utils import normalize
+from spotiflow.data import SpotsDataset
+from spotiflow.model import Spotipy
+from spotiflow.utils import normalize
 
 from pathlib import Path
 import argparse
@@ -12,7 +12,7 @@ import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/telomeres")
-parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotipy_torch_v2")
+parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotiflow_v2")
 parser.add_argument("--which", type=str, default="best")
 parser.add_argument("--batch-size", type=int, default=1)
 parser.add_argument("--threshold-range", nargs="+", default=(0.3, 0.7))

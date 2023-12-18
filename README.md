@@ -7,35 +7,35 @@
 Create and activate a fresh conda environment:
 
 ```console
-(base) foo@bar:~$ conda create -n spotipy-torch python=3.9
-(base) foo@bar:~$ conda activate spotipy-torch
+(base) foo@bar:~$ conda create -n spotiflow python=3.9
+(base) foo@bar:~$ conda activate spotiflow
 ```
 
 Then install PyTorch using conda/mamba (refer to [the official installation instructions](https://pytorch.org/get-started/locally/) for more info depending on your system):
 
 For MacOS:
 ```console
-(spotipy-torch) foo@bar:~$ conda install pytorch::pytorch torchvision -c pytorch # for MacOS
+(spotiflow) foo@bar:~$ conda install pytorch::pytorch torchvision -c pytorch # for MacOS
 ```
 
 For linux with a CUDA device (one might need to change the cuda version accordingly):
 ```console
-(spotipy-torch) foo@bar:~$ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
+(spotiflow) foo@bar:~$ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
 ```
 
 
 Then, install tormenter (the augmentation library) by cloning it first:
 
 ```console
-(spotipy-torch) foo@bar:~$ git clone git@github.com:weigertlab/tormenter.git
-(spotipy-torch) foo@bar:~$ pip install -e ./tormenter
+(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/tormenter.git
+(spotiflow) foo@bar:~$ pip install -e ./tormenter
 ```
 
-Finally, install `spotipy-torch`:
+Finally, install `spotiflow`:
 
 ```console
-(spotipy-torch) foo@bar:~$ git clone git@github.com:weigertlab/spotipy-torch.git
-(spotipy-torch) foo@bar:~$ pip install -e ./spotipy-torch
+(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/spotiflow.git
+(spotiflow) foo@bar:~$ pip install -e ./spotiflow
 ```
 
 ## Usage
@@ -46,7 +46,7 @@ See `scripts/train.py` for an example of training script.
 ### Inference
 ```python
 import tifffile
-from spotipy_torch.model import Spotipy
+from spotiflow.model import Spotipy
 
 # Load an image
 img = tifffile.imread("path/to/image") # or any other image loading library according to the image format
@@ -59,7 +59,7 @@ pred, details = model.predict(img) # Pred contains the detected spots, the attri
 ```
 
 ## Napari plugin
-See [spotipy-napari](https://github.com/weigertlab/napari-spotipy-torch) for the napari plugin.
+See [spotipy-napari](https://github.com/weigertlab/napari-spotiflow) for the napari plugin.
 
 
 ## Tests
@@ -67,13 +67,13 @@ See [spotipy-napari](https://github.com/weigertlab/napari-spotipy-torch) for the
 Install the `testing` extras first:
 
 ```console
-(spotipy-torch) foo@bar:~$ pip install -e "./spotipy-torch[testing]"
+(spotiflow) foo@bar:~$ pip install -e "./spotiflow[testing]"
 ```
 
 Then `cd` into the cloned repository and run the tests:
 ```console
-(spotipy-torch) foo@bar:~$ cd spotipy-torch
-(spotipy-torch) foo@bar:~/spotipy-torch$ pytest -v --color=yes --cov=spotipy_torch
+(spotiflow) foo@bar:~$ cd spotiflow
+(spotiflow) foo@bar:~/spotiflow$ pytest -v --color=yes --cov=spotiflow
 ```
 
 ## Docs
@@ -81,19 +81,19 @@ Then `cd` into the cloned repository and run the tests:
 Install the `docs` extras:
 
 ```console
-(spotipy-torch) foo@bar:~$ pip install -e "./spotipy-torch[docs]"
+(spotiflow) foo@bar:~$ pip install -e "./spotiflow[docs]"
 ```
 
 and then `cd` into the `docs` folder of the cloned repository and build them:
 ```console
-(spotipy-torch) foo@bar:~$ cd spotipy-torch/docs
-(spotipy-torch) foo@bar:~/spotipy-torch/docs$ sphinx-build -M html source build
+(spotiflow) foo@bar:~$ cd spotiflow/docs
+(spotiflow) foo@bar:~/spotiflow/docs$ sphinx-build -M html source build
 ```
 
 ## TODO
 
 - [x] Refactor datasets
-- [x] Refactor `spotipy_torch/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
+- [x] Refactor `spotiflow/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
 - [x] Add fast peak detection mode
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [x] First docs prototype

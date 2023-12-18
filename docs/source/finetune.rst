@@ -1,5 +1,5 @@
-Fine-tuning a Spotipy model on a custom dataset
------------------------------------------------
+Fine-tuning a Spotiflow model on a custom dataset
+-------------------------------------------------
 
 Data format
 ^^^^^^^^^^^
@@ -13,14 +13,14 @@ Finetuning a pre-trained model on a custom dataset is very easy. You can load th
 
 .. code-block:: python
 
-    from spotipy_torch.model import Spotipy
-    from spotipy_torch.utils import get_data
+    from spotiflow.model import Spotiflow
+    from spotiflow.utils import get_data
 
     # Get the data
     train_imgs, train_spots, val_imgs, val_spots = get_data("/path/to/spots_data")
 
     # Initialize the model
-    model = Spotipy.from_pretrained(
+    model = Spotiflow.from_pretrained(
         "general",
         inference_mode=False,
     )

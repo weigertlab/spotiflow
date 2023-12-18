@@ -65,27 +65,27 @@ class build_ext_openmp(build_ext):
         return super(build_ext_openmp, self).build_extension(ext)
 
 
-external_root = path.join(_dir, "spotipy_torch", "lib", "external")
+external_root = path.join(_dir, "spotiflow", "lib", "external")
 nanoflann_root = path.join(external_root, "nanoflann")
 
 setup(
     cmdclass={"build_ext": build_ext_openmp},
     ext_modules=[
         Extension(
-            "spotipy_torch.lib.spotflow2d",
-            sources=["spotipy_torch/lib/spotflow2d.cpp"],
+            "spotiflow.lib.spotflow2d",
+            sources=["spotiflow/lib/spotflow2d.cpp"],
             extra_compile_args=["-std=c++11"],
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
         Extension(
-            "spotipy_torch.lib.point_nms",
-            sources=["spotipy_torch/lib/point_nms.cpp"],
+            "spotiflow.lib.point_nms",
+            sources=["spotiflow/lib/point_nms.cpp"],
             extra_compile_args=["-std=c++11"],
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
         Extension(
-            "spotipy_torch.lib.filters",
-            sources=["spotipy_torch/lib/filters.cpp"],
+            "spotiflow.lib.filters",
+            sources=["spotiflow/lib/filters.cpp"],
             extra_compile_args=["-std=c++11"],
             include_dirs=get_numpy_include_dirs(),
         ),

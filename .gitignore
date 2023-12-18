@@ -141,3 +141,7 @@ stat/
 # Logs
 **/logs/**
 **/lightning_logs/**
+
+
+# DS_Store
+**/.DS_Store

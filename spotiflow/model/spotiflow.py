@@ -4,7 +4,7 @@ from copy import deepcopy
 from itertools import product
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Literal, Optional, Sequence, Tuple, Union
+from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 from typing_extensions import Self
 
 import lightning.pytorch as pl
@@ -25,10 +25,10 @@ from ..utils import (center_crop, center_pad, filter_shape, flow_to_vector,
                      normalize, points_matching_dataset, prob_to_points)
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
-from .config import SpotipyModelConfig, SpotipyTrainingConfig
+from .config import SpotiflowModelConfig, SpotiflowTrainingConfig
 from .post import FeaturePyramidNetwork, MultiHeadProcessor
 from .pretrained import get_pretrained_model_path
-from .trainer import SpotipyModelCheckpoint, SpotipyTrainingWrapper
+from .trainer import SpotiflowModelCheckpoint, SpotiflowTrainingWrapper
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -71,22 +71,22 @@ def _subpixel_offset(
     return _add
 
 
-class Spotipy(nn.Module):
+class Spotiflow(nn.Module):
     """Supervised spot detector using a multi-stage neural network as a backbone for
     feature extraction followed by resolution-dependent post-processing modules
     to allow loss computation and optimization at different resolution levels.
     """
 
-    def __init__(self, config: Optional[SpotipyModelConfig] = None) -> None:
+    def __init__(self, config: Optional[SpotiflowModelConfig] = None) -> None:
         """Initialize the model.
 
         Args:
-            config (Optional[SpotipyModelConfig]): model configuration object. If None, will use the default configuration.
+            config (Optional[SpotiflowModelConfig]): model configuration object. If None, will use the default configuration.
         """
         super().__init__()
         if config is None:
             log.info("No model config given, using default.")
-            config = SpotipyModelConfig()
+            config = SpotiflowModelConfig()
             log.info(f"Default model config: {config}")
         self.config = config
         self._bg_remover = (
@@ -168,7 +168,7 @@ class Spotipy(nn.Module):
         Returns:
             Self: loaded model
         """
-        model_config = SpotipyModelConfig.from_config_file(
+        model_config = SpotiflowModelConfig.from_config_file(
             Path(pretrained_path) / "config.yaml"
         )
         assert map_location is not None, "map_location must be one of ('auto', 'cpu', 'cuda', 'mps')"
@@ -224,7 +224,7 @@ class Spotipy(nn.Module):
         self,
         train_ds: torch.utils.data.Dataset,
         val_ds: torch.utils.data.Dataset,
-        train_config: SpotipyTrainingConfig,
+        train_config: SpotiflowTrainingConfig,
         accelerator: Literal["auto", "cpu", "cuda", "mps"]="auto",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
@@ -238,7 +238,7 @@ class Spotipy(nn.Module):
         Args:
             train_ds (torch.utils.data.Dataset): training dataset. 
             val_ds (torch.utils.data.Dataset): validation dataset.
-            train_config (SpotipyTrainingConfig): training configuration
+            train_config (SpotiflowTrainingConfig): training configuration
             accelerator (str): accelerator to use. Can be "auto" (automatically infered from available hardware), "cpu", "cuda", "mps".
             logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to None.
             devices (Optional[int], optional): number of accelerating devices to use. Defaults to 1.
@@ -263,7 +263,7 @@ class Spotipy(nn.Module):
             max_epochs=train_config.num_epochs,
             log_every_n_steps=min(50, len(train_ds) // train_config.batch_size),
         )
-        training_wrapper = SpotipyTrainingWrapper(self, train_config)
+        training_wrapper = SpotiflowTrainingWrapper(self, train_config)
         train_dl, val_dl = training_wrapper.generate_dataloaders(
             train_ds,
             val_ds,
@@ -283,17 +283,17 @@ class Spotipy(nn.Module):
         val_spots: Sequence[np.ndarray],
         augment_train: Union[bool, AugmentationPipeline] = True,
         save_dir: Optional[str] = None,
-        train_config: Optional[Union[dict, SpotipyTrainingConfig]] = None,
+        train_config: Optional[Union[dict, SpotiflowTrainingConfig]] = None,
         device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         logger: Literal["none", "tensorboard", "wandb"] = "tensorboard",
         number_of_devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
-        callbacks: Optional[Sequence[pl.callbacks.Callback]] = None, # !
+        callbacks: Optional[Sequence[pl.callbacks.Callback]] = None,
         deterministic: Optional[bool] = True,
         benchmark: Optional[bool] = False,
         **dataset_kwargs,
     ):
-        """Train a Spotipy model.
+        """Train a Spotiflow model.
 
         Args:
             train_images (Sequence[np.ndarray]): training images
@@ -302,7 +302,7 @@ class Spotipy(nn.Module):
             val_spots (Sequence[np.ndarray]): validation spots
             augment_train (Union[bool, AugmentationPipeline]): whether to augment the training data. Defaults to True.
             save_dir (Optional[str], optional): directory to save the model to. Must be given if no checkpoint logger is given as a callback. Defaults to None.
-            train_config (Optional[SpotipyTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
+            train_config (Optional[SpotiflowTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
             device (Literal["cpu", "cuda", "mps"], optional): computing device to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
             logger (Optional[pl.loggers.Logger], optional): logger to use. If not given, will use TensorBoard. Defaults to None.
             number_of_devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
@@ -318,18 +318,18 @@ class Spotipy(nn.Module):
         # Generate default training config if none is given
         if train_config is None:
             log.info("No training config given. Using default.")
-            train_config = SpotipyTrainingConfig()
+            train_config = SpotiflowTrainingConfig()
         elif isinstance(train_config, dict):
-            train_config = SpotipyTrainingConfig(**train_config)
+            train_config = SpotiflowTrainingConfig(**train_config)
         log.info(f"Training config is: {train_config}")
 
         # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
         if "compute_flow" in dataset_kwargs.keys():
-            log.warning("'compute_flow' argument given to Spotipy.fit(). This argument is ignored.")
+            log.warning("'compute_flow' argument given to Spotiflow.fit(). This argument is ignored.")
         if "downsample_factors" in dataset_kwargs.keys():
-            log.warning("'downsample_factors' argument given to Spotipy.fit(). This argument is ignored.")
+            log.warning("'downsample_factors' argument given to Spotiflow.fit(). This argument is ignored.")
         if "sigma" in dataset_kwargs.keys():
-            log.warning("'sigma' argument given to Spotipy.fit(). This argument is ignored.")
+            log.warning("'sigma' argument given to Spotiflow.fit(). This argument is ignored.")
         dataset_kwargs["compute_flow"] = self.config.compute_flow
         dataset_kwargs["downsample_factors"] = [self.config.downsample_factor**lv for lv in range(self.config.levels)]
         dataset_kwargs["sigma"] = self.config.sigma
@@ -359,11 +359,11 @@ class Spotipy(nn.Module):
         if callbacks is None:
             callbacks = []
 
-        if not any(isinstance(c, SpotipyModelCheckpoint) for c in callbacks):
+        if not any(isinstance(c, SpotiflowModelCheckpoint) for c in callbacks):
             if not save_dir:
-                raise ValueError("save_dir argument must be given if no SpotipyModelCheckpoint callback is given")
+                raise ValueError("save_dir argument must be given if no SpotiflowModelCheckpoint callback is given")
             callbacks = [
-                SpotipyModelCheckpoint(
+                SpotiflowModelCheckpoint(
                     logdir=save_dir,
                     train_config=train_config,
                     monitor="val_loss"),
@@ -546,10 +546,10 @@ class Spotipy(nn.Module):
         exclude_border: bool = False,
         scale: Optional[int] = None,
         subpix: Optional[Union[bool, int]] = None,
-        peak_mode: Literal["skimage", "fast"] = "skimage",
-        normalizer: Optional[callable] = normalize,
+        peak_mode: Literal["skimage", "fast"] = "fast",
+        normalizer: Optional[Union[Literal["auto"], Callable]] = "auto",
         verbose: bool = True,
-        progress_bar_wrapper: Optional[callable] = None,
+        progress_bar_wrapper: Optional[Callable] = None,
         device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
@@ -563,7 +563,7 @@ class Spotipy(nn.Module):
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
             subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
             peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
-            normalizer (Optional[callable], optional): Normalization function to apply to the image. If None, no normalization is applied. Defaults to percentile-based (1, 99.8) normalization.
+            normalizer (Optional[Union[Literal["auto"], callable]], optional): Normalizer to use. If None, will use the default normalizer. Defaults to "auto" (percentile-based normalization with p_min=1, p_max=99.8).
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
@@ -626,8 +626,11 @@ class Spotipy(nn.Module):
             log.info(f"Padding to shape {pad_shape}")
         x, padding = center_pad(x, pad_shape, mode="reflect")
 
+        if isinstance(normalizer, str) and normalizer == "auto":
+            normalizer = normalize
         if normalizer is not None and callable(normalizer):
             x = normalizer(x)
+
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):

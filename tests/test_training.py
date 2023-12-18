@@ -1,5 +1,5 @@
-from spotipy_torch.data import SpotsDataset
-from spotipy_torch.model import SpotipyModelConfig, SpotipyTrainingConfig, Spotipy
+from spotiflow.data import SpotsDataset
+from spotiflow.model import SpotipyModelConfig, SpotipyTrainingConfig, Spotipy
 import lightning.pytorch as pl
 from numerize.numerize import numerize
 import torch

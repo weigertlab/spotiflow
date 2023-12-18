@@ -21,13 +21,13 @@ def list_registered():
 
 
 def _cache_dir():
-    return Path("~").expanduser() / ".spotipy"
+    return Path("~").expanduser() / ".spotiflow"
 
 
 def get_pretrained_model_path(name: str):
     """
     Downloads and extracts the pretrained model with the given name.
-    The model is downloaded to ~/.cache/spotipy/ and extracted to ~/.cache/spotipy/name.
+    The model is downloaded to ~/.cache/spotiflow/ and extracted to ~/.cache/spotiflow/name.
     """
     if name not in _REGISTERED:
         print(f"No pretrained model named {name} found.")

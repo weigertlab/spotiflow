@@ -1,4 +1,4 @@
-Training a Spotipy model on a custom dataset
+Training a Spotiflow model on a custom dataset
 ----------------------------------------------
 
 Data format
@@ -41,14 +41,14 @@ You can easily train a model using the default settings as follows and save it t
 
 .. code-block:: python
 
-    from spotipy_torch.model import Spotipy
-    from spotipy_torch.utils import get_data
+    from spotiflow.model import Spotiflow
+    from spotiflow.utils import get_data
 
     # Get the data
     train_imgs, train_spots, val_imgs, val_spots = get_data("/path/to/spots_data")
 
     # Initialize the model
-    model = Spotipy()
+    model = Spotiflow()
 
     # Train and save the model
     model.fit(
@@ -63,12 +63,12 @@ You can then load it by simply calling:
 
 .. code-block:: python
 
-    model = Spotipy.from_folder("/my/trained/model")
+    model = Spotiflow.from_folder("/my/trained/model")
 
 Customizing the training
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that through the `` For more information on the arguments, see the documentation of :py:func:`spotipy_torch.model.spotipy.Spotipy.fit` method as well as :py:mod:`spotipy_torch.model.config.SpotipyTrainingConfig`. As an example, let's change the number of epochs and the learning rate:
+You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that through the `` For more information on the arguments, see the documentation of :py:func:`spotiflow.model.spotiflow.Spotiflow.fit` method as well as :py:mod:`spotiflow.model.config.SpotiflowTrainingConfig`. As an example, let's change the number of epochs and the learning rate:
 
 .. code-block:: python
     
@@ -89,15 +89,15 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
     )
 
 
-In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotipy_torch.model.config.SpotipyModelConfig` object and populate it accordingly. Then you can pass it to the `Spotipy` constructor. For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
+In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and populate it accordingly. Then you can pass it to the `Spotiflow` constructor. For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
 
 .. code-block:: python
 
-    from spotipy_torch.model import SpotipyModelConfig
+    from spotiflow.model import SpotiflowModelConfig
 
     # Create the model config
-    model_config = SpotipyModelConfig(
+    model_config = SpotiflowModelConfig(
         in_channels=3,
         # you can pass other arguments here
     )
-    model = Spotipy(model_config)
+    model = Spotiflow(model_config)

@@ -1,6 +1,6 @@
-from spotipy_torch.data import SpotsDataset
-from spotipy_torch import utils
-from spotipy_torch.model import Spotipy
+from spotiflow.data import SpotsDataset
+from spotiflow import utils
+from spotiflow.model import Spotipy
 from tqdm.auto import tqdm
 
 from pathlib import Path
@@ -10,8 +10,8 @@ import torch
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data-dir", type=str, default="/data/spots/datasets/telomeres")
-parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotipy_torch_v2")
-parser.add_argument("--out-dir", type=str, default="/data/spots/results/telomeres/spotipy_torch_v2")
+parser.add_argument("--model-dir", type=str, default="/data/spots/results/telomeres/spotiflow_v2")
+parser.add_argument("--out-dir", type=str, default="/data/spots/results/telomeres/spotiflow_v2")
 parser.add_argument("--batch-size", type=int, default=4)
 parser.add_argument("--opt-split", type=str, default=None)
 parser.add_argument("--pred-split", type=str, default="test")

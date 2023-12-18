@@ -1,10 +1,10 @@
-:hero: Spotipy: accurate and robust spot detection for fluorescence microscopy 
+:hero: Spotiflow: accurate and robust spot detection for fluorescence microscopy 
 
-=======
-Spotipy
-=======
+=========
+Spotiflow
+=========
 
-Spotipy is a learning-based spot detection method for fluorescence microscopy images. For more information, please refer to our `paper <https://random.dog/>`__.
+Spotiflow is a learning-based spot detection method for fluorescence microscopy images. For more information, please refer to our `paper <https://random.dog/>`__.
 
 Getting Started
 ---------------
@@ -17,8 +17,8 @@ First, create and activate a new conda environment.
 
 .. code-block:: console
 
-   (base) $ conda create -n spotipy python=3.9
-   (base) $ conda activate spotipy
+   (base) $ conda create -n spotiflow python=3.9
+   (base) $ conda activate spotiflow
 
 Then, install Pytorch using ``conda``/ ``mamba``. Please follow the `official instructions for your system <https://pytorch.org/get-started/locally>`__.
 
@@ -26,19 +26,19 @@ As an example, for MacOS:
 
 .. code-block:: console
 
-   (spotipy) $ conda install pytorch::pytorch torchvision -c pytorch
+   (spotiflow) $ conda install pytorch::pytorch torchvision -c pytorch
 
 For a linux system with CUDA (note that you should change the CUDA version to match the one installed on your system):
 
 .. code-block:: console
 
-   (spotipy) $ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
+   (spotiflow) $ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
 
-Finally, install ``spotipy`` using ``pip``:
+Finally, install ``spotiflow`` using ``pip``:
 
 .. code-block:: console
 
-   (spotipy) $ pip install spotipy
+   (spotiflow) $ pip install spotiflow
 
 Predicting spots in an image
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -48,15 +48,15 @@ The snippet below shows how to retrieve the spots from an image using one of the
 .. code-block:: python
 
    from skimage.io import imread
-   from spotipy_torch.model import Spotipy
-   from spotipy_torch.utils import write_coords_csv
+   from spotiflow.model import Spotiflow
+   from spotiflow.utils import write_coords_csv
    
 
    # Load the desired image
    img = imread("/path/to/your/image") 
  
    # Load a pretrained model
-   model = Spotipy.from_pretrained("general")
+   model = Spotiflow.from_pretrained("general")
 
    # Predict spots
    spots, details = model.predict(img) # predict expects a numpy array
@@ -72,7 +72,7 @@ If a custom model is used, simply change the model loadings step to:
 .. code-block:: python
 
    # Load a custom model
-   model = Spotipy.from_folder("/path/to/model")
+   model = Spotiflow.from_folder("/path/to/model")
    
 
 

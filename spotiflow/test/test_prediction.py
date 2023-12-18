@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from spotipy_torch.model import Spotipy, SpotipyModelConfig
+from spotiflow.model import Spotiflow, SpotiflowModelConfig
 from typing import Tuple
 
 
@@ -34,12 +34,12 @@ def test_predict(img_size: Tuple[int, int],
                  subpix: bool,
                  ):
     img = np.random.randn(*img_size, in_channels).astype(np.float32)
-    model_config = SpotipyModelConfig(
+    model_config = SpotiflowModelConfig(
         levels=2,
         in_channels=in_channels,
         out_channels=1,
     )
-    model = Spotipy(model_config)
+    model = Spotiflow(model_config)
     orig_device = str(next(model.parameters()).device)
 
     wrong_scale, not_implemented = False, False

@@ -1,5 +1,5 @@
 import numpy as np
-from spotipy_torch.utils import points_to_prob, points_to_flow, flow_to_vector
+from spotiflow.utils import points_to_prob, points_to_flow, flow_to_vector
 
 
 if __name__ == "__main__":

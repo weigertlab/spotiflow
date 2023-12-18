@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from spotipy_torch.model import Spotipy, SpotipyModelConfig
+from spotiflow.model import Spotiflow, SpotiflowModelConfig
 from tempfile import TemporaryDirectory
 
 
@@ -33,19 +33,19 @@ torch.use_deterministic_algorithms(True)
 def test_save_load(
                    in_channels: int,
                   ):
-    model_config = SpotipyModelConfig(
+    model_config = SpotiflowModelConfig(
         levels=2,
         in_channels=in_channels,
         out_channels=1,
         background_remover=in_channels==1,
     )
-    model = Spotipy(model_config)
+    model = Spotiflow(model_config)
 
     with TemporaryDirectory() as tmpdir:
         model.save(tmpdir, which="best", update_thresholds=True)
-        model_same = Spotipy.from_folder(tmpdir, map_location=DEVICE_STR)
+        model_same = Spotiflow.from_folder(tmpdir, map_location=DEVICE_STR)
         with pytest.raises(AssertionError):
-            _ = Spotipy.from_folder(tmpdir, map_location=DEVICE_STR, which="notexist")
+            _ = Spotiflow.from_folder(tmpdir, map_location=DEVICE_STR, which="notexist")
 
     assert model_same.config == model.config, "Model configs are not equal"
     assert equal_states_dict(model.state_dict(), model_same.state_dict()), "Model states are not equal"

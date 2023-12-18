@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, Path(__file__).parents[2].resolve().as_posix())
 
-project = 'Spotipy'
+project = 'Spotiflow'
 copyright = '2023, Albert Dominguez Mantes'
 author = 'Albert Dominguez Mantes'
 release = '0.1'
@@ -32,7 +32,7 @@ exclude_patterns = []
 autosectionlabel_prefix_document = True
 
 python_apigen_modules = {
-      "spotipy_torch": "api",
+      "spotiflow": "api",
 }
 python_apigen_order_tiebreaker = "definition_order"
 
@@ -42,7 +42,7 @@ python_apigen_order_tiebreaker = "definition_order"
 
 html_theme = 'sphinx_immaterial'
 html_static_path = ['_static']
-html_logo = "_static/spotipy_transp_small.png"
+html_logo = "_static/spotiflow_transp_small.png"
 
 
 html_theme_options = {
@@ -51,8 +51,8 @@ html_theme_options = {
         "edit": "material/file-edit-outline",
     },
     # "site_url": "https://jbms.github.io/sphinx-immaterial/",
-    "repo_url": "https://github.com/weigertlab/spotipy-torch",
-    "repo_name": "Spotipy",
+    "repo_url": "https://github.com/weigertlab/spotiflow",
+    "repo_name": "Spotiflow",
     "edit_uri": "blob/main/docs",
     "globaltoc_collapse": True,
     "features": [

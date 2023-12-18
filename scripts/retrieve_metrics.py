@@ -6,7 +6,7 @@ import configargparse
 import numpy as np
 import pandas as pd
 
-from spotipy_torch.utils import points_matching_dataset, points_matching
+from spotiflow.utils import points_matching_dataset, points_matching
 
 def read_coords_csv(fname: str): 
     """ parses a csv file and returns correctly ordered points array     

@@ -1,7 +1,7 @@
 from types import SimpleNamespace
-from spotipy_torch import utils
-from spotipy_torch.data import SpotsDataset
-from spotipy_torch.model import (
+from spotiflow import utils
+from spotiflow.data import SpotsDataset
+from spotiflow.model import (
     CustomEarlyStopping,
     Spotipy,
     SpotipyModelCheckpoint,
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save-dir",
         type=str,
-        default="/data/spots/results/synthetic_clean/spotipy_torch_v2",
+        default="/data/spots/results/synthetic_clean/spotiflow_v2",
         help="Path to the save directory",
     )
     parser.add_argument(

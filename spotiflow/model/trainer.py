@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .config import SpotipyTrainingConfig
+from .config import SpotiflowTrainingConfig
 from .losses import AdaptiveWingLoss
 from ..data import collate_spots
 from ..utils import prob_to_points, points_matching_dataset, remove_device_id_from_device_str
@@ -32,15 +32,15 @@ def _img_to_rgb_or_gray(x: torch.Tensor):
         return x[_cs]
 
 
-class SpotipyTrainingWrapper(pl.LightningModule):
-    """Lightning module that wraps a Spotipy model and handles the training stage."""
+class SpotiflowTrainingWrapper(pl.LightningModule):
+    """Lightning module that wraps a Spotiflow model and handles the training stage."""
 
-    def __init__(self, model, training_config: SpotipyTrainingConfig):
-        """Initializes the SpotipyTrainingWrapper.
+    def __init__(self, model, training_config: SpotiflowTrainingConfig):
+        """Initializes the SpotiflowTrainingWrapper.
 
         Args:
-            model (SpotipyModel): The model to train.
-            training_config (SpotipyTrainingConfig): The training configuration.
+            model (SpotiflowModel): The model to train.
+            training_config (SpotiflowTrainingConfig): The training configuration.
         """
         super().__init__()
         self.model = model
@@ -426,23 +426,23 @@ class SpotipyTrainingWrapper(pl.LightningModule):
         return train_dl, val_dl
 
 
-# a model checkpoint that uses Spotipy.save() to save the model
-class SpotipyModelCheckpoint(pl.callbacks.Callback):
+# a model checkpoint that uses Spotiflow.save() to save the model
+class SpotiflowModelCheckpoint(pl.callbacks.Callback):
     """Callback to save the best model according to a given metric.
-    Uses Spotipy.save() to save the model for maximum flexibility.
+    Uses Spotiflow.save() to save the model for maximum flexibility.
     """
 
     def __init__(
         self,
         logdir: Union[str, Path],
-        train_config: SpotipyTrainingConfig,
+        train_config: SpotiflowTrainingConfig,
         monitor: str = "val_loss",
     ):
         """
 
         Args:
             logdir (str): path to the directory where the model checkpoints will be saved.
-            train_config (SpotipyTrainingConfig): training configuration.
+            train_config (SpotiflowTrainingConfig): training configuration.
             monitor (str, optional): metric to be minimized. Defaults to "val_loss".
         """
         self._logdir = Path(logdir) if isinstance(logdir, str) else logdir

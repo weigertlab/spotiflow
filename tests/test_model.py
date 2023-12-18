@@ -1,6 +1,6 @@
-from spotipy_torch.model import Spotipy
-from spotipy_torch.utils import normalize
-from spotipy_torch.data import test_data_hybiss_2d
+from spotiflow.model import Spotipy
+from spotiflow.utils import normalize
+from spotiflow.data import test_data_hybiss_2d
 
 if __name__ == "__main__":
     model = Spotipy.from_pretrained("hybiss", map_location="cpu")

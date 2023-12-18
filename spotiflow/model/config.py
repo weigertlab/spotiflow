@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 log = logging.getLogger(__name__)
 
 
-class SpotipyConfig(argparse.Namespace, abc.ABC):
+class SpotiflowConfig(argparse.Namespace, abc.ABC):
     def __init__(self):
         self.is_valid()
 
@@ -79,7 +79,7 @@ class SpotipyConfig(argparse.Namespace, abc.ABC):
         pass
 
 
-class SpotipyModelConfig(SpotipyConfig):
+class SpotiflowModelConfig(SpotiflowConfig):
     def __init__(
         self,
         backbone: Literal["resnet", "unet", "unet_res"] = "unet",
@@ -199,7 +199,7 @@ class SpotipyModelConfig(SpotipyConfig):
         ), "downsample_factor must be a positive integer"
 
 
-class SpotipyTrainingConfig(SpotipyConfig):
+class SpotiflowTrainingConfig(SpotiflowConfig):
     def __init__(
         self,
         crop_size: int = 512,

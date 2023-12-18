@@ -1,4 +1,4 @@
-from spotipy_torch.data import SpotsDataset
+from spotiflow.data import SpotsDataset
 from utils import example_data
 
 

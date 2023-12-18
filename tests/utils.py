@@ -1,5 +1,5 @@
 import numpy as np
-from spotipy_torch.utils import points_to_prob
+from spotiflow.utils import points_to_prob
 
 
 def example_data(n_samples: int = 10, size: int = 256, noise: float = 0.2, sigma=2):

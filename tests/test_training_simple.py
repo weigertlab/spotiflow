@@ -1,4 +1,4 @@
-from spotipy_torch.model import SpotipyModelConfig, Spotipy
+from spotiflow.model import SpotipyModelConfig, Spotipy
 from numerize.numerize import numerize
 import torch
 from utils import example_data

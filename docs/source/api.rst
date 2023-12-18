@@ -1,20 +1,22 @@
 API Reference
 -------------
 
-.. autoclass:: spotipy_torch.model.spotipy.Spotipy
+.. autoclass:: spotiflow.model.spotiflow.Spotiflow
     :members: from_pretrained, from_folder, predict, fit, save, load, optimize_threshold
 
-.. autoclass:: spotipy_torch.model.config.SpotipyModelConfig
+.. autoclass:: spotiflow.model.config.SpotiflowModelConfig
     :members:
 
-.. autoclass:: spotipy_torch.model.config.SpotipyTrainingConfig
+.. autoclass:: spotiflow.model.config.SpotiflowTrainingConfig
     :members:
 
-.. autoclass:: spotipy_torch.data.spots.SpotsDataset
+.. autoclass:: spotiflow.data.spots.SpotsDataset
     :members:
 
-.. automodule:: spotipy_torch.utils
+    .. automethod:: __init__
+
+.. automodule:: spotiflow.utils
     :members: get_data, read_coords_csv, write_coords_csv, normalize
 
-.. automodule:: spotipy_torch.sample_data
+.. automodule:: spotiflow.sample_data
     :members:
