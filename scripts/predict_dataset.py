@@ -1,6 +1,6 @@
 from spotiflow.data import SpotsDataset
 from spotiflow import utils
-from spotiflow.model import Spotipy
+from spotiflow.model import Spotiflow
 from tqdm.auto import tqdm
 
 from pathlib import Path
@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-model = Spotipy.from_pretrained(
+model = Spotiflow.from_pretrained(
     pretrained_path=args.model_dir,
     inference_mode=True,
     map_location=device,

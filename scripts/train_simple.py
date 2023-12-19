@@ -1,4 +1,4 @@
-"""Sample script to train a Spotipy model.
+"""Sample script to train a Spotiflow model.
 """
 
 import argparse
@@ -7,7 +7,7 @@ from pathlib import Path
 from skimage import io
 from itertools import chain
 
-from spotiflow.model import Spotipy, SpotipyModelConfig
+from spotiflow.model import Spotiflow, SpotiflowModelConfig
 from spotiflow import utils
 import lightning.pytorch as pl
 
@@ -27,7 +27,7 @@ def get_data(data_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default="/data/spots/datasets/hybiss_spots_v4")
-    parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotipy_simple_train_debug")
+    parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotiflow_simple_train_debug")
     parser.add_argument("--sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     print(f"Validation data loaded (N={len(val_images)}).")
 
     print("Instantiating model...")
-    model = Spotipy(SpotipyModelConfig(sigma=args.sigma))
+    model = Spotiflow(SpotiflowModelConfig(sigma=args.sigma))
 
     print("Launching training...")
     model.fit(

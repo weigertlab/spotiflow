@@ -3,10 +3,10 @@ from spotiflow import utils
 from spotiflow.data import SpotsDataset
 from spotiflow.model import (
     CustomEarlyStopping,
-    Spotipy,
-    SpotipyModelCheckpoint,
-    SpotipyModelConfig,
-    SpotipyTrainingConfig,
+    Spotiflow,
+    SpotiflowModelCheckpoint,
+    SpotiflowModelConfig,
+    SpotiflowTrainingConfig,
 )
 
 from pathlib import Path
@@ -52,7 +52,7 @@ def get_run_name(args: SimpleNamespace):
 if __name__ == "__main__":
 
     parser = configargparse.ArgumentParser(
-        description="Train Spotipy model",
+        description="Train Spotiflow model",
         config_file_parser_class=configargparse.YAMLConfigFileParser,
     )
     parser.add(
@@ -306,7 +306,7 @@ if __name__ == "__main__":
 
     model_dir = Path(args.save_dir) / f"{run_name}"
 
-    training_config = SpotipyTrainingConfig(
+    training_config = SpotiflowTrainingConfig(
         crop_size=args.crop_size,
         loss_f=args.loss,
         pos_weight=args.pos_weight,
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     )
 
     if args.pretrained_model is not None:
-        model = Spotipy.from_pretrained(
+        model = Spotiflow.from_pretrained(
             args.pretrained_model,
             inference_mode=False,
             map_location=accelerator,
@@ -343,7 +343,7 @@ if __name__ == "__main__":
         print(f"Will finetune pretrained model loaded from {args.pretrained_model}")
         model_config = model.config
     else:
-        model_config = SpotipyModelConfig(
+        model_config = SpotiflowModelConfig(
             backbone=args.backbone,
             in_channels=args.in_channels,
             out_channels=1,
@@ -362,7 +362,7 @@ if __name__ == "__main__":
             sigma=args.sigma,
         )
         # Create model
-        model = Spotipy(model_config)
+        model = Spotiflow(model_config)
 
     model = torch.compile(model)
 
@@ -372,7 +372,7 @@ if __name__ == "__main__":
 
     if not args.dry:
         callbacks.append(
-            SpotipyModelCheckpoint(
+            SpotiflowModelCheckpoint(
                 model_dir,
                 training_config,
                 monitor="val_loss",
@@ -467,7 +467,7 @@ if __name__ == "__main__":
         # Load the best checkpoint of the model we trained
         device = torch.device(accelerator)
 
-        model = Spotipy.from_folder(
+        model = Spotiflow.from_folder(
             model_dir,
             inference_mode=True,
             map_location=accelerator,

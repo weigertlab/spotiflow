@@ -1,5 +1,5 @@
 from spotiflow.data import SpotsDataset
-from spotiflow.model import Spotipy
+from spotiflow.model import Spotiflow
 from spotiflow.utils import normalize
 
 from pathlib import Path
@@ -22,7 +22,7 @@ args = parser.parse_args()
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
 print("Loading model...")
-model = Spotipy.from_pretrained(
+model = Spotiflow.from_pretrained(
     pretrained_path=args.model_dir,
     inference_mode=True,
 ).to(torch.device(device))

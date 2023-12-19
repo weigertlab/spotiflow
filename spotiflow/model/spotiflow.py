@@ -16,8 +16,8 @@ import torch.nn.functional as F
 import yaml
 from csbdeep.internals.predict import tile_iterator
 from scipy.ndimage import zoom
-from tormenter import transforms
-from tormenter.pipeline import Pipeline as AugmentationPipeline
+from spotiflow.augmentations import transforms
+from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
 
 from ..data import SpotsDataset
