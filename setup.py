@@ -87,7 +87,7 @@ setup(
             "spotiflow.lib.filters",
             sources=["spotiflow/lib/filters.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs(),
+            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
     ],
 )

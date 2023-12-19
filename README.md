@@ -37,13 +37,13 @@ See `scripts/train.py` for an example of training script.
 ### Inference
 ```python
 import tifffile
-from spotiflow.model import Spotipy
+from spotiflow.model import Spotiflow
 
 # Load an image
 img = tifffile.imread("path/to/image") # or any other image loading library according to the image format
 
 # Load the model
-model = Spotipy.from_pretrained("path/to/trained_model", inference=True)
+model = Spotiflow.from_pretrained("path/to/trained_model")
 
 # Predict
 pred, details = model.predict(img) # Pred contains the detected spots, the attribute 'heatmap' of `details` contains the predicted heatmap (access it by `details.heatmap`)

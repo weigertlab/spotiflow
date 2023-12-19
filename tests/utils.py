@@ -1,7 +1,6 @@
 import numpy as np
 from spotiflow.utils import points_to_prob
 
-
 def example_data(n_samples: int = 10, size: int = 256, noise: float = 0.2, sigma=2):
     def _single():
         p = np.random.uniform(0, 200, (np.random.randint(18, 24), 2))
