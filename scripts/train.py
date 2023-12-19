@@ -11,8 +11,8 @@ from spotiflow.model import (
 
 from pathlib import Path
 import lightning.pytorch as pl
-from tormenter import transforms
-from tormenter.pipeline import Pipeline
+from spotiflow.augmentations import transforms
+from spotiflow.augmentations.pipeline import Pipeline
 
 import configargparse
 import torch

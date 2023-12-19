@@ -23,19 +23,10 @@ For linux with a CUDA device (one might need to change the cuda version accordin
 (spotiflow) foo@bar:~$ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
 ```
 
-
-Then, install tormenter (the augmentation library) by cloning it first:
-
-```console
-(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/tormenter.git
-(spotiflow) foo@bar:~$ pip install -e ./tormenter
-```
-
 Finally, install `spotiflow`:
 
 ```console
-(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/spotiflow.git
-(spotiflow) foo@bar:~$ pip install -e ./spotiflow
+(spotiflow) foo@bar:~$ pip install -e .potiflow
 ```
 
 ## Usage
@@ -64,13 +55,19 @@ See [spotipy-napari](https://github.com/weigertlab/napari-spotiflow) for the nap
 
 ## Tests
 
-Install the `testing` extras first:
+First, clone the repository:
+```console
+(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/spotiflow.git
+```
+
+Then install the `testing` extras:
 
 ```console
 (spotiflow) foo@bar:~$ pip install -e "./spotiflow[testing]"
 ```
 
-Then `cd` into the cloned repository and run the tests:
+Finally `cd` into the cloned repository and run the tests:
+
 ```console
 (spotiflow) foo@bar:~$ cd spotiflow
 (spotiflow) foo@bar:~/spotiflow$ pytest -v --color=yes --cov=spotiflow
