@@ -1,7 +1,7 @@
 import torch 
-from .transforms.utils import _generate_img_from_points
-from . import Pipeline
-from . import FlipRot90, Rotation, Translation
+from spotiflow.augmentations import Pipeline
+from spotiflow.augmentations.transforms import FlipRot90, Rotation, Translation
+from spotiflow.augmentations.transforms.utils import _generate_img_from_points
 
 import matplotlib.pyplot as plt
 

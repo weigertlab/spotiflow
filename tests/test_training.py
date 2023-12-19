@@ -1,5 +1,5 @@
 from spotiflow.data import SpotsDataset
-from spotiflow.model import SpotipyModelConfig, SpotipyTrainingConfig, Spotipy
+from spotiflow.model import SpotiflowModelConfig, SpotiflowTrainingConfig, Spotiflow
 import lightning.pytorch as pl
 from numerize.numerize import numerize
 import torch
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     sigma = 1.5
 
-    config = SpotipyModelConfig(
+    config = SpotiflowModelConfig(
         backbone=backbone,
         levels=n_levels,
         compute_flow=compute_flow,
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         batch_norm=batch_norm,
     )
 
-    train_config = SpotipyTrainingConfig(num_epochs=100, pos_weight=10, batch_size=4)
+    train_config = SpotiflowTrainingConfig(num_epochs=100, pos_weight=10, batch_size=4)
 
     data = SpotsDataset(
         X,
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         downsample_factors=(1, 2, 4, 8)[:n_levels],
     )
 
-    model = Spotipy(config)
+    model = Spotiflow(config)
 
     print(f"Total params: {numerize(sum(p.numel() for p in model.parameters()))}")
 
