@@ -1,4 +1,4 @@
-![Logo](artwork/spotiflow_transp_small.png)
+![Logo](artwork/spotiflow_logo.png)
 ---
 
 # Spotipy - accurate and efficient spot detection (Torch version)
