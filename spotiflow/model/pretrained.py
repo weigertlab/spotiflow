@@ -31,7 +31,7 @@ def get_pretrained_model_path(name: str):
     """
     if name not in _REGISTERED:
         print(f"No pretrained model named {name} found.")
-        print(f"Available models: {list_registered()}")
+        print(f"Available models: {','.join(sorted(list_registered()))}")
     else:
         model = _REGISTERED[name]
         path = Path(

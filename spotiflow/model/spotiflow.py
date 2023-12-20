@@ -21,8 +21,15 @@ from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
 
 from ..data import SpotsDataset
-from ..utils import (center_crop, center_pad, filter_shape, flow_to_vector,
-                     normalize, points_matching_dataset, prob_to_points)
+from ..utils import (
+    center_crop,
+    center_pad,
+    filter_shape,
+    flow_to_vector,
+    normalize,
+    points_matching_dataset,
+    prob_to_points,
+)
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
 from .config import SpotiflowModelConfig, SpotiflowTrainingConfig
@@ -160,7 +167,7 @@ class Spotiflow(nn.Module):
         """Load a pretrained model.
 
         Args:
-            pretrained_path (str): path to the pretrained model
+            pretrained_path (str): path to the model folder
             inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
             which (str, optional): which checkpoint to load. Defaults to "best".
             map_location (str, optional): device string to load the model to. Defaults to 'auto' (hardware-based).
@@ -171,7 +178,9 @@ class Spotiflow(nn.Module):
         model_config = SpotiflowModelConfig.from_config_file(
             Path(pretrained_path) / "config.yaml"
         )
-        assert map_location is not None, "map_location must be one of ('auto', 'cpu', 'cuda', 'mps')"
+        assert (
+            map_location is not None
+        ), "map_location must be one of ('auto', 'cpu', 'cuda', 'mps')"
         device = cls._retrieve_device_str(None, map_location)
         model = cls(model_config)
         model.load(
@@ -183,12 +192,21 @@ class Spotiflow(nn.Module):
         return model.to(torch.device(device))
 
     @classmethod
-    def from_pretrained(cls, pretrained_name: str, **kwargs) -> Self:
+    def from_pretrained(
+        cls,
+        pretrained_name: str,
+        inference_mode=True,
+        which: str = "best",
+        map_location: Literal["auto", "cpu", "cuda", "mps"] = "auto",
+        **kwargs,
+    ) -> Self:
         """Load a pretrained model with given name
 
         Args:
             pretrained_name (str): name of the pretrained model to be loaded
-            kwargs: additional arguments to pass to the from_folder method
+            inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
+            which (str, optional): which checkpoint to load. Defaults to "best".
+            map_location (str, optional): device string to load the model to. Defaults to 'auto' (hardware-based).
 
         Returns:
             Self: loaded model
@@ -196,7 +214,13 @@ class Spotiflow(nn.Module):
         print(f"Loading pretrained model {pretrained_name}")
         pretrained_path = get_pretrained_model_path(pretrained_name)
         if pretrained_path is not None:
-            return cls.from_folder(pretrained_path, **kwargs)
+            return cls.from_folder(
+                pretrained_path,
+                inference_mode=inference_mode,
+                which=which,
+                map_location=map_location,
+                **kwargs,
+            )
         else:
             raise ValueError(f"Pretrained model {pretrained_name} not found.")
 
@@ -225,7 +249,7 @@ class Spotiflow(nn.Module):
         train_ds: torch.utils.data.Dataset,
         val_ds: torch.utils.data.Dataset,
         train_config: SpotiflowTrainingConfig,
-        accelerator: Literal["auto", "cpu", "cuda", "mps"]="auto",
+        accelerator: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         logger: Optional[pl.loggers.Logger] = None,
         devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
@@ -236,7 +260,7 @@ class Spotiflow(nn.Module):
         """Train the model using torch Datasets as input.
 
         Args:
-            train_ds (torch.utils.data.Dataset): training dataset. 
+            train_ds (torch.utils.data.Dataset): training dataset.
             val_ds (torch.utils.data.Dataset): validation dataset.
             train_config (SpotiflowTrainingConfig): training configuration
             accelerator (str): accelerator to use. Can be "auto" (automatically infered from available hardware), "cpu", "cuda", "mps".
@@ -273,7 +297,6 @@ class Spotiflow(nn.Module):
         trainer.fit(training_wrapper, train_dl, val_dl)
         log.info("Training finished.")
         return
-    
 
     def fit(
         self,
@@ -325,23 +348,31 @@ class Spotiflow(nn.Module):
 
         # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
         if "compute_flow" in dataset_kwargs.keys():
-            log.warning("'compute_flow' argument given to Spotiflow.fit(). This argument is ignored.")
+            log.warning(
+                "'compute_flow' argument given to Spotiflow.fit(). This argument is ignored."
+            )
         if "downsample_factors" in dataset_kwargs.keys():
-            log.warning("'downsample_factors' argument given to Spotiflow.fit(). This argument is ignored.")
+            log.warning(
+                "'downsample_factors' argument given to Spotiflow.fit(). This argument is ignored."
+            )
         if "sigma" in dataset_kwargs.keys():
-            log.warning("'sigma' argument given to Spotiflow.fit(). This argument is ignored.")
+            log.warning(
+                "'sigma' argument given to Spotiflow.fit(). This argument is ignored."
+            )
         dataset_kwargs["compute_flow"] = self.config.compute_flow
-        dataset_kwargs["downsample_factors"] = [self.config.downsample_factor**lv for lv in range(self.config.levels)]
+        dataset_kwargs["downsample_factors"] = [
+            self.config.downsample_factor**lv for lv in range(self.config.levels)
+        ]
         dataset_kwargs["sigma"] = self.config.sigma
-        
+
         # Generate dataset kwargs for training and validation
         train_dataset_kwargs = deepcopy(dataset_kwargs)
         val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
 
         min_img_size = min(min(img.shape[:2]) for img in train_images)
-        min_crop_size = int(2**np.floor(np.log2(min_img_size)))
+        min_crop_size = int(2 ** np.floor(np.log2(min_img_size)))
 
-        crop_size = tuple(2*[min(train_config.crop_size, min_crop_size)])
+        crop_size = tuple(2 * [min(train_config.crop_size, min_crop_size)])
 
         # Build augmenters
         if augment_train:
@@ -349,11 +380,14 @@ class Spotiflow(nn.Module):
         else:
             tr_augmenter = self.build_image_cropper(crop_size)
         val_augmenter = self.build_image_cropper(crop_size)
-        
 
         # Generate datasets
-        train_ds = SpotsDataset(train_images, train_spots, augmenter=tr_augmenter, **train_dataset_kwargs)
-        val_ds = SpotsDataset(val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs)
+        train_ds = SpotsDataset(
+            train_images, train_spots, augmenter=tr_augmenter, **train_dataset_kwargs
+        )
+        val_ds = SpotsDataset(
+            val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs
+        )
 
         # Add model checkpoint callback if not given (to save the model)
         if callbacks is None:
@@ -361,13 +395,15 @@ class Spotiflow(nn.Module):
 
         if not any(isinstance(c, SpotiflowModelCheckpoint) for c in callbacks):
             if not save_dir:
-                raise ValueError("save_dir argument must be given if no SpotiflowModelCheckpoint callback is given")
+                raise ValueError(
+                    "save_dir argument must be given if no SpotiflowModelCheckpoint callback is given"
+                )
             callbacks = [
                 SpotiflowModelCheckpoint(
-                    logdir=save_dir,
-                    train_config=train_config,
-                    monitor="val_loss"),
-                *callbacks]
+                    logdir=save_dir, train_config=train_config, monitor="val_loss"
+                ),
+                *callbacks,
+            ]
 
         if logger == "tensorboard":
             logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
@@ -391,18 +427,30 @@ class Spotiflow(nn.Module):
             benchmark=benchmark,
         )
         return
-    
+
     def _validate_fit_inputs(
         self, train_images, train_spots, val_images, val_spots
     ) -> None:
-        """Validate the inputs given to the fit method.
-        """
-        for imgs, pts, split in zip((train_images, val_images), (train_spots, val_spots), ("train", "validation")):
-            assert len(imgs) == len(pts), f"Number of images and points must be equal for {split} set"
-            assert all(img.ndim in (2, 3) for img in imgs), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
+        """Validate the inputs given to the fit method."""
+        for imgs, pts, split in zip(
+            (train_images, val_images),
+            (train_spots, val_spots),
+            ("train", "validation"),
+        ):
+            assert len(imgs) == len(
+                pts
+            ), f"Number of images and points must be equal for {split} set"
+            assert all(
+                img.ndim in (2, 3) for img in imgs
+            ), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
             if self.config.in_channels > 1:
-                assert all(img.ndim == 3 and img.shape[-1] == self.config.in_channels for img in imgs), f"All images must be 2D (Y,X) for {split} set"
-            assert all(pts.ndim == 2 and pts.shape[1] == 2 for pts in pts), f"Points must be 2D (Y,X) for {split} set"
+                assert all(
+                    img.ndim == 3 and img.shape[-1] == self.config.in_channels
+                    for img in imgs
+                ), f"All images must be 2D (Y,X) for {split} set"
+            assert all(
+                pts.ndim == 2 and pts.shape[1] == 2 for pts in pts
+            ), f"Points must be 2D (Y,X) for {split} set"
         return
 
     def build_image_cropper(self, crop_size: Tuple[int, int]):
@@ -412,20 +460,21 @@ class Spotiflow(nn.Module):
             crop_size (Tuple[int, int]): tuple of (height, width) to randomly crop the images to
         """
         cropper = AugmentationPipeline()
-        cropper.add(transforms.Crop(
-            probability=1.0,
-            size=crop_size,
-            point_priority=0)
-        )
+        cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=0))
         return cropper
 
-    def build_image_augmenter(self,
-                              crop_size: Optional[Tuple[int, int]]=None,
+    def build_image_augmenter(
+        self,
+        crop_size: Optional[Tuple[int, int]] = None,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
-            crop_size: if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
+        crop_size: if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
         """
-        augmenter = self.build_image_cropper(crop_size) if crop_size is not None else AugmentationPipeline()
+        augmenter = (
+            self.build_image_cropper(crop_size)
+            if crop_size is not None
+            else AugmentationPipeline()
+        )
         augmenter.add(transforms.FlipRot90(probability=0.5))
         augmenter.add(transforms.Rotation(probability=0.5, order=1))
         augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
@@ -435,7 +484,7 @@ class Spotiflow(nn.Module):
             )
         )
         return augmenter
-        
+
     def save(
         self,
         path: str,
@@ -550,7 +599,9 @@ class Spotiflow(nn.Module):
         normalizer: Optional[Union[Literal["auto"], Callable]] = "auto",
         verbose: bool = True,
         progress_bar_wrapper: Optional[Callable] = None,
-        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
+        device: Optional[
+            Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
+        ] = None,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -571,7 +622,6 @@ class Spotiflow(nn.Module):
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
-
 
         if subpix is False:
             subpix_radius = -1
@@ -605,7 +655,9 @@ class Spotiflow(nn.Module):
             x = img
         else:
             if subpix:
-                raise NotImplementedError("Subpixel prediction is not supported yet when scale != 1.")
+                raise NotImplementedError(
+                    "Subpixel prediction is not supported yet when scale != 1."
+                )
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
             if scale < 1:
@@ -774,7 +826,9 @@ class Spotiflow(nn.Module):
         if subpix and subpix_radius >= 0:
             _offset = _subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
-            pts = pts.clip(0, np.array(img.shape[:2]) - 1) # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
+            pts = pts.clip(
+                0, np.array(img.shape[:2]) - 1
+            )  # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
         else:
             _subpix = None
             flow = None
@@ -785,12 +839,14 @@ class Spotiflow(nn.Module):
     def predict_dataset(
         self,
         ds: torch.utils.data.Dataset,
-        min_distance: int=1,
-        exclude_border: bool=False,
-        batch_size: int=4,
-        prob_thresh: Optional[float]=None,
-        return_heatmaps: bool=False,
-        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
+        min_distance: int = 1,
+        exclude_border: bool = False,
+        batch_size: int = 4,
+        prob_thresh: Optional[float] = None,
+        return_heatmaps: bool = False,
+        device: Optional[
+            Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
+        ] = None,
     ) -> Sequence[Tuple[np.ndarray, SimpleNamespace]]:
         """Predict spots from a SpotsDataset object.
 
@@ -818,7 +874,7 @@ class Spotiflow(nn.Module):
                 self.to(device)
 
         log.info(f"Will use device: {device}")
-    
+
         device = torch.device(device)
         log.info(
             f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}"
@@ -856,7 +912,9 @@ class Spotiflow(nn.Module):
         threshold_range: Tuple[float, float] = (0.3, 0.7),
         niter: int = 11,
         batch_size: int = 1,
-        device: Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]] = None,
+        device: Optional[
+            Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
+        ] = None,
         subpix: Optional[bool] = None,
     ) -> None:
         """Optimize the probability threshold on an annotated dataset.
@@ -900,7 +958,11 @@ class Spotiflow(nn.Module):
                     curr_flow_preds = []
                     for flow in out["flow"]:
                         curr_flow_preds += [
-                            F.normalize(flow, dim=1).permute(1, 2, 0).detach().cpu().numpy()
+                            F.normalize(flow, dim=1)
+                            .permute(1, 2, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
                         ]
 
                 for p in val_batch["pts"]:
@@ -913,7 +975,7 @@ class Spotiflow(nn.Module):
                             flow_to_vector(
                                 curr_flow_preds[batch_elem], sigma=self.config.sigma
                             )
-                    ]
+                        ]
                 del out, imgs, val_batch
 
         def _metric_at_threshold(thr):
@@ -951,8 +1013,10 @@ class Spotiflow(nn.Module):
         log.info(f"Best F1-score: {best_f1:.3f}")
         self._prob_thresh = float(best_thr)
         return
-    
-    def _retrieve_device_str(self, device_str: Union[None, Literal["auto", "cpu", "cuda", "mps"]]) -> str:
+
+    def _retrieve_device_str(
+        self, device_str: Union[None, Literal["auto", "cpu", "cuda", "mps"]]
+    ) -> str:
         """Retrieve the device string to use for the model.
 
         Args:
@@ -969,7 +1033,13 @@ class Spotiflow(nn.Module):
         if device_str is None:
             return str(next(self.parameters()).device)
         elif device_str == "auto":
-            return "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            return (
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
         return device_str
 
     def _backbone_switcher(self) -> nn.Module:

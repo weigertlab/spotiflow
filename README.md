@@ -36,17 +36,21 @@ See `scripts/train.py` for an example of training script.
 
 ### Inference
 ```python
-import tifffile
-from spotiflow.model import Spotiflow
+from spotiflow.model import Spotipy
+from spotiflow.sample_data import test_image_hybiss_2d
 
-# Load an image
-img = tifffile.imread("path/to/image") # or any other image loading library according to the image format
+# Load sample image
+img = test_image_hybiss_2d()
+# Or any other image
+img = tifffile.imread("myimage.tif")
 
-# Load the model
-model = Spotiflow.from_pretrained("path/to/trained_model")
+# Load a pretrained model
+model = Spotiflow.from_pretrained("hybiss", inference=True)
+# Or load a model from folder
+model = Spotiflow.from_folder("./mymodel", inference=True)
 
 # Predict
-pred, details = model.predict(img) # Pred contains the detected spots, the attribute 'heatmap' of `details` contains the predicted heatmap (access it by `details.heatmap`)
+points, details = model.predict(img) # Pred contains the detected spots, the attribute 'heatmap' of `details` contains the predicted heatmap (access it by `details.heatmap`)
 ```
 
 ## Napari plugin
@@ -95,7 +99,7 @@ and then `cd` into the `docs` folder of the cloned repository and build them:
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [x] First docs prototype
 - [x] Tests
-- [x] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True) 
+- [x] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True)
 - [ ] Register all models
 - [ ] Register all datasets?
 - [ ] Add example notebooks (train, inference)
