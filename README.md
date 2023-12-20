@@ -11,26 +11,27 @@
 Create and activate a fresh conda environment:
 
 ```console
-(base) foo@bar:~$ conda create -n spotiflow python=3.9
-(base) foo@bar:~$ conda activate spotiflow
+conda create -n spotiflow python=3.9
+conda activate spotiflow
 ```
 
 Then install PyTorch using conda/mamba (refer to [the official installation instructions](https://pytorch.org/get-started/locally/) for more info depending on your system):
 
 For MacOS:
 ```console
-(spotiflow) foo@bar:~$ conda install pytorch::pytorch torchvision -c pytorch # for MacOS
+conda install pytorch::pytorch torchvision -c pytorch # for MacOS
 ```
 
 For linux with a CUDA device (one might need to change the cuda version accordingly):
 ```console
-(spotiflow) foo@bar:~$ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
+conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
 ```
 
 Finally, install `spotiflow`:
 
 ```console
-(spotiflow) foo@bar:~$ pip install -e .potiflow
+cd spotiflow
+pip install -e .
 ```
 
 ## Usage
@@ -65,20 +66,20 @@ See [spotipy-napari](https://github.com/weigertlab/napari-spotiflow) for the nap
 
 First, clone the repository:
 ```console
-(spotiflow) foo@bar:~$ git clone git@github.com:weigertlab/spotiflow.git
+git clone git@github.com:weigertlab/spotiflow.git
 ```
 
 Then install the `testing` extras:
 
 ```console
-(spotiflow) foo@bar:~$ pip install -e "./spotiflow[testing]"
+cd spotiflow
+pip install -e ".[testing]"
 ```
 
-Finally `cd` into the cloned repository and run the tests:
+then run the tests:
 
 ```console
-(spotiflow) foo@bar:~$ cd spotiflow
-(spotiflow) foo@bar:~/spotiflow$ pytest -v --color=yes --cov=spotiflow
+pytest -v --color=yes --cov=spotiflow
 ```
 
 ## Docs
@@ -86,13 +87,13 @@ Finally `cd` into the cloned repository and run the tests:
 Install the `docs` extras:
 
 ```console
-(spotiflow) foo@bar:~$ pip install -e "./spotiflow[docs]"
+pip install -e ".[docs]"
 ```
 
 and then `cd` into the `docs` folder of the cloned repository and build them:
 ```console
-(spotiflow) foo@bar:~$ cd spotiflow/docs
-(spotiflow) foo@bar:~/spotiflow/docs$ sphinx-build -M html source build
+cd spotiflow/docs
+sphinx-build -M html source build
 ```
 
 ## TODO
