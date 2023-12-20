@@ -1,7 +1,11 @@
 ![Logo](artwork/spotiflow_logo.png)
 ---
 
-# Spotipy - accurate and efficient spot detection (Torch version)
+# Spotipy - accurate and efficient spot detection with stereographic flow
+
+*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarly delevoped for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images.
+
+![Overview](artwork/overview.png)
 
 ## Installation
 Create and activate a fresh conda environment:
