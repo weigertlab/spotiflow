@@ -40,7 +40,7 @@ See `scripts/train.py` for an example of training script.
 
 ### Inference
 ```python
-from spotiflow.model import Spotipy
+from spotiflow.model import Spotiflow
 from spotiflow.sample_data import test_image_hybiss_2d
 
 # Load sample image
@@ -58,7 +58,7 @@ points, details = model.predict(img) # Pred contains the detected spots, the att
 ```
 
 ## Napari plugin
-See [spotipy-napari](https://github.com/weigertlab/napari-spotiflow) for the napari plugin.
+See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for the napari plugin.
 
 
 ## Tests
@@ -103,17 +103,17 @@ sphinx-build -M html source build
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [x] First docs prototype
 - [x] Tests
-- [x] Adjust `SpotipyModelConfig` default config (e.g. compute flow=True, batch_norm=True)
+- [x] Adjust `SpotiflowModelConfig` default config (e.g. compute flow=True, batch_norm=True)
 - [ ] Register all models
 - [ ] Register all datasets?
 - [ ] Add example notebooks (train, inference)
 - [ ] Improve docs (order, etc.)
 
 ## How to cite
-If you use Spotiflow in your research, please cite [the paper](https://random.dog/).
+If you use this code in your research, please cite [the Spotiflow paper](https://random.dog/):
 
 ```bibtex
-@inproceedings{schmidt2018,
+@inproceedings{XYZ,
   author    = {},
   title     = {},
   ...
