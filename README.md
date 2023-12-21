@@ -3,7 +3,7 @@
 
 # Spotiflow - accurate and efficient spot detection with stereographic flow
 
-*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarly delevoped for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images.
+*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images.
 
 ![Overview](artwork/overview.png)
 
@@ -30,8 +30,7 @@ conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For l
 Finally, install `spotiflow`:
 
 ```console
-cd spotiflow
-pip install -e .
+pip install spotiflow
 ```
 
 ## Usage
@@ -110,6 +109,13 @@ sphinx-build -M html source build
 - [ ] Add example notebooks (train, inference)
 - [ ] Improve docs (order, etc.)
 
-## Contributors
+## How to cite
+If you use Spotiflow in your research, please cite [the paper](https://random.dog/).
 
-Albert Dominguez Mantes, Antonio Herrera, Irina Khven, Anjalie Schläppi, Gioele La Manno, Martin Weigert
+```bibtex
+@inproceedings{schmidt2018,
+  author    = {},
+  title     = {},
+  ...
+}
+```
