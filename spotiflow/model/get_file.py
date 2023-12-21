@@ -1,5 +1,5 @@
 """
-Copied from tensorflow.keras.utils.data_utils
+Adapted from tensorflow.keras.utils.data_utils
 """
 
 import hashlib
@@ -440,21 +440,13 @@ def get_file(
     """Downloads a file from a URL if it not already in the cache.
 
     By default the file at the url `origin` is downloaded to the
-    cache_dir `~/.keras`, placed in the cache_subdir `datasets`,
+    cache_dir `~/.spotiflow`, placed in the cache_subdir `datasets`,
     and given the filename `fname`. The final location of a file
-    `example.txt` would therefore be `~/.keras/datasets/example.txt`.
+    `example.txt` would therefore be `~/.spotiflow/datasets/example.txt`.
 
     Files in tar, tar.gz, tar.bz, and zip formats can also be extracted.
     Passing a hash will verify the file after download. The command line
     programs `shasum` and `sha256sum` can compute the hash.
-
-    Example:
-
-    ```python
-    path_to_downloaded_file = tf.keras.utils.get_file(
-        origin="https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz",
-        extract=True,
-    )
     ```
 
     Args:
@@ -481,7 +473,7 @@ def get_file(
             The default `'auto'` corresponds to `['tar', 'zip']`.
             None or an empty list will return no matches found.
         cache_dir: Location to store cached files, when None it
-            defaults to `~/.keras/`.
+            defaults to `~/.spotiflow/`.
 
     Returns:
         Path to the downloaded file.
@@ -500,13 +492,11 @@ def get_file(
         )
 
     if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".keras")
+        cache_dir = os.path.join(os.path.expanduser("~"), ".spotiflow")
     if md5_hash is not None and file_hash is None:
         file_hash = md5_hash
         hash_algorithm = "md5"
     datadir_base = os.path.expanduser(cache_dir)
-    # if not os.access(datadir_base, os.W_OK):
-    #     datadir_base = os.path.join("/tmp", ".keras")
     datadir = os.path.join(datadir_base, cache_subdir)
     _makedirs_exist_ok(datadir)
     fname = str(fname)

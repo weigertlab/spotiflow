@@ -27,7 +27,7 @@ def _cache_dir():
 def get_pretrained_model_path(name: str):
     """
     Downloads and extracts the pretrained model with the given name.
-    The model is downloaded to ~/.cache/spotiflow/ and extracted to ~/.cache/spotiflow/name.
+    The model is downloaded to ~/.spotiflow and extracted to ~/.spotiflow/name.
     """
     if name not in _REGISTERED:
         print(f"No pretrained model named {name} found.")
@@ -51,5 +51,9 @@ _REGISTERED = {
     "hybiss": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/O4hqFSSGX6veLwa/download",
         md5_hash="254afa97c137d0bd74fd9c1827f0e323",
+    ),
+    "general": RegisteredModel(
+        url="https://drive.switch.ch/index.php/s/6AoTEgpIAeQMRvX/download",
+        md5_hash="9dd31a36b737204e91b040515e3d899e"
     )
 }
