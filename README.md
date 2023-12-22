@@ -3,7 +3,7 @@
 
 # Spotiflow - accurate and efficient spot detection with stereographic flow
 
-*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images.
+*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images.
 
 ![Overview](artwork/overview.png)
 
@@ -36,9 +36,12 @@ pip install spotiflow
 ## Usage
 
 ### Training
-See `scripts/train.py` for an example of training script.
+See `scripts/train.py` or `notebooks/01_training.ipynb` for an example of training.
 
 ### Inference
+
+The API allows detecting spots in a new image in a few lines of code! Please check `notebooks/02_inference.ipynb` for a more in-depth explanation/
+
 ```python
 from spotiflow.model import Spotiflow
 from spotiflow.sample_data import test_image_hybiss_2d
@@ -49,20 +52,23 @@ img = test_image_hybiss_2d()
 img = tifffile.imread("myimage.tif")
 
 # Load a pretrained model
-model = Spotiflow.from_pretrained("hybiss", inference=True)
-# Or load a model from folder
+model = Spotiflow.from_pretrained("general", inference=True)
+# Or load your own trained model from folder
 model = Spotiflow.from_folder("./mymodel", inference=True)
 
 # Predict
-points, details = model.predict(img) # Pred contains the detected spots, the attribute 'heatmap' of `details` contains the predicted heatmap (access it by `details.heatmap`)
+points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contains the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`).
 ```
 
-## Napari plugin
-See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for the napari plugin.
+### Napari plugin
+Our napari plugin allows detecting spots directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
 
 
-## Tests
+## For developers
 
+We are open to contributions, and we indeed very much encourage them! Make sure that existing tests pass before submitting a PR, as well as adding new tests/updating the documentation accordingly for new features.
+
+### Testing
 First, clone the repository:
 ```console
 git clone git@github.com:weigertlab/spotiflow.git
@@ -81,7 +87,7 @@ then run the tests:
 pytest -v --color=yes --cov=spotiflow
 ```
 
-## Docs
+### Docs
 
 Install the `docs` extras:
 
@@ -103,11 +109,12 @@ sphinx-build -M html source build
 - [x] Make prediction workable on images whose size is non-divisible by powers of 2
 - [x] First docs prototype
 - [x] Tests
-- [x] Adjust `SpotiflowModelConfig` default config (e.g. compute flow=True, batch_norm=True)
+- [x] Adjust `SpotiflowModelConfig` default config (e.g. compute_flow=True, batch_norm=True)
 - [ ] Register all models
 - [ ] Register all datasets?
-- [ ] Add example notebooks (train, inference)
-- [ ] Improve docs (order, etc.)
+- [ ] Add example train notebook
+- [x] Add example inference notebook
+- [x] Improve docs (order, etc.)
 
 ## How to cite
 If you use this code in your research, please cite [the Spotiflow paper](https://random.dog/):
