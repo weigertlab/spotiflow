@@ -1,7 +1,9 @@
 from pathlib import Path
-from ..utils.get_file import get_file
 from ..utils import get_data
 from dataclasses import dataclass
+
+from ..utils import get_data, NotRegisteredError
+from ..utils.get_file import get_file
 
 
 @dataclass
@@ -31,21 +33,19 @@ def get_training_datasets_path(name: str):
     The dataset is downloaded to ~/.spotiflow/datasets and extracted to ~/.spotiflow/datasets/name.
     """
     if name not in _REGISTERED:
-        print(f"No training dataset named {name} found.")
-        print(f"Available datasets: {','.join(sorted(list_registered()))}")
-    else:
-        dataset = _REGISTERED[name]
-        path = Path(
-            get_file(
-                fname=f"{name}.zip",
-                origin=dataset.url,
-                file_hash=dataset.md5_hash,
-                cache_dir=_cache_dir(),
-                cache_subdir="",
-                extract=True,
-            )
+        raise NotRegisteredError(f"No training dataset named {name} found. Available datasets: {','.join(sorted(list_registered()))}")
+    dataset = _REGISTERED[name]
+    path = Path(
+        get_file(
+            fname=f"{name}.zip",
+            origin=dataset.url,
+            file_hash=dataset.md5_hash,
+            cache_dir=_cache_dir(),
+            cache_subdir="",
+            extract=True,
         )
-        return path.parent / name
+    )
+    return path.parent / name
 
 def load_dataset(name: str, include_test: bool=False):
     """

@@ -1,0 +1,1 @@
+from .spotiflow_wrapper import SpotiflowDetector
