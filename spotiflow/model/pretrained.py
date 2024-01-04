@@ -1,5 +1,5 @@
 from pathlib import Path
-from .get_file import get_file
+from ..utils.get_file import get_file
 from dataclasses import dataclass
 
 

@@ -263,7 +263,7 @@ def write_coords_csv(pts: np.ndarray, fname: Path) -> None:
 def remove_device_id_from_device_str(device_str):
     return device_str.split(":")[0].strip()
 
-def get_data(path: Union[Path, str], normalize: bool=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def get_data(path: Union[Path, str], normalize: bool=True, include_test: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get data from a given path. The path should contain a 'train' and 'val' folder.
 
     Args:
@@ -282,22 +282,39 @@ def get_data(path: Union[Path, str], normalize: bool=True) -> Tuple[np.ndarray, 
 
     train_path = path/"train"
     val_path = path/"val"
+    test_path = path/"test"
     assert (train_path).exists(), f"Given data path {path} does not contain a 'train' folder!"
     assert (val_path).exists(), f"Given data path {path} does not contain a 'val' folder!"
+    if include_test:
+        assert (test_path).exists(), f"Given data path {path} does not contain a 'test' folder!"
 
+    test_ds = None
     if normalize:
         tr_ds = SpotsDataset.from_folder(train_path)
         val_ds = SpotsDataset.from_folder(val_path)
+        if include_test:
+            test_ds = SpotsDataset.from_folder(test_path)
     else:
         tr_ds = SpotsDataset.from_folder(train_path, normalizer=None)
         val_ds = SpotsDataset.from_folder(val_path, normalizer=None)
+        
+        if include_test:
+            test_ds = SpotsDataset.from_folder(test_path, normalizer=None)
     
     tr_imgs = tr_ds.images
     val_imgs = val_ds.images
+    if include_test:
+        test_imgs = test_ds.images
 
     tr_pts = tr_ds.centers
     val_pts = val_ds.centers
+    if include_test:
+        test_pts = test_ds.centers
 
     del tr_ds, val_ds
+
+    if include_test:
+        del test_ds
+        return tr_imgs, tr_pts, val_imgs, val_pts, test_imgs, test_pts
 
     return tr_imgs, tr_pts, val_imgs, val_pts
