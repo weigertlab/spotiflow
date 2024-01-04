@@ -21,7 +21,7 @@ def list_registered():
 
 
 def _cache_dir():
-    return Path("~").expanduser() / ".spotiflow"
+    return Path("~").expanduser() / ".spotiflow" / "models"
 
 
 def get_pretrained_model_path(name: str):
@@ -55,5 +55,9 @@ _REGISTERED = {
     "general": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/6AoTEgpIAeQMRvX/download",
         md5_hash="9dd31a36b737204e91b040515e3d899e"
-    )
+    ),
+    "synth_complex": RegisteredModel(
+        url="https://drive.switch.ch/index.php/s/CiCjNJaJzpVVD2M/download",
+        md5_hash="d692fa21da47e4a50b4c52f49442508b"
+    ),
 }
