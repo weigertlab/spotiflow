@@ -36,11 +36,11 @@ pip install spotiflow
 ## Usage
 
 ### Training
-See `scripts/train.py` or `notebooks/01_training.ipynb` for an example of training.
+See the [example training notebook](scripts/train.py) or the [example notebook](examples/01_training.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
 
 ### Inference
 
-The API allows detecting spots in a new image in a few lines of code! Please check `notebooks/02_inference.ipynb` for a more in-depth explanation/
+The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/02_inference.ipynb) for a more in-depth explanation/
 
 ```python
 from spotiflow.model import Spotiflow
