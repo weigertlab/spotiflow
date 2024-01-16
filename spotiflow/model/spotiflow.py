@@ -36,46 +36,10 @@ from .config import SpotiflowModelConfig, SpotiflowTrainingConfig
 from .post import FeaturePyramidNetwork, MultiHeadProcessor
 from .pretrained import get_pretrained_model_path
 from .trainer import SpotiflowModelCheckpoint, SpotiflowTrainingWrapper
+from ..utils import subpixel_offset
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-
-
-def _subpixel_offset(
-    pts: np.ndarray, subpix: np.ndarray, prob: np.ndarray, radius: int
-):
-    """compute offset for subpixel localization at given locations by aggregating within a radius the
-    2d offset field `subpix` around each point in `pts` weighted by the probability `prob`
-    """
-    assert (
-        pts.ndim == 2
-        and pts.shape[1] == 2
-        and subpix.ndim == 3
-        and subpix.shape[2] == 2
-        and prob.ndim == 2
-    )
-    subpix = np.clip(subpix, -1, 1)
-    n, _ = pts.shape
-    _weight = np.zeros((n, 1), np.float32)
-    _add = np.zeros((n, 2), np.float32)
-    for i, j in product(range(-radius, radius + 1), repeat=2):
-        dp = np.array([[i, j]])
-        p = pts + dp
-        # filter points outside of the image (boundary)
-        p, mask = filter_shape(p, prob.shape, return_mask=True)
-        _p = tuple(p.astype(int).T)
-
-        _w = np.zeros((n, 1), np.float32)
-        _w[mask] = prob[_p][:, None]
-
-        _correct = np.zeros((n, 2), np.float32)
-        _correct[mask] = subpix[_p] + dp
-
-        _weight += _w
-        _add += _w * _correct
-
-    _add /= _weight
-    return _add
 
 
 class Spotiflow(nn.Module):
@@ -824,7 +788,7 @@ class Spotiflow(nn.Module):
             log.info(f"Found {len(pts)} spots")
 
         if subpix and subpix_radius >= 0:
-            _offset = _subpixel_offset(pts, _subpix, y, radius=subpix_radius)
+            _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
             pts = pts.clip(
                 0, np.array(img.shape[:2]) - 1

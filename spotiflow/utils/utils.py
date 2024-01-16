@@ -1,6 +1,7 @@
 import logging
 import os
 import warnings
+from itertools import product
 from pathlib import Path
 from typing import Sequence, Tuple, Union
 
@@ -318,3 +319,39 @@ def get_data(path: Union[Path, str], normalize: bool=True, include_test: bool=Fa
         return tr_imgs, tr_pts, val_imgs, val_pts, test_imgs, test_pts
 
     return tr_imgs, tr_pts, val_imgs, val_pts
+
+def subpixel_offset(
+    pts: np.ndarray, subpix: np.ndarray, prob: np.ndarray, radius: int
+):
+    """compute offset for subpixel localization at given locations by aggregating within a radius the
+    2d offset field `subpix` around each point in `pts` weighted by the probability `prob`
+    """
+    assert (
+        pts.ndim == 2
+        and pts.shape[1] == 2
+        and subpix.ndim == 3
+        and subpix.shape[2] == 2
+        and prob.ndim == 2
+    )
+    subpix = np.clip(subpix, -1, 1)
+    n, _ = pts.shape
+    _weight = np.zeros((n, 1), np.float32)
+    _add = np.zeros((n, 2), np.float32)
+    for i, j in product(range(-radius, radius + 1), repeat=2):
+        dp = np.array([[i, j]])
+        p = pts + dp
+        # filter points outside of the image (boundary)
+        p, mask = filter_shape(p, prob.shape, return_mask=True)
+        _p = tuple(p.astype(int).T)
+
+        _w = np.zeros((n, 1), np.float32)
+        _w[mask] = prob[_p][:, None]
+
+        _correct = np.zeros((n, 2), np.float32)
+        _correct[mask] = subpix[_p] + dp
+
+        _weight += _w
+        _add += _w * _correct
+
+    _add /= _weight
+    return _add
