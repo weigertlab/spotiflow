@@ -112,7 +112,7 @@ sphinx-build -M html source build
 - [x] Adjust `SpotiflowModelConfig` default config (e.g. compute_flow=True, batch_norm=True)
 - [ ] Register all models
 - [ ] Register all datasets?
-- [ ] Add example train notebook
+- [x] Add example train notebook
 - [x] Add example inference notebook
 - [x] Improve docs (order, etc.)
 
