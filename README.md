@@ -40,7 +40,7 @@ See the [example training notebook](scripts/train.py) or the [example notebook](
 
 ### Inference
 
-The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/02_inference.ipynb) for a more in-depth explanation/
+The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/02_inference.ipynb) and the documentation for a more in-depth explanation.
 
 ```python
 from spotiflow.model import Spotiflow
@@ -49,12 +49,12 @@ from spotiflow.sample_data import test_image_hybiss_2d
 # Load sample image
 img = test_image_hybiss_2d()
 # Or any other image
-img = tifffile.imread("myimage.tif")
+# img = tifffile.imread("myimage.tif")
 
 # Load a pretrained model
 model = Spotiflow.from_pretrained("general", inference=True)
 # Or load your own trained model from folder
-model = Spotiflow.from_folder("./mymodel", inference=True)
+# model = Spotiflow.from_folder("./mymodel", inference=True)
 
 # Predict
 points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contains the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`).
@@ -100,21 +100,6 @@ and then `cd` into the `docs` folder of the cloned repository and build them:
 cd spotiflow/docs
 sphinx-build -M html source build
 ```
-
-## TODO
-
-- [x] Refactor datasets
-- [x] Refactor `spotiflow/model` (model loading/saving, config classes, see if trainer/evaler can be done in a separate file, etc.)
-- [x] Add fast peak detection mode
-- [x] Make prediction workable on images whose size is non-divisible by powers of 2
-- [x] First docs prototype
-- [x] Tests
-- [x] Adjust `SpotiflowModelConfig` default config (e.g. compute_flow=True, batch_norm=True)
-- [ ] Register all models
-- [ ] Register all datasets?
-- [x] Add example train notebook
-- [x] Add example inference notebook
-- [x] Improve docs (order, etc.)
 
 ## How to cite
 If you use this code in your research, please cite [the Spotiflow paper](https://random.dog/):
