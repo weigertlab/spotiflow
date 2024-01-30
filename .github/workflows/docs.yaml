@@ -16,12 +16,12 @@ jobs:
           pip install sphinx sphinx-immaterial
       - name: Sphinx build
         run: |
-          sphinx-build doc _build
+          sphinx-build docs/source docs/build
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
           publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _build/
+          publish_dir: docs/build/
           force_orphan: true
