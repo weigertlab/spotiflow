@@ -36,7 +36,7 @@ pip install spotiflow
 ## Usage
 
 ### Training
-See the [example training notebook](scripts/train.py) or the [example notebook](examples/01_training.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
+See the [example training script](scripts/train.py) or the [example notebook](examples/01_train.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
 
 ### Inference
 
