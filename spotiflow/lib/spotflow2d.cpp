@@ -217,7 +217,7 @@ static PyObject *c_spotflow2d(PyObject *self, PyObject *args)
 
             // get the closest point
             const float query_pt[2] = {(float)j, (float)i};
-            unsigned long ret_index;
+            size_t ret_index;
             float out_dist_sqr;
 
             index.knnSearch(
