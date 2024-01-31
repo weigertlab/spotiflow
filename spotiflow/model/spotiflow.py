@@ -731,6 +731,7 @@ class Spotiflow(nn.Module):
                         if prob_thresh is None
                         else prob_thresh,
                         exclude_border=exclude_border,
+                        mode=peak_mode,
                         min_distance=min_distance,
                     )
                     # remove global offset
