@@ -4,7 +4,7 @@
 Spotiflow
 =========
 
-Spotiflow is a learning-based spot detection method for fluorescence microscopy images. For more information, please refer to our `paper <https://random.dog/>`__.
+Spotiflow is a learning-based spot detection method for fluorescence microscopy images. For more information, please refer to our `paper <https://PLACEHOLDER/>`__.
 
 Getting Started
 ---------------

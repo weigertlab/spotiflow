@@ -27,11 +27,15 @@ For linux with a CUDA device (one might need to change the cuda version accordin
 conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
 ```
 
+**Note (only for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
+
+
 Finally, install `spotiflow`:
 
 ```console
 pip install spotiflow
 ```
+
 
 ## Usage
 
@@ -102,10 +106,10 @@ sphinx-build -M html source build
 ```
 
 ## How to cite
-If you use this code in your research, please cite [the Spotiflow paper](https://random.dog/):
+If you use this code in your research, please cite [the Spotiflow paper](FIXME) (currently preprint):
 
 ```bibtex
-@inproceedings{XYZ,
+@inproceedings{dominguezmantes2024,
   author    = {},
   title     = {},
   ...
