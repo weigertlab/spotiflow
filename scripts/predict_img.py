@@ -23,7 +23,11 @@ model = Spotiflow.from_pretrained(
 ).to(torch.device(device))
 
 assert Path(args.img_dir).exists(), "Image does not exist!"
-model = torch.compile(model)
+try:
+    model = torch.compile(model)
+except RuntimeError:
+    print("Could not compile model. Proceeding without torch compilation.")
+
 img = tifffile.imread(args.img_dir)
 
 

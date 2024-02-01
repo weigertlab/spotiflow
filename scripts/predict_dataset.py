@@ -29,7 +29,11 @@ model = Spotiflow.from_pretrained(
     map_location=device,
 ).to(torch.device(device))
 
-model = torch.compile(model)
+try:
+    model = torch.compile(model)
+except RuntimeError:
+    print("Could not compile model. Proceeding without torch compilation.")
+
 
 if args.opt_split is not None:
     print(f"Optimizing and updating threshold on {args.opt_split}...")

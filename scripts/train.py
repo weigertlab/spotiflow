@@ -364,7 +364,11 @@ if __name__ == "__main__":
         # Create model
         model = Spotiflow(model_config)
 
-    model = torch.compile(model)
+    try:
+        model = torch.compile(model)
+    except RuntimeError:
+        print("Could not compile model. Proceeding without torch compilation.")
+
 
     callbacks = [
         pl.callbacks.LearningRateMonitor(logging_interval="epoch"),
@@ -473,8 +477,11 @@ if __name__ == "__main__":
             map_location=accelerator,
             which="best",
         ).to(device)
+        try:
+            model = torch.compile(model)
+        except RuntimeError:
+            print("Could not compile model. Proceeding without torch compilation.")
 
-        model = torch.compile(model)
 
         # Load the test data
         test_ds = SpotsDataset.from_folder(

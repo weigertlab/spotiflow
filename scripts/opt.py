@@ -26,8 +26,10 @@ model = Spotiflow.from_pretrained(
     pretrained_path=args.model_dir,
     inference_mode=True,
 ).to(torch.device(device))
-
-model = torch.compile(model)
+try:
+    model = torch.compile(model)
+except RuntimeError:
+    print("Could not compile model. Proceeding without torch compilation.")
 
 
 print("Loading data...")

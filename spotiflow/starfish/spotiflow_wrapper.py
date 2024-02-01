@@ -82,7 +82,10 @@ class SpotiflowDetector(FindSpotsAlgorithm):
         # Spotipy args
         self.model = model
         if isinstance(self.model, Spotiflow):
-            self.model = torch.compile(self.model)
+            try:
+                self.model = torch.compile(self.model)
+            except RuntimeError as e:
+                log.warn("Could not compile the model. Will proceed without torch compilation.")
         self.n_tiles = n_tiles
         self.min_distance = min_distance
         self.probability_threshold = prob_threshold
@@ -99,14 +102,17 @@ class SpotiflowDetector(FindSpotsAlgorithm):
         if isinstance(self.model, str):
             try:
                 self.model = Spotiflow.from_pretrained(self.model)
-                self.model = torch.compile(self.model)
             except NotRegisteredError:
                 self.model = Spotiflow.from_folder(self.model)
-                self.model = torch.compile(self.model)
         elif isinstance(self.model, Path):
             self.model = Spotiflow.from_folder(self.model)
+        
+        try:
             self.model = torch.compile(self.model)
-        elif isinstance(self.model, Spotiflow):
+        except RuntimeError as e:
+            log.warn("Could not compile the model. Will proceed without torch compilation.")
+        
+        if isinstance(self.model, Spotiflow):
             return self.model
         else:
             raise ValueError(f"model argument for initializing must be a path to a model, a Spotiflow object, or a registered model name")
