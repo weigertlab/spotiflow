@@ -23,10 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # os: [ubuntu-20.04, windows-2019, macos-11]
-        # py: [cp39, cp310, cp311]
-        os: [macos-11]
-        py: [cp39]
+        os: [ubuntu-20.04, windows-2019, macos-11]
+        py: [cp39, cp310, cp311]
 
     steps:
       - uses: actions/checkout@v3
