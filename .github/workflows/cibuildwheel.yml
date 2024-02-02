@@ -4,7 +4,7 @@
 # - https://github.com/pypa/cibuildwheel/blob/main/examples/github-deploy.yml
 # - https://github.com/stardist/stardist/blob/master/.github/workflows/cibuildwheel.yml
 
-name: Build, test and upload to PyPI
+name: tests
 
 on:
   push:

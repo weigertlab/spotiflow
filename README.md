@@ -1,6 +1,13 @@
 ![Logo](artwork/spotiflow_logo.png)
 ---
 
+[![License: BSD-3](https://img.shields.io/badge/License-BSD3-blue.svg)](https://www.gnu.org/licenses/bsd3)
+[![PyPI](https://img.shields.io/pypi/v/spotiflow.svg?color=green)](https://pypi.org/project/spotiflow)
+[![Python Version](https://img.shields.io/pypi/pyversions/spotiflow.svg?color=green)](https://python.org)
+[![tests](https://github.com/weigertlab/spotiflow/workflows/tests/badge.svg)](https://github.com/weigertlab/spotiflow/actions)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/spotiflow)](https://pypistats.org/packages/spotiflow)
+
+
 # Spotiflow - accurate and efficient spot detection with stereographic flow
 
 *Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images.
