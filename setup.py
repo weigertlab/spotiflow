@@ -1,3 +1,4 @@
+"""Adapted from https://github.com/stardist/stardist/blob/master/setup.py"""
 from __future__ import absolute_import, print_function
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
