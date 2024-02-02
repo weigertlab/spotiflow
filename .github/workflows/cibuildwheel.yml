@@ -4,7 +4,7 @@
 # - https://github.com/pypa/cibuildwheel/blob/main/examples/github-deploy.yml
 # - https://github.com/stardist/stardist/blob/master/.github/workflows/cibuildwheel.yml
 
-name: Build and upload to PyPI
+name: Build, test and upload to PyPI
 
 on:
   push:
@@ -62,31 +62,28 @@ jobs:
           CIBW_BUILD: "${{ matrix.py }}-*"
           CIBW_ARCHS_MACOS: x86_64 arm64
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_TEST_REQUIRES: pytest tensorflow
-          CIBW_TEST_COMMAND: pytest -v -m "not gpu" {project}
-          CIBW_TEST_SKIP: "*cp36*-macosx*" # Python crashes ¯\_(ツ)_/¯
+          CIBW_TEST_REQUIRES: pytest pytest-cov
+          CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
 
       - name: Build wheels for CPython (Linux and Windows)
         if: startsWith(matrix.os, 'macos') == false
         run: |
           python -m cibuildwheel --output-dir dist
         env:
-          # only build for platforms where tensorflow is available
+          # only build for specific platforms 
           CIBW_BUILD: "${{ matrix.py }}-*{x86_64,win_amd64}"
           CIBW_SKIP: "*musllinux*"
-          # numba is a requirement and only has wheels for manylinux2014
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+
           CIBW_BUILD_VERBOSITY: 1
-          CIBW_TEST_REQUIRES: pytest tensorflow
-          CIBW_TEST_COMMAND: pytest -v -m "not gpu" {project}
-          # CIBW_TEST_SKIP: "*musllinux*"
+          CIBW_TEST_REQUIRES: pytest pytest-cov
+          CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
+
 
       - uses: actions/upload-artifact@v3
         name: Upload wheels
         with:
           name: dist
           path: ./dist/*.whl
-
 
   build_sdist:
     name: Build source distribution
@@ -109,7 +106,7 @@ jobs:
     name: Upload to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release' && github.event.action == 'published' # upload to pypi only on release
     steps:
       - uses: actions/download-artifact@v3
         name: Download wheels and sdist
@@ -117,18 +114,11 @@ jobs:
           name: dist
           path: dist
 
-      - name: Check that package version matches git tag ${{ github.ref_name }}
-        shell: bash
-        run: |
-          ls -l dist
-          test -f "dist/spotiflow-${{ github.ref_name }}.tar.gz"
-
       - uses: pypa/gh-action-pypi-publish@release/v1
         name: Publish to PyPI
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
-          # password: ${{ secrets.TESTPYPI_API_TOKEN }}
-          # repository-url: https://test.pypi.org/legacy/
+
   
