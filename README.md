@@ -8,7 +8,7 @@
 ![Overview](artwork/overview.png)
 
 ## Installation
-Create and activate a fresh conda environment:
+Create and activate a fresh conda environment (we currently support Python 3.9 to 3.11):
 
 ```console
 conda create -n spotiflow python=3.9
@@ -22,9 +22,9 @@ For MacOS:
 conda install pytorch::pytorch torchvision -c pytorch # for MacOS
 ```
 
-For linux with a CUDA device (one might need to change the cuda version accordingly):
+For Linux/Windows with a CUDA device (one might need to change the cuda version accordingly):
 ```console
-conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # For linux with a CUDA device, might need to change the cuda version accordingly
+conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # Might need to change the cuda version accordingly
 ```
 
 **Note (only for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
@@ -73,6 +73,7 @@ Our napari plugin allows detecting spots directly with an easy-to-use UI. See [n
 We are open to contributions, and we indeed very much encourage them! Make sure that existing tests pass before submitting a PR, as well as adding new tests/updating the documentation accordingly for new features.
 
 ### Testing
+
 First, clone the repository:
 ```console
 git clone git@github.com:weigertlab/spotiflow.git
