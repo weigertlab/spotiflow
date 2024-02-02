@@ -1,5 +1,3 @@
-"""Torch implementation, adapted from https://github.com/maweigert/spotipy/blob/99dcbc95fd39492f71355230912fc45d427ef2e4/spotipy/model.py#L330
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +5,7 @@ import torch.nn.functional as F
 class BackgroundRemover(nn.Module):
     """Remove background of an input image I_in by substracting a low-pass filtered
     of the image (I_low) from it. That is, I_out = I_in-I_low. The convolving filter is
-    a large radius Gaussian kernel.
+    a large radius Gaussian kernel. Note that this is disabled by default.
 
 
     Args:
