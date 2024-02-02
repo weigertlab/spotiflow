@@ -144,3 +144,6 @@ stat/
 
 # DS_Store
 **/.DS_Store
+
+# Version file
+spotiflow/_version.py
