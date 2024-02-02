@@ -352,3 +352,31 @@ def subpixel_offset(
 
     _add /= _weight
     return _add
+
+def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
+    """Reads a spots dataset from a .npz file formatted as in deepBlink (Eichenberger et al. 2021))
+
+    Args:
+        fname (Union[Path, str]): Path to the .npz file
+
+    Returns:
+        Tuple[np.ndarray, ...]: A 6-length tuple corresponding to training images, training spots, validation images,
+                                validation spots, test images and test spots. Images are NumPy arrays of shape (N_i, H, W),
+                                while spots is an N_i-element list of 2D arrays of shape (N_p, 2) 
+    """
+    if isinstance(fname, str):
+        fname = Path(fname)
+    assert fname.suffix == ".npz", f"Given file {fname} is not a .npz file!"
+
+    expected_keys = ['x_train', 'y_train', 'x_valid', 'y_valid', 'x_test', 'y_test']
+    data = np.load(fname, allow_pickle=True)
+    assert set(expected_keys).issubset(data.files), f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
+    ret_data = [None]*len(expected_keys)
+    for i, key in enumerate(expected_keys):
+        if key.startswith("x"):
+            ret_data[i] = np.asarray(data[key])
+        elif key.startswith("y"):
+            ret_data[i] = list(data[key])
+        else:
+            raise ValueError(f"Unexpected key {key} in .npz file {fname}")
+    return ret_data
