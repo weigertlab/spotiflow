@@ -91,4 +91,5 @@ setup(
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
     ],
+    include_package_data=True,
 )
