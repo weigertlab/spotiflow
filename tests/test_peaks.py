@@ -18,3 +18,4 @@ if __name__ == "__main__":
     # p = p0 + v[tuple(p0)]
 
     # print("error (L1):", np.abs(points[0] - p).sum())
+

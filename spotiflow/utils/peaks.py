@@ -1,5 +1,6 @@
 from numbers import Number
 from typing import Union
+
 import numpy as np
 import numpy as np
 from skimage.feature import corner_peaks, corner_subpix
@@ -114,6 +115,7 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[
     if not len(points) == len(val) or not len(points) == len(sigma):
         raise ValueError("points, sigmas, and probs must have the same length")
             
+
     if len(points) == 0:
         return x
 
@@ -123,7 +125,7 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[
             val.astype(np.float32, copy=False),
             sigma.astype(np.float32, copy=False),
             np.int32(shape[0]),
-            np.int32(shape[1])
+            np.int32(shape[1]),
         )
     else:
         raise ValueError(mode)
