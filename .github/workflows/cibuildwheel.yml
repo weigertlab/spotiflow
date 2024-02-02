@@ -23,8 +23,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
-        py: [cp39, cp310, cp311]
+        # os: [ubuntu-20.04, windows-2019, macos-11]
+        # py: [cp39, cp310, cp311]
+        os: [macos-11]
+        py: [cp39]
 
     steps:
       - uses: actions/checkout@v3
@@ -60,7 +62,7 @@ jobs:
           python -m cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: "${{ matrix.py }}-*"
-          CIBW_ARCHS_MACOS: x86_64 arm64
+          CIBW_ARCHS_MACOS: arm64
           CIBW_BUILD_VERBOSITY: 1
           CIBW_TEST_REQUIRES: pytest pytest-cov
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
