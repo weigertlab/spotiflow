@@ -1,0 +1,3 @@
+include spotiflow/lib/*cpp
+include spotiflow/lib/external/nanoflann/*
+include spotiflow/sample_data/images/*
