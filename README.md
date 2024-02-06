@@ -116,12 +116,18 @@ sphinx-build -M html source build
 ```
 
 ## How to cite
-If you use this code in your research, please cite [the Spotiflow paper](FIXME) (currently preprint):
+If you use this code in your research, please cite [the Spotiflow paper](https://doi.org/10.1101/2024.02.01.578426) (currently preprint):
 
 ```bibtex
-@inproceedings{dominguezmantes2024,
-  author    = {},
-  title     = {},
-  ...
+@article {Dominguez Mantes2024.02.01.578426,
+	author = {Albert Dominguez Mantes and Antonio Herrera and Irina Khven and Anjalie Schlaeppi and Eftychia Kyriacou and Georgios Tsissios and Can Aztekin and Joachim Ligner and Gioele La Manno and Martin Weigert},
+	title = {Spotiflow: accurate and efficient spot detection for imaging-based spatial transcriptomics with stereographic flow regression},
+	elocation-id = {2024.02.01.578426},
+	year = {2024},
+	doi = {10.1101/2024.02.01.578426},
+	publisher = {Cold Spring Harbor Laboratory},
+  URL = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426},
+	eprint = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426.full.pdf},
+	journal = {bioRxiv}
 }
 ```
