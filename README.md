@@ -65,9 +65,9 @@ img = test_image_hybiss_2d()
 # img = tifffile.imread("myimage.tif")
 
 # Load a pretrained model
-model = Spotiflow.from_pretrained("general", inference=True)
+model = Spotiflow.from_pretrained("general")
 # Or load your own trained model from folder
-# model = Spotiflow.from_folder("./mymodel", inference=True)
+# model = Spotiflow.from_folder("./mymodel")
 
 # Predict
 points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contains the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`).
