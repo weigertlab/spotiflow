@@ -175,7 +175,7 @@ class Spotiflow(nn.Module):
         Returns:
             Self: loaded model
         """
-        print(f"Loading pretrained model {pretrained_name}")
+        log.info(f"Loading pretrained model {pretrained_name}")
         pretrained_path = get_pretrained_model_path(pretrained_name)
         if pretrained_path is not None:
             return cls.from_folder(
@@ -604,9 +604,9 @@ class Spotiflow(nn.Module):
             if device is not None:
                 self.to(device)
 
-        log.info(f"Will use device: {str(device)}")
 
         if verbose:
+            log.info(f"Will use device: {str(device)}")
             log.info(
                 f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}"
             )
@@ -618,7 +618,7 @@ class Spotiflow(nn.Module):
         if scale is None or scale == 1:
             x = img
         else:
-            if subpix:
+            if subpix_radius >= 0:
                 raise NotImplementedError(
                     "Subpixel prediction is not supported yet when scale != 1."
                 )
@@ -663,7 +663,7 @@ class Spotiflow(nn.Module):
                     .cpu()
                     .numpy()
                 )
-                if subpix:
+                if subpix_radius >= 0:
                     flow = (
                         F.normalize(out["flow"], dim=1)[0]
                         .permute(1, 2, 0)
@@ -674,7 +674,7 @@ class Spotiflow(nn.Module):
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
-            if subpix:
+            if subpix_radius >= 0:
                 _subpix = flow_to_vector(
                     flow,
                     sigma=self.config.sigma,
@@ -695,7 +695,7 @@ class Spotiflow(nn.Module):
 
         else:  # Predict with tiling
             y = np.empty(x.shape[:2], np.float32)
-            if subpix:
+            if subpix_radius >= 0:
                 _subpix = np.empty(x.shape[:2] + (2,), np.float32)
             flow = np.empty(x.shape[:2] + (3,), np.float32)  # ! Check dimensions
             points = []
@@ -749,7 +749,7 @@ class Spotiflow(nn.Module):
                     y[s_dst[:2]] = y_tile_sub
 
                     # Flow
-                    if subpix:
+                    if subpix_radius >= 0:
                         flow_tile = (
                             F.normalize(out["flow"], dim=1)[0]
                             .permute(1, 2, 0)
@@ -769,7 +769,7 @@ class Spotiflow(nn.Module):
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
             y = center_crop(y, img.shape[:2])
-            if subpix:
+            if subpix_radius >= 0:
                 flow = center_crop(flow, img.shape[:2])
                 _subpix = center_crop(_subpix, img.shape[:2])
 
@@ -788,7 +788,7 @@ class Spotiflow(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        if subpix and subpix_radius >= 0:
+        if subpix_radius >= 0:
             _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
             pts = pts.clip(
@@ -810,8 +810,8 @@ class Spotiflow(nn.Module):
         prob_thresh: Optional[float] = None,
         return_heatmaps: bool = False,
         device: Optional[
-            Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
-        ] = None,
+            Union[torch.device, Literal["auto", "cpu", "cuda", "mps"], None]
+        ] = "auto",
     ) -> Sequence[Tuple[np.ndarray, SimpleNamespace]]:
         """Predict spots from a SpotsDataset object.
 
@@ -822,7 +822,7 @@ class Spotiflow(nn.Module):
             batch_size (int, optional): Batch size to use for prediction. Defaults to 4.
             prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
             return_heatmaps (bool, optional): Whether to return the heatmaps. Defaults to False.
-            device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
+            device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to "auto".
 
         Returns:
             Sequence[Tuple[np.ndarray, SimpleNamespace]]: Sequence of (points, details) tuples. Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
