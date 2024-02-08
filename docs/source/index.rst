@@ -83,6 +83,7 @@ Contents
    :maxdepth: 2
 
    napari
+   cli
    train
    finetune
    api
