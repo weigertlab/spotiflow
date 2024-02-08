@@ -53,7 +53,7 @@ See the [example training script](scripts/train.py) or the [example notebook](ex
 
 ### Inference
 
-The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/02_inference.ipynb) and the documentation for a more in-depth explanation.
+The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/2_inference.ipynb) and the documentation for a more in-depth explanation.
 
 ```python
 from spotiflow.model import Spotiflow
