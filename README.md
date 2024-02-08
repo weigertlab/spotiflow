@@ -24,19 +24,14 @@ conda create -n spotiflow python=3.9
 conda activate spotiflow
 ```
 
-Then install PyTorch using conda/mamba (refer to [the official installation instructions](https://pytorch.org/get-started/locally/) for more info depending on your system):
-
-For MacOS:
-```console
-conda install pytorch::pytorch torchvision -c pytorch # for MacOS
-```
-
-For Linux/Windows with a CUDA device (one might need to change the cuda version accordingly):
+For Linux/Windows with a CUDA device, install PyTorch using conda/mamba (one might need to change the cuda version accordingly):
 ```console
 conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # Might need to change the cuda version accordingly
 ```
 
-**Note (only for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
+**Note (for MacOS users):** if using MacOS, there is a known bug causing the installation of PyTorch with `conda` to sometimes break OpenMP. You can avoid installing PyTorch and let spotiflow install it automatically via `pip`.
+
+**Note (for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
 
 
 Finally, install `spotiflow`:
@@ -51,7 +46,17 @@ pip install spotiflow
 ### Training
 See the [example training script](scripts/train.py) or the [example notebook](examples/1_train.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
 
-### Inference
+### Inference (CLI)
+
+You can use the CLI to run inference on an image or folder containing several images. To do that, you can use the following command:
+
+```console
+spotiflow-predict PATH
+```
+
+where PATH can be either an image or a folder. By default, the command will use the `general` pretrained model. You can specify a different model by using the `--pretrained-model` flag. Moreover, spots are saved to a subfolder `spotiflow_results` created inside the input folder (this can be changed with the `--out-dir` flag). For more information, please refer to the help message of the CLI (`$ spotiflow-predict -h`).
+
+### Inference (API)
 
 The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/2_inference.ipynb) and the documentation for a more in-depth explanation.
 
