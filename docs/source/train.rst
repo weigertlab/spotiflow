@@ -68,7 +68,7 @@ You can then load it by simply calling:
 Customizing the training
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that through the `` For more information on the arguments, see the documentation of :py:func:`spotiflow.model.spotiflow.Spotiflow.fit` method as well as :py:mod:`spotiflow.model.config.SpotiflowTrainingConfig`. As an example, let's change the number of epochs and the learning rate:
+You can also pass other parameters relevant for training to the `fit` method. For example, you can change the number of epochs, the batch size, the learning rate, etc. You can do that using the `train_config` parameter. For more information on the arguments allowed, see the documentation of :py:func:`spotiflow.model.spotiflow.Spotiflow.fit` method as well as :py:mod:`spotiflow.model.config.SpotiflowTrainingConfig`. As an example, let's change the number of epochs and the learning rate:
 
 .. code-block:: python
     
