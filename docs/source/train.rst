@@ -15,7 +15,7 @@ First of all, make sure that the data is organized in the following format:
     |   ...
     │   ├── img_XYZ.csv
     |   └── img_XYZ.tif
-    └── validation          
+    └── val          
         ├── val_img_001.csv
         ├── val_img_001.tif
         ...
