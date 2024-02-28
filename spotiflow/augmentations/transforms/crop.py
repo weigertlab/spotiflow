@@ -27,7 +27,7 @@ class Crop(BaseAugmentation):
         return self._size
     
     @property
-    def point_priority(self) -> Tuple[int, int]:
+    def point_priority(self) -> float:
         return self._point_priority
 
     def apply(self, img: torch.Tensor, pts: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

@@ -338,12 +338,13 @@ class Spotiflow(nn.Module):
 
         crop_size = tuple(2 * [min(train_config.crop_size, min_crop_size)])
 
+        point_priority = 0.8 if train_config.smart_crop else 0.0
         # Build augmenters
         if augment_train:
-            tr_augmenter = self.build_image_augmenter(crop_size)
+            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
         else:
-            tr_augmenter = self.build_image_cropper(crop_size)
-        val_augmenter = self.build_image_cropper(crop_size)
+            tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+        val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
 
         # Generate datasets
         train_ds = SpotsDataset(
@@ -417,25 +418,30 @@ class Spotiflow(nn.Module):
             ), f"Points must be 2D (Y,X) for {split} set"
         return
 
-    def build_image_cropper(self, crop_size: Tuple[int, int]):
+    def build_image_cropper(self, crop_size: Tuple[int, int], point_priority: float = 0.):
         """Build default cropper for a dataset.
 
         Args:
-            crop_size (Tuple[int, int]): tuple of (height, width) to randomly crop the images to
+            crop_size (Tuple[int, int]): tuple of (height, width) to randomly crop the images to.
+            point_priority (float, optional): priority to sample regions containing spots when cropping. If 0, no priority is given (so all crops will be random). If 1, all crops will containg at least one spot. Defaults to 0.
         """
         cropper = AugmentationPipeline()
-        cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=0))
+        cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=point_priority))
         return cropper
 
     def build_image_augmenter(
         self,
         crop_size: Optional[Tuple[int, int]] = None,
+        point_priority: float = 0.,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
-        crop_size: if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
+           
+        Args:
+            crop_size (Optional[Tuple[int, int]]): if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
+            point_priority (float, optional): priority to sample regions containing spots when cropping. Defaults to 0.
         """
         augmenter = (
-            self.build_image_cropper(crop_size)
+            self.build_image_cropper(crop_size, point_priority)
             if crop_size is not None
             else AugmentationPipeline()
         )
