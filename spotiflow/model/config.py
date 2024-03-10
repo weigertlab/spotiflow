@@ -100,6 +100,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         kernel_sizes: Optional[Tuple[Tuple[int, int]]] = None,
         dropout: float = 0.0,
         sigma: Number = 1.0,
+        is_3d: bool = False,
         **kwargs,
     ):
         self.backbone = backbone
@@ -110,7 +111,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         self.n_convs_per_level = n_convs_per_level
         if downsample_factors is None:
             self.downsample_factors = tuple(
-                (downsample_factor, downsample_factor) for _ in range(levels)
+                (downsample_factor,)*2 if not is_3d else (downsample_factor,)*3 for _ in range(levels)
             )
         else:
             log.warning(
@@ -119,7 +120,8 @@ class SpotiflowModelConfig(SpotiflowConfig):
             self.downsample_factors = downsample_factors
         if kernel_sizes is None:
             self.kernel_sizes = tuple(
-                (kernel_size, kernel_size) for _ in range(n_convs_per_level)
+                (kernel_size,)*2 if not is_3d else (kernel_size,)*3
+                for _ in range(n_convs_per_level)
             )
         else:
             log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
@@ -138,6 +140,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         self.dropout = dropout
         self.sigma = sigma
         self.downsample_factor = downsample_factor
+        self.is_3d = bool(is_3d)
 
         super().__init__()
 

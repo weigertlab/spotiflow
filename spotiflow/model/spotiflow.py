@@ -72,6 +72,7 @@ class Spotiflow(nn.Module):
                 initial_fmaps=self.config.initial_fmaps,
                 fmap_inc_factor=self.config.fmap_inc_factor,
                 use_slim_mode=False,
+                is_3d=self.config.is_3d,
             )
         elif config.mode == "slim":
             self._post = MultiHeadProcessor(
@@ -80,6 +81,7 @@ class Spotiflow(nn.Module):
                 kernel_sizes=self.config.kernel_sizes,
                 initial_fmaps=self.config.initial_fmaps,
                 use_slim_mode=True,
+                is_3d=self.config.is_3d,
             )
         elif config.mode == "fpn":
             self._post = FeaturePyramidNetwork(
@@ -89,31 +91,34 @@ class Spotiflow(nn.Module):
         else:
             raise NotImplementedError(f"Mode {config.mode} not implemented.")
 
+        ConvModule = nn.Conv2d if not self.config.is_3d else nn.Conv3d
+        BatchNormModule = nn.BatchNorm2d if not self.config.is_3d else nn.BatchNorm3d
+
         if self.config.compute_flow:
             self._flow = nn.Sequential(
-                nn.Conv2d(
+                ConvModule(
                     self._backbone.out_channels_list[0],
                     self._backbone.out_channels_list[0],
                     3,
                     padding=1,
                     bias=False if self.config.batch_norm else True,
                 ),
-                nn.BatchNorm2d(self._backbone.out_channels_list[0])
+                BatchNormModule(self._backbone.out_channels_list[0])
                 if self.config.batch_norm
                 else nn.Identity(),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(
+                ConvModule(
                     self._backbone.out_channels_list[0],
                     self._backbone.out_channels_list[0],
                     3,
                     padding=1,
                     bias=False if self.config.batch_norm else True,
                 ),
-                nn.BatchNorm2d(self._backbone.out_channels_list[0])
+                BatchNormModule(self._backbone.out_channels_list[0])
                 if self.config.batch_norm
                 else nn.Identity(),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(self._backbone.out_channels_list[0], 3, 3, padding=1),
+                ConvModule(self._backbone.out_channels_list[0], 3, 3, padding=1),
             )
 
         self._levels = self.config.levels
@@ -1026,7 +1031,7 @@ class Spotiflow(nn.Module):
                 "batch_norm",
                 "padding",
             )
-            return UNetBackbone(concat_mode="cat", **backbone_params)
+            return UNetBackbone(concat_mode="cat", use_3d_convs=self.config.is_3d, **backbone_params)
         elif self.config.backbone == "unet_res":
             backbone_params = pydash.pick(
                 self.config,

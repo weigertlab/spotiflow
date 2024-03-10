@@ -79,14 +79,32 @@ setup(
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
         Extension(
+            "spotiflow.lib.spotflow3d",
+            sources=["spotiflow/lib/spotflow3d.cpp"],
+            extra_compile_args=["-std=c++11"],
+            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+        ),
+        Extension(
             "spotiflow.lib.point_nms",
             sources=["spotiflow/lib/point_nms.cpp"],
             extra_compile_args=["-std=c++11"],
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),
         Extension(
+            "spotiflow.lib.point_nms3d",
+            sources=["spotiflow/lib/point_nms3d.cpp"],
+            extra_compile_args=["-std=c++11"],
+            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+        ),
+        Extension(
             "spotiflow.lib.filters",
             sources=["spotiflow/lib/filters.cpp"],
+            extra_compile_args=["-std=c++11"],
+            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+        ),
+        Extension(
+            "spotiflow.lib.filters3d",
+            sources=["spotiflow/lib/filters3d.cpp"],
             extra_compile_args=["-std=c++11"],
             include_dirs=get_numpy_include_dirs() + [nanoflann_root],
         ),

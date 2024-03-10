@@ -60,7 +60,7 @@ def filter_shape(points: np.ndarray,
     """
     if idxr_array is None:
         idxr_array = points.copy()
-    assert idxr_array.ndim == 2 and idxr_array.shape[1] == 2
+    assert idxr_array.ndim == 2 and idxr_array.shape[1] in (2, 3)
     idx = np.all(np.logical_and(idxr_array >= 0, idxr_array < np.array(shape)), axis=1)
     if return_mask:
         return points[idx], idx
@@ -78,7 +78,10 @@ def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: 
     Returns:
         np.ndarray: Decimated image
     """
-    if decimate == (1, 1):
+    if len(decimate) == 2 and y.ndim == 3:
+        decimate = (decimate[0], *decimate[0])
+    assert y.ndim == len(decimate), f"decimate {decimate} and y.ndim {y.ndim} do not match"
+    if decimate == (1, 1) or decimate == (1, 1, 1):
         return y
     assert y.ndim == len(decimate)
     from skimage.measure import block_reduce

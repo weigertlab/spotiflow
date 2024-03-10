@@ -13,8 +13,11 @@ import os
 from .utils import filter_shape
 
 from ..lib.filters import c_maximum_filter_2d_float
+from ..lib.filters3d import c_maximum_filter_3d_float
 from ..lib.point_nms import c_point_nms_2d
+from ..lib.point_nms3d import c_point_nms_3d
 from ..lib.spotflow2d import c_spotflow2d, c_gaussian2d
+from ..lib.spotflow3d import c_spotflow3d, c_gaussian3d
 
 
 def get_num_threads():
@@ -65,6 +68,45 @@ def nms_points_2d(
     inds = c_point_nms_2d(points, np.float32(min_distance))
     return points[inds].copy()
 
+def nms_points_3d(
+    points: np.ndarray, scores: np.ndarray = None, min_distance: int = 2
+) -> np.ndarray:
+    """Non-maximum suppression for 2D points, choosing the highest scoring points while
+    ensuring that no two points are closer than min_distance.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        Array of shape (N,2) containing the points to be filtered.
+    scores : np.ndarray
+        Array of shape (N,) containing scores for each point
+        If None, all points have the same score
+    min_distance : int, optional
+        Minimum distance between points, by default 2
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (N,) containing the indices of the points that survived the filtering.
+    """
+
+    points = np.asarray(points)
+    if not points.ndim == 2 and points.shape[1] == 3:
+        raise ValueError("points must be a array of shape (N,3)")
+    if scores is None:
+        scores = np.ones(len(points))
+    else:
+        scores = np.asarray(scores)
+    if not scores.ndim == 1:
+        raise ValueError("scores must be a array of shape (N,)")
+
+    idx = np.argsort(scores, kind="stable")
+    points = points[idx]
+    scores = scores[idx]
+
+    points = np.ascontiguousarray(points, dtype=np.float32)
+    inds = c_point_nms_3d(points, np.float32(min_distance))
+    return points[inds].copy()
 
 def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
 
@@ -79,10 +121,31 @@ def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
         image, np.int32(kernel_size // 2), np.int32(n_threads)
     )
 
+def maximum_filter_3d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
+    if not image.ndim == 3:
+        raise ValueError("Image must be 3D")
+    if not kernel_size > 0 and kernel_size % 2 == 1:
+        raise ValueError("kernel_size must be positive and odd")
 
-def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str="max", ):
+    image = np.ascontiguousarray(image, dtype=np.float32)
+    n_threads = get_num_threads()
+    return c_maximum_filter_3d_float(
+        image, np.int32(kernel_size // 2), np.int32(n_threads)
+    )
+
+
+def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max") -> np.ndarray:
+    """Wrapper function for different cpp calls. Points should be in (y,x) or (z,y,x) order"""
+    if points.shape[1] == 2:
+        return points_to_prob2d(points, shape, sigma, val, mode)
+    elif points.shape[1] == 3:
+        return points_to_prob3d(points, shape, sigma, mode)
+    else:
+        raise ValueError("Wrong dimension of points!")
+
+def points_to_prob2d(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str="max") -> np.ndarray:
     """ 
-    create a probability map from a set of points
+    Create a 2D probability map from a set of points
     
     Parameters
     ----------
@@ -132,8 +195,44 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[
 
     return x
 
+def points_to_prob3d(points, shape, sigma=1.5, mode="max"):
+    """points are in (z,y,x) order"""
+
+    x = np.zeros(shape, np.float32)
+    assert points.ndim == 2 and points.shape[1] == 3
+    points = filter_shape(points, shape)
+
+    if len(points) == 0:
+        return x
+
+    if mode == "max":
+        x = c_gaussian3d(
+            points.astype(np.float32, copy=False),
+            np.int32(shape[0]),
+            np.int32(shape[1]),
+            np.int32(shape[2]),
+            np.float32(sigma),
+        )
+    else:
+        raise ValueError(mode)
+
+    return x
 
 def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
+    """
+    for each grid point in shape compute the vector d in R^N to the closest point
+    and return its flow embedding onto S^(N+1)
+    """
+    assert points.shape[-1] == len(shape)
+    if len(shape) == 2:
+        return points_to_flow2d(points, shape, sigma)
+    elif len(shape) == 3:
+        return points_to_flow3d(points, shape, sigma)
+    else:
+        raise ValueError("Dimensionality of the input points should be 2 or 3!")
+
+
+def points_to_flow2d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
     """
     for each grid point in shape compute the vector d=(y,x) to the closest
     point and return its flow embedding (z',y',x') onto S^3
@@ -158,8 +257,43 @@ def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
             np.float32(sigma),
         )
 
+def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
+    """
+    for each grid point in shape compute the vector d=(z,y,x) to the closest
+    point and return its flow embedding (w;, z',y',x') onto S^4
 
-def flow_to_vector(flow: np.ndarray, sigma: float, eps: float = 1e-20):
+    w' = -(r^2 - sigma^2) / (r^2 + sigma^2);
+    z' = 2 * sigma * z / (r^2 + sigma^2);
+    y' = 2 * sigma * y / (r^2 + sigma^2);
+    x' = 2 * sigma * x / (r^2 + sigma^2);
+
+
+
+    with r = sqrt(x^2+y^2+z^2)
+    """
+    if len(points) == 0:
+        flow = np.zeros(shape[:3] + (4,), np.float32)
+        flow[..., 0] = -1
+        return flow
+    else:
+        return c_spotflow3d(
+            points.astype(np.float32, copy=False),
+            np.int32(shape[0]),
+            np.int32(shape[1]),
+            np.int32(shape[2]),
+            np.float32(sigma),
+        )
+
+
+def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20):
+    if flow.ndim == 3:
+        return flow_to_vector_2d(flow, sigma, eps)
+    elif flow.ndim == 4:
+        return flow_to_vector_3d(flow, sigma, eps)
+    else:
+        raise ValueError(f"Dimensionality of the stereographic flow should be 3 or 4!")
+
+def flow_to_vector_2d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     """from the 3d flow (z',y',x') compute back the 2d vector field (y,x) it corresponds to
 
     y = sigma*y'/(1+z')
@@ -171,6 +305,18 @@ def flow_to_vector(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     return np.stack((y * s, x * s), axis=-1)
 
 
+def flow_to_vector_3d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
+    """from the 4d flow (w',z',y',x') compute back the 3d vector field (z,y,x) it corresponds to
+
+    Args:
+        flow (np.ndarray): _description_
+        sigma (float): _description_
+        eps (float, optional): _description_. Defaults to 1e-20.
+    """
+    w, z, y, x = flow.transpose(3, 0, 1, 2)
+    s = sigma / (1 + w + eps)
+    return np.stack((z * s, y * s, x * s), axis=-1)
+
 def prob_to_points(
     prob,
     prob_thresh=0.5,
@@ -179,7 +325,7 @@ def prob_to_points(
     mode: str = "skimage",
     exclude_border: bool = True,
 ):
-    assert prob.ndim == 2, "Wrong dimension of prob"
+    assert prob.ndim in (2, 3), "Wrong dimension of prob"
     if mode == "skimage":
         corners = corner_peaks(
             prob,
@@ -212,8 +358,10 @@ def local_peaks(
     threshold_abs=None,
     threshold_rel=None,
 ):
-    if not image.ndim == 2 and not image.ndim == 2:
+    if not image.ndim in [2, 3]:
         raise ValueError("Image must be 2D")
+    max_filter_fun = maximum_filter_2d if image.ndim == 2 else maximum_filter_3d
+    nms_fun = nms_points_2d if image.ndim == 2 else nms_points_3d
 
     # make compatible with scikit-image
     # https://github.com/scikit-image/scikit-image/blob/a4e533ea2a1947f13b88219e5f2c5931ab092413/skimage/feature/peak.py#L120
@@ -225,7 +373,7 @@ def local_peaks(
     if min_distance <= 0:
         mask = image > threshold
     else:
-        mask = maximum_filter_2d(image, 2 * min_distance + 1) == image
+        mask = max_filter_fun(image, 2 * min_distance + 1) == image
 
         # no peak for a trivial image
         image_is_trivial = np.all(mask)
@@ -238,5 +386,6 @@ def local_peaks(
     coord = np.nonzero(mask)
     coord = np.stack(coord, axis=1)
 
-    points = nms_points_2d(coord, min_distance=min_distance)
+    points = nms_fun(coord, min_distance=min_distance)
     return points
+
