@@ -20,7 +20,7 @@ from spotiflow.augmentations import transforms
 from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
 
-from ..data import SpotsDataset
+from ..data import SpotsDataset, Spots3DDataset
 from ..utils import (
     center_crop,
     center_pad,
@@ -338,24 +338,30 @@ class Spotiflow(nn.Module):
         train_dataset_kwargs = deepcopy(dataset_kwargs)
         val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
 
-        min_img_size = min(min(img.shape[:2]) for img in train_images)
+        min_img_size = min(min(img.shape[:2 if not self.config.is_3d else 3]) for img in train_images)
         min_crop_size = int(2 ** np.floor(np.log2(min_img_size)))
 
-        crop_size = tuple(2 * [min(train_config.crop_size, min_crop_size)])
+        crop_size = tuple((2 if not self.config.is_3d else 3) * [min(train_config.crop_size, min_crop_size)])
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
-        # Build augmenters
-        if augment_train:
-            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
+        if self.config.is_3d:
+            # TODO: remove and refactor when 3D augmentations are implemented
+            tr_augmenter = AugmentationPipeline()
+            val_augmenter = AugmentationPipeline()
         else:
-            tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
-        val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+            # Build augmenters
+            if augment_train:
+                tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
+            else:
+                tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+            val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
 
+        ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
-        train_ds = SpotsDataset(
+        train_ds = ActualSpotsDataset(
             train_images, train_spots, augmenter=tr_augmenter, **train_dataset_kwargs
         )
-        val_ds = SpotsDataset(
+        val_ds = ActualSpotsDataset(
             val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs
         )
 
@@ -410,17 +416,27 @@ class Spotiflow(nn.Module):
             assert len(imgs) == len(
                 pts
             ), f"Number of images and points must be equal for {split} set"
-            assert all(
-                img.ndim in (2, 3) for img in imgs
-            ), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
+            if not self.config.is_3d:
+                assert all(
+                    img.ndim in (2, 3) for img in imgs
+                ), f"Images must be 2D (Y,X) or 3D (Y,X,C) for {split} set"
+            else:
+                assert all(
+                    img.ndim in (3, 4) for img in imgs
+                ), f"Images must be 3D (Z,Y,X) or 4D (Z,Y,X,C) for {split} set"
             if self.config.in_channels > 1:
                 assert all(
-                    img.ndim == 3 and img.shape[-1] == self.config.in_channels
+                    img.ndim == (3 if not self.config.is_3d else 4) and img.shape[-1] == self.config.in_channels
                     for img in imgs
-                ), f"All images must be 2D (Y,X) for {split} set"
-            assert all(
-                pts.ndim == 2 and pts.shape[1] == 2 for pts in pts
-            ), f"Points must be 2D (Y,X) for {split} set"
+                ), f"Input images should be in channel-last format (..., C) for {split} set"
+            if not self.config.is_3d:
+                assert all(
+                    pts.ndim == 2 and pts.shape[1] == 2 for pts in pts
+                ), f"Points must be 2D (Y,X) for {split} set"
+            else:
+                assert all(
+                    pts.ndim == 2 and pts.shape[1] == 3 for pts in pts
+                ), f"Points must be 3D (Z,Y,X) for {split} set"
         return
 
     def build_image_cropper(self, crop_size: Tuple[int, int], point_priority: float = 0.):

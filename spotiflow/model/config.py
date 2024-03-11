@@ -163,7 +163,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
             isinstance(self.n_convs_per_level, int) and self.n_convs_per_level > 0
         ), "n_convs_per_level must be greater than 0"
         assert all(
-            isinstance(factor, tuple) and len(factor) == 2
+            isinstance(factor, tuple) and (len(factor) == 2 if not self.is_3d else len(factor) == 3)
             for factor in self.downsample_factors
         ), "downsample_factors must be a tuple of tuples of length 2"
         assert all(
@@ -175,7 +175,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
             len(self.kernel_sizes) == self.n_convs_per_level
         ), "kernel_sizes must have length equal to n_convs_per_level"
         assert all(
-            isinstance(ksize, tuple) and len(ksize) == 2 for ksize in self.kernel_sizes
+            isinstance(ksize, tuple) and len(ksize) == (2 if not self.is_3d else 3) for ksize in self.kernel_sizes
         ), "kernel_sizes must be a tuple of tuples of length 2"
         assert all(
             isinstance(k, int) and k > 0 for ksize in self.kernel_sizes for k in ksize

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from .backbones.unet import ConvBlock
+from .backbones.unet import ConvBlock, ConvBlock3D
 
 
 class FeaturePyramidNetwork(nn.Module):
@@ -113,14 +113,18 @@ class MultiHeadProcessor(nn.Module):
         mix_last: bool = False,
         dropout: int = 0,
         use_slim_mode: bool = False,
+        is_3d: bool = False,
     ):
         super().__init__()
 
+        ConvModule = ConvBlock if not is_3d else ConvBlock3D
+    
         self.n_heads = len(in_channels_list)
         self.n_convs_per_head = len(kernel_sizes)
         self.activation = activation
         self.heads = nn.ModuleList()
         self.mix_last = mix_last
+        self.is_3d = is_3d
         self.last_convs = (
             nn.ModuleList()
         )  # Need to be separated to avoid kaiming init on blocks with non-relu activations
@@ -133,7 +137,7 @@ class MultiHeadProcessor(nn.Module):
                 in_chan = in_channels if n == 0 or use_slim_mode else initial_fmaps * fmap_inc_factor**h
                 out_chan = in_channels if use_slim_mode else initial_fmaps * fmap_inc_factor**h
                 curr_head.append(
-                    ConvBlock(
+                    ConvModule(
                         in_channels=in_chan,
                         out_channels=out_chan,
                         kernel_size=kernel_sizes[n],
@@ -153,7 +157,7 @@ class MultiHeadProcessor(nn.Module):
             
         for h, in_channels in enumerate(out_channels_list_after):
             self.last_convs.append(
-                ConvBlock(
+                ConvModule(
                     in_channels=in_channels,
                     out_channels=out_channels,
                     kernel_size=1,
@@ -172,7 +176,7 @@ class MultiHeadProcessor(nn.Module):
                 raise ValueError(
                     f"Kaiming init not applicable for activation {self.activation}."
                 )
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
                 nn.init.kaiming_normal_(m.weight, nonlinearity=nonlinearity)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
@@ -185,59 +189,8 @@ class MultiHeadProcessor(nn.Module):
         x = tuple(head(_x) for _x, head in zip(x, self.heads))
 
         if self.mix_last:
-            x = tuple(torch.cat(tuple(F.interpolate(_x2, size=_x.shape[-2:], mode="bilinear", align_corners=True) for _x2 in x), dim=1) for _x in x)
+            x = tuple(torch.cat(tuple(F.interpolate(_x2, size=_x.shape[-2 if not self.is_3d else -3:], mode="bilinear", align_corners=True) for _x2 in x), dim=1) for _x in x)
 
         x = tuple(last(_x) for _x, last in zip(x, self.last_convs))
             
-        return x
-
-
-
-
-
-class SimpleConv(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_layers: int = 3,
-        activation: nn.Module = nn.ReLU,
-        padding: Union[str, int] = "same",
-        padding_mode: str = "zeros",
-        dropout: int = 0,
-    ):
-        super().__init__()
-        self.activation = activation
-        layers = []
-        for i in range(n_layers):
-            last = i == n_layers - 1
-            layers.append(
-                ConvBlock(
-                    in_channels,
-                    out_channels if last else in_channels,
-                    3,
-                    padding=1,
-                    activation=nn.Identity if last else activation,
-                )
-            )
-        self.layers = nn.Sequential(*layers)
-
-        def init_kaiming(m):
-            if self.activation is nn.ReLU:
-                nonlinearity = "relu"
-            elif self.activation is nn.LeakyReLU:
-                nonlinearity = "leaky_relu"
-            else:
-                raise ValueError(
-                    f"Kaiming init not applicable for activation {self.activation}."
-                )
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, nonlinearity=nonlinearity)
-                nn.init.zeros_(m.bias)
-
-        if activation is nn.ReLU or activation is nn.LeakyReLU:
-            self.apply(init_kaiming)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.layers(x)
         return x

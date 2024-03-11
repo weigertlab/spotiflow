@@ -96,10 +96,13 @@ class UNetBackbone(nn.Module):
         self.n_convs_per_level = len(kernel_sizes)
 
         parsed_kernel_sizes = []
+
         for k in kernel_sizes:
             if use_3d_convs and len(k) == 2:
                 parsed_kernel_sizes.append((k[0], *k))
             elif not use_3d_convs and len(k) == 2:
+                parsed_kernel_sizes.append(k)
+            elif use_3d_convs and len(k) == 3:
                 parsed_kernel_sizes.append(k)
             else:
                 raise ValueError(f"Kernel size {k} must be of length 2 or 3. If 2D, then it must be (h, w). If 3D, then it must be (d, h, w).")
@@ -110,6 +113,8 @@ class UNetBackbone(nn.Module):
             if use_3d_convs and len(d) == 2:
                 parsed_downsample_factors.append((d[0], *d))
             elif not use_3d_convs and len(d) == 2:
+                parsed_downsample_factors.append(d)
+            elif use_3d_convs and len(d) == 3:
                 parsed_downsample_factors.append(d)
             else:
                 raise ValueError(f"Downsample factor {d} must be of length 2 or 3. If 2D, then it must be (h, w). If 3D, then it must be (d, h, w).")

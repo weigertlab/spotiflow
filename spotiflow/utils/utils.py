@@ -44,6 +44,34 @@ def read_coords_csv(fname: str) -> np.ndarray:
 
     return points
 
+def read_coords_csv3d(fname: str) -> np.ndarray:
+    """Parses a csv file and returns correctly ordered points array
+    
+    Args:
+        fname (str): Path to the csv file
+    Returns:
+        np.ndarray: A 2D array of spot coordinates
+    """
+    try:
+        df = pd.read_csv(fname)
+    except pd.errors.EmptyDataError:
+        return np.zeros((0, 3), dtype=np.float32)
+
+    df = df.rename(columns=str.lower)
+    cols = set(df.columns)
+
+    col_candidates = (("axis-0", "axis-1", "axis-2"), ("z", "y", "x"), ("Z", "Y", "X"))
+    points = None
+    for possible_columns in col_candidates:
+        if cols.issuperset(set(possible_columns)):
+            points = df[list(possible_columns)].to_numpy()
+            break
+
+    if points is None:
+        raise ValueError(f"could not get points from csv file {fname}")
+
+    return points
+
 
 def filter_shape(points: np.ndarray,
                  shape: Tuple[int, int],
@@ -252,7 +280,8 @@ def remove_device_id_from_device_str(device_str: str) -> str:
 
 def get_data(path: Union[Path, str],
              normalize: bool=True,
-             include_test: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+             include_test: bool=False,
+             is_3d: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get data from a given path. The path should contain a 'train' and 'val' folder.
 
     Args:
@@ -262,8 +291,9 @@ def get_data(path: Union[Path, str],
     Returns:
         Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: A 4-length tuple of arrays corresponding to the training images, training spots, validation images and validation spots.
     """
-    from ..data import SpotsDataset
+    from ..data import SpotsDataset, Spots3DDataset
 
+    SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
     if isinstance(path, str):
         path = Path(path)
     
@@ -279,16 +309,16 @@ def get_data(path: Union[Path, str],
 
     test_ds = None
     if normalize:
-        tr_ds = SpotsDataset.from_folder(train_path)
-        val_ds = SpotsDataset.from_folder(val_path)
+        tr_ds = SpotsDatasetClass.from_folder(train_path)
+        val_ds = SpotsDatasetClass.from_folder(val_path)
         if include_test:
-            test_ds = SpotsDataset.from_folder(test_path)
+            test_ds = SpotsDatasetClass.from_folder(test_path)
     else:
-        tr_ds = SpotsDataset.from_folder(train_path, normalizer=None)
-        val_ds = SpotsDataset.from_folder(val_path, normalizer=None)
+        tr_ds = SpotsDatasetClass.from_folder(train_path, normalizer=None)
+        val_ds = SpotsDatasetClass.from_folder(val_path, normalizer=None)
         
         if include_test:
-            test_ds = SpotsDataset.from_folder(test_path, normalizer=None)
+            test_ds = SpotsDatasetClass.from_folder(test_path, normalizer=None)
     
     tr_imgs = tr_ds.images
     val_imgs = val_ds.images
