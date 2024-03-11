@@ -137,11 +137,26 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
     def _common_step(self, batch):
         heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._loss_levels)]
         imgs = batch["img"]
+        orig_imgs_shape = imgs.shape
 
         if self.model.config.compute_flow:
             flow = batch["flow"]
 
+        """
+        # Pad third dimension if necessary
+        if self.model.config.is_3d and orig_imgs_shape[-3] < 2**self._loss_levels:
+            pad = 2**self._loss_levels - orig_imgs_shape[-3]
+            imgs = torch.nn.functional.pad(imgs, (0, 0, 0, 0, 0, pad))
+        """
         out = self(imgs)
+
+        """
+        # Unpad third dimension if necessary
+        if self.model.config.is_3d and orig_imgs_shape[-3] < 2**self._loss_levels:
+            out["heatmaps"] = [h[..., :orig_imgs_shape[-3], :, :] for h in out["heatmaps"]]
+            if self.model.config.compute_flow:
+                out["flow"] = out["flow"][:, :, :orig_imgs_shape[-3], :, :]
+        """
         pred_heatmap = out["heatmaps"]
 
         loss_heatmaps = list(
@@ -286,6 +301,12 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
 
     def log_images(self):
         """Helper function to log sample images according to different loggers (wandb and tensorboard)."""
+        # TODO: make logging 3d compatible
+        if self.model.config.is_3d:
+            return
+         
+
+
         n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger):  # Wandb logger
             self.logger.log_image(

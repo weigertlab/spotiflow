@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import yaml
 from csbdeep.internals.predict import tile_iterator
 from scipy.ndimage import zoom
-from spotiflow.augmentations import transforms
+from spotiflow.augmentations import transforms, transforms3d
 from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
 
@@ -118,7 +118,7 @@ class Spotiflow(nn.Module):
                 if self.config.batch_norm
                 else nn.Identity(),
                 nn.ReLU(inplace=True),
-                ConvModule(self._backbone.out_channels_list[0], 3, 3, padding=1),
+                ConvModule(self._backbone.out_channels_list[0], 3 if not self.config.is_3d else 4, 3, padding=1),
             )
 
         self._levels = self.config.levels
@@ -202,7 +202,7 @@ class Spotiflow(nn.Module):
         Returns:
             out: Dict[torch.Tensor]
             out["heatmaps"]:  heatmaps at different resolutions. Highest resolution first.
-            out["flow"]:      3d flow estimate
+            out["flow"]:      (n+1)d flow estimate
         """
         x = self._bg_remover(x)
         x = self._backbone(x)
@@ -296,7 +296,7 @@ class Spotiflow(nn.Module):
             save_dir (Optional[str], optional): directory to save the model to. Must be given if no checkpoint logger is given as a callback. Defaults to None.
             train_config (Optional[SpotiflowTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
             device (Literal["cpu", "cuda", "mps"], optional): computing device to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
-            logger (Optional[pl.loggers.Logger], optional): logger to use. If not given, will use TensorBoard. Defaults to None.
+            logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to "tensorboard".
             number_of_devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
             num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0 (main process only).
             callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
@@ -338,23 +338,26 @@ class Spotiflow(nn.Module):
         train_dataset_kwargs = deepcopy(dataset_kwargs)
         val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
 
-        min_img_size = min(min(img.shape[:2 if not self.config.is_3d else 3]) for img in train_images)
+        if not self.config.is_3d:
+            min_img_size = min(min(img.shape[:2]) for img in train_images)
+        else:
+            min_img_size = min(min(img.shape[1:3]) for img in train_images)
         min_crop_size = int(2 ** np.floor(np.log2(min_img_size)))
 
-        crop_size = tuple((2 if not self.config.is_3d else 3) * [min(train_config.crop_size, min_crop_size)])
+        crop_size = tuple(2 * [min(train_config.crop_size, min_crop_size)])
+
+        if self.config.is_3d:
+            min_depth_size = min(img.shape[-3] for img in train_images)
+            min_crop_size_depth = int(2 ** np.floor(np.log2(min_depth_size)))
+            crop_size = (min(train_config.crop_size_depth, min_crop_size_depth),) + crop_size
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
-        if self.config.is_3d:
-            # TODO: remove and refactor when 3D augmentations are implemented
-            tr_augmenter = AugmentationPipeline()
-            val_augmenter = AugmentationPipeline()
+        # Build augmenters
+        if augment_train:
+            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
         else:
-            # Build augmenters
-            if augment_train:
-                tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
-            else:
-                tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
-            val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+            tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+        val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
 
         ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
@@ -439,15 +442,21 @@ class Spotiflow(nn.Module):
                 ), f"Points must be 3D (Z,Y,X) for {split} set"
         return
 
-    def build_image_cropper(self, crop_size: Tuple[int, int], point_priority: float = 0.):
+    def build_image_cropper(self, crop_size: Union[Tuple[int, int], Tuple[int, int, int]], point_priority: float = 0.):
         """Build default cropper for a dataset.
 
         Args:
-            crop_size (Tuple[int, int]): tuple of (height, width) to randomly crop the images to.
+            crop_size (Tuple[int, int]): tuple of (height, width) (if 2d) or (depth, height, width) (if 3d) to randomly crop the images.
             point_priority (float, optional): priority to sample regions containing spots when cropping. If 0, no priority is given (so all crops will be random). If 1, all crops will containg at least one spot. Defaults to 0.
         """
         cropper = AugmentationPipeline()
-        cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=point_priority))
+        if not self.config.is_3d:
+            assert len(crop_size) == 2, "Crop size must be a 2-length tuple if mode is 2D."
+            cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=point_priority))
+        else:
+            assert len(crop_size) == 3, "Crop size must be a 3-length tuple if mode is 3D."
+            cropper.add(transforms3d.Crop3D(probability=1.0, size=crop_size, point_priority=point_priority))
+
         return cropper
 
     def build_image_augmenter(
@@ -949,13 +958,22 @@ class Spotiflow(nn.Module):
                 if subpix:
                     curr_flow_preds = []
                     for flow in out["flow"]:
-                        curr_flow_preds += [
-                            F.normalize(flow, dim=1)
-                            .permute(1, 2, 0)
-                            .detach()
-                            .cpu()
-                            .numpy()
-                        ]
+                        if not self.config.is_3d:
+                            curr_flow_preds += [
+                                F.normalize(flow, dim=1)
+                                .permute(1, 2, 0)
+                                .detach()
+                                .cpu()
+                                .numpy()
+                            ]
+                        else:
+                            curr_flow_preds += [
+                                F.normalize(flow, dim=1)
+                                .permute(1, 2, 3, 0)
+                                .detach()
+                                .cpu()
+                                .numpy()
+                            ]
 
                 for p in val_batch["pts"]:
                     val_gt_pts.append(p.numpy())

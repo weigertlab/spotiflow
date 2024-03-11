@@ -28,7 +28,7 @@ class Spots3DDataset(SpotsDataset):
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
         assert img.ndim in (4, 5)  # Images should be in BCDWH or BDHW format
-        if img.ndim == 3:
+        if img.ndim == 4:
             img = img.unsqueeze(1) # Add C dimension
 
         img, centers = self.augmenter(img, centers)
@@ -36,7 +36,7 @@ class Spots3DDataset(SpotsDataset):
 
         if self._compute_flow:
             flow = utils.points_to_flow3d(
-                centers.numpy(), img.shape[-2:], sigma=self._sigma
+                centers.numpy(), img.shape[-3:], sigma=self._sigma
             ).transpose((3, 0, 1, 2))
             flow = torch.from_numpy(flow).float()
 

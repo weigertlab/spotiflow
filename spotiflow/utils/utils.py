@@ -107,7 +107,7 @@ def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: 
         np.ndarray: Decimated image
     """
     if len(decimate) == 2 and y.ndim == 3:
-        decimate = (decimate[0], *decimate[0])
+        decimate = (decimate[0], *decimate)
     assert y.ndim == len(decimate), f"decimate {decimate} and y.ndim {y.ndim} do not match"
     if decimate == (1, 1) or decimate == (1, 1, 1):
         return y

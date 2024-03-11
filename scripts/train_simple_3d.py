@@ -43,7 +43,7 @@ if __name__ == "__main__":
     print(f"Validation data loaded (N={len(val_images)}).")
 
     print("Instantiating model...")
-    model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True))
+    model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True, levels=3))
 
     print("Launching training...")
     model.fit(
@@ -52,9 +52,14 @@ if __name__ == "__main__":
         val_images,
         val_spots,
         save_dir=args.save_dir,
+        augment_train=False,
         device="auto",
+        deterministic=False,
+        logger="none",
         train_config={
             "num_epochs": 200,
+            "crop_size": 128,
+            "crop_size_depth": 8,
         }
     )
     print("Done!")

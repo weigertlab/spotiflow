@@ -205,7 +205,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
 class SpotiflowTrainingConfig(SpotiflowConfig):
     def __init__(
         self,
-        crop_size: int = 512,
+        crop_size: Union[int, Tuple[int, int], Tuple[int, int, int]] = 512,
         smart_crop: bool = False,
         heatmap_loss_f: str = "bce",
         flow_loss_f: str = "l1",
@@ -219,6 +219,7 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         num_epochs: int = 200,
         finetuned_from: Optional[str] = None,
         early_stopping_patience: int = 0,
+        crop_size_depth: int = 32,
         **kwargs,
     ):
         self.crop_size = crop_size
@@ -240,6 +241,7 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         self.num_train_samples = num_train_samples
         self.finetuned_from = finetuned_from
         self.early_stopping_patience = early_stopping_patience
+        self.crop_size_depth = crop_size_depth # FIXME: should be done w crop_size argument
         super().__init__()
 
     def is_valid(self):
@@ -271,3 +273,6 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         assert (
             isinstance(self.early_stopping_patience, int) and self.early_stopping_patience >= 0
         ), "early_stopping_patience must be >= 0"
+        assert (
+            isinstance(self.crop_size_depth, int) and self.crop_size_depth > 0
+        ), "crop_size_depth must be an integer > 0."
