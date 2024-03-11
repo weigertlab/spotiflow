@@ -631,8 +631,10 @@ class Spotiflow(nn.Module):
             subpix_radius = 0 if self.config.compute_flow else -1
         else:
             subpix_radius = int(subpix)
-
-        assert img.ndim in (2, 3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
+        if not self.config.is_3d:
+            assert img.ndim in (2, 3), "Image must be 2D (Y,X) or 3D (Y,X,C)"
+        else:
+            assert img.ndim in (3, 4), "Image must be 3D (Z,Y,X) or 4D (Z,Y,X,C)"
 
         if device is None or isinstance(device, str):
             device = self._retrieve_device_str(device)
@@ -647,7 +649,9 @@ class Spotiflow(nn.Module):
                 f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}"
             )
 
-        if img.ndim == 2:
+        if not self.config.is_3d and img.ndim == 2:
+            img = img[..., None]
+        elif self.config.is_3d and img.ndim == 3:
             img = img[..., None]
 
         img = img.astype(np.float32)
@@ -657,6 +661,10 @@ class Spotiflow(nn.Module):
             if subpix_radius >= 0:
                 raise NotImplementedError(
                     "Subpixel prediction is not supported yet when scale != 1."
+                )
+            if self.config.is_3d:
+                raise NotImplementedError(
+                    "3D scaling is not supported yet."
                 )
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
@@ -689,8 +697,11 @@ class Spotiflow(nn.Module):
             with torch.inference_mode():
                 img_t = (
                     torch.from_numpy(x).to(device).unsqueeze(0)
-                )  # Add B and C dimensions
-                img_t = img_t.permute(0, 3, 1, 2)
+                )  # Add B dimension
+                if not self.config.is_3d:
+                    img_t = img_t.permute(0, 3, 1, 2) # BHWC -> BCHW
+                else:
+                    img_t = img_t.permute(0, 4, 1, 2, 3) # BDHWC -> BCDHW
                 out = self(img_t)
 
                 y = (
@@ -700,13 +711,22 @@ class Spotiflow(nn.Module):
                     .numpy()
                 )
                 if subpix_radius >= 0:
-                    flow = (
-                        F.normalize(out["flow"], dim=1)[0]
-                        .permute(1, 2, 0)
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
+                    if not self.config.is_3d:
+                        flow = (
+                            F.normalize(out["flow"], dim=1)[0]
+                            .permute(1, 2, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
+                    else:
+                        flow = (
+                            F.normalize(out["flow"], dim=1)[0]
+                            .permute(1, 2, 3, 0)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
@@ -715,8 +735,9 @@ class Spotiflow(nn.Module):
                     flow,
                     sigma=self.config.sigma,
                 )
-                flow = center_crop(flow, img.shape[:2])
-                _subpix = center_crop(_subpix, img.shape[:2])
+                out_shape = img.shape[:2 if not self.config.is_3d else 3]
+                flow = center_crop(flow, out_shape)
+                _subpix = center_crop(_subpix, out_shape)
 
             y = center_crop(y, img.shape[:2])
 
@@ -827,9 +848,16 @@ class Spotiflow(nn.Module):
         if subpix_radius >= 0:
             _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
-            pts = pts.clip(
-                0, np.array(img.shape[:2]) - 1
-            )  # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
+            # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
+            if not self.config.is_3d:
+                pts = pts.clip(
+                    0, np.array(img.shape[:2]) - 1
+                )
+            else:
+                pts = pts.clip(
+                    0, np.array(img.shape[:3]) - 1
+                )
+
         else:
             _subpix = None
             flow = None

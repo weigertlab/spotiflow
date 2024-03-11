@@ -338,7 +338,7 @@ def get_data(path: Union[Path, str],
 
     return tr_imgs, tr_pts, val_imgs, val_pts
 
-def subpixel_offset(
+def subpixel_offset_2d(
     pts: np.ndarray,
     subpix: np.ndarray,
     prob: np.ndarray,
@@ -385,6 +385,79 @@ def subpixel_offset(
 
     _add /= _weight
     return _add
+
+def subpixel_offset_3d(
+    pts: np.ndarray,
+    subpix: np.ndarray,
+    prob: np.ndarray,
+    radius: int,
+) -> np.ndarray:
+    """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
+    3D local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
+
+    Args:
+        pts (np.ndarray): 2D array of points of shape (N, 3)
+        subpix (np.ndarray): local vector field in Euclidean space. Should be a 4D array with shape (D, H, W, 2)
+        prob (np.ndarray): heatmap of probabilities of shape (D, H, W)
+        radius (int): Radius for aggregation
+
+    Returns:
+        np.ndarray: 3D array of offsets
+    """
+    assert (
+        pts.ndim == 2
+        and pts.shape[1] == 3
+        and subpix.ndim == 4
+        and subpix.shape[3] == 3
+        and prob.ndim == 3
+    )
+    subpix = np.clip(subpix, -1, 1)
+    n, _ = pts.shape
+    _weight = np.zeros((n, 1), np.float32)
+    _add = np.zeros((n, 3), np.float32)
+    for i, j, k in product(range(-radius, radius + 1), repeat=3):
+        dp = np.array([[i, j, k]])
+        p = pts + dp
+        # filter points outside of the image (boundary)
+        p, mask = filter_shape(p, prob.shape, return_mask=True)
+        _p = tuple(p.astype(int).T)
+
+        _w = np.zeros((n, 1), np.float32)
+        _w[mask] = prob[_p][:, None]
+
+        _correct = np.zeros((n, 3), np.float32)
+        _correct[mask] = subpix[_p] + dp
+
+        _weight += _w
+        _add += _w * _correct
+
+    _add /= _weight
+    return _add
+
+def subpixel_offset(
+    pts: np.ndarray,
+    subpix: np.ndarray,
+    prob: np.ndarray,
+    radius: int,
+) -> np.ndarray:
+    """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
+    Euclidean local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
+
+    Args:
+        pts (np.ndarray): 2D or 3D array of points of shape (N, 3)
+        subpix (np.ndarray): local vector field in Euclidean space. Should be a 3D array with shape (H, W, 2) or (H, W, 3)
+        prob (np.ndarray): 2D or 3D array of probabilities of shape ((D), H, W)
+        radius (int): Radius for aggregation
+
+    Returns:
+        np.ndarray: 2D or 3D array of offsets
+    """
+    if pts.shape[1] == 2:
+        return subpixel_offset_2d(pts, subpix, prob, radius)
+    elif pts.shape[1] == 3:
+        return subpixel_offset_3d(pts, subpix, prob, radius)
+    else:
+        raise ValueError(f"Invalid shape {pts.shape} for points array.")
 
 def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
     """Reads a spots dataset from a .npz file formatted as in deepBlink (Eichenberger et al. 2021))
