@@ -262,7 +262,12 @@ def write_coords_csv(pts: np.ndarray, fname: Union[Path, str]) -> None:
         pts (np.ndarray): 2D array of points
         fname (Union[Path, str]): Path to the CSV file
     """
-    df = pd.DataFrame(pts, columns=["y", "x"])
+    columns = ("y", "x")
+    if pts.shape[1] == 3:
+        # 3D, add leading "z"
+        columns = ("z",) + columns
+
+    df = pd.DataFrame(pts, columns=columns)
     df.to_csv(fname, index=False)
     return
 
