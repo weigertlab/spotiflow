@@ -40,7 +40,8 @@ class Spots3DDataset(SpotsDataset):
             ).transpose((3, 0, 1, 2))
             flow = torch.from_numpy(flow).float()
 
-        heatmap_lv0 = utils.points_to_prob3d( # TODO: Implement this function for 3D
+
+        heatmap_lv0 = utils.points_to_prob3d(
             centers.numpy(), img.shape[-3:], mode=self._mode, sigma=self._sigma
         )
 

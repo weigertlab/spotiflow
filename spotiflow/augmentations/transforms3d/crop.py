@@ -44,7 +44,7 @@ class Crop3D(BaseAugmentation):
         # Crop points
         pts_c = pts - torch.FloatTensor([cz, cy, cx])
         idxs_in = _filter_points_idx(pts_c, self.size)
-        return img_c, pts_c[idxs_in].view(*pts.shape[:-3], -1, pts.shape[-1])
+        return img_c, pts_c[idxs_in].view(*pts.shape[:-2], -1, pts.shape[-1])
     
     def _generate_tl_anchor(self, z: int, y: int, x: int, pts: torch.Tensor) -> Tuple[int, int, int]:
         prob = torch.FloatTensor(1).uniform_(0, 1).item()

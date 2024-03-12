@@ -653,6 +653,8 @@ class Spotiflow(nn.Module):
             img = img[..., None]
         elif self.config.is_3d and img.ndim == 3:
             img = img[..., None]
+        
+        actual_n_dims = 2 if not self.config.is_3d else 3
 
         img = img.astype(np.float32)
         if scale is None or scale == 1:
@@ -735,7 +737,7 @@ class Spotiflow(nn.Module):
                     flow,
                     sigma=self.config.sigma,
                 )
-                out_shape = img.shape[:2 if not self.config.is_3d else 3]
+                out_shape = img.shape[:actual_n_dims]
                 flow = center_crop(flow, out_shape)
                 _subpix = center_crop(_subpix, out_shape)
 
@@ -751,19 +753,25 @@ class Spotiflow(nn.Module):
             probs = y[tuple(pts.astype(int).T)].tolist()
 
         else:  # Predict with tiling
-            y = np.empty(x.shape[:2], np.float32)
+            y = np.empty(x.shape[:actual_n_dims], np.float32)
             if subpix_radius >= 0:
-                _subpix = np.empty(x.shape[:2] + (2,), np.float32)
-            flow = np.empty(x.shape[:2] + (3,), np.float32)  # ! Check dimensions
+                _subpix = np.empty(x.shape[:actual_n_dims] + (actual_n_dims,), np.float32)
+                flow = np.empty(x.shape[:actual_n_dims] + (actual_n_dims+1,), np.float32)
             points = []
             probs = []
+            actual_n_tiles = n_tiles
+            if not self.config.is_3d and x.ndim == 3 and len(n_tiles) == 2:
+                actual_n_tiles = actual_n_tiles + (1,)
+            elif self.config.is_3d and x.ndim == 4 and len(n_tiles) == 3:
+                actual_n_tiles = actual_n_tiles + (1,)
+            n_block_overlaps = (4, 4, 0)
+            if self.config.is_3d:
+                n_block_overlaps = (4,) + n_block_overlaps
             iter_tiles = tile_iterator(
                 x,
-                n_tiles=n_tiles + (1,)
-                if x.ndim == 3 and len(n_tiles) == 2
-                else n_tiles,
+                n_tiles=actual_n_tiles,
                 block_sizes=div_by,
-                n_block_overlaps=(4, 4) if x.ndim == 2 else (4, 4, 0),
+                n_block_overlaps=n_block_overlaps,
             )
 
             if verbose and callable(progress_bar_wrapper):
@@ -778,7 +786,10 @@ class Spotiflow(nn.Module):
                     img_t = (
                         torch.from_numpy(tile).to(device).unsqueeze(0)
                     )  # Add B and C dimensions
-                    img_t = img_t.permute(0, 3, 1, 2)
+                    if not self.config.is_3d:
+                        img_t = img_t.permute(0, 3, 1, 2) # BHWC -> BCHW
+                    else:
+                        img_t = img_t.permute(0, 4, 1, 2, 3) # BDHWC -> BCDHW
                     out = self(img_t)
                     y_tile = self._sigmoid(out["heatmaps"][0].squeeze(0).squeeze(0))
                     y_tile = y_tile.detach().cpu().numpy()
@@ -792,55 +803,67 @@ class Spotiflow(nn.Module):
                         min_distance=min_distance,
                     )
                     # remove global offset
-                    p -= np.array([s.start for s in s_src[:2]])[None]
-                    write_shape = tuple(s.stop - s.start for s in s_dst[:2])
+                    p -= np.array([s.start for s in s_src[:actual_n_dims]])[None]
+                    write_shape = tuple(s.stop - s.start for s in s_dst[:actual_n_dims])
                     p = filter_shape(p, write_shape, idxr_array=p)
 
-                    y_tile_sub = y_tile[s_src[:2]]
+                    y_tile_sub = y_tile[s_src[:actual_n_dims]]
 
                     probs += y_tile_sub[tuple(p.astype(int).T)].tolist()
 
                     # add global offset
-                    p += np.array([s.start for s in s_dst[:2]])[None]
+                    p += np.array([s.start for s in s_dst[:actual_n_dims]])[None]
                     points.append(p)
-                    y[s_dst[:2]] = y_tile_sub
+                    y[s_dst[:actual_n_dims]] = y_tile_sub
 
                     # Flow
                     if subpix_radius >= 0:
-                        flow_tile = (
-                            F.normalize(out["flow"], dim=1)[0]
-                            .permute(1, 2, 0)
-                            .detach()
-                            .cpu()
-                            .numpy()
-                        )
-                        flow_tile_sub = flow_tile[s_src[:2]]
-                        flow[s_dst[:2]] = flow_tile_sub
+                        if not self.config.is_3d:
+                            flow_tile = (
+                                F.normalize(out["flow"], dim=1)[0]
+                                .permute(1, 2, 0)
+                                .detach()
+                                .cpu()
+                                .numpy()
+                            )
+                        else:
+                            flow_tile = (
+                                F.normalize(out["flow"], dim=1)[0]
+                                .permute(1, 2, 3, 0)
+                                .detach()
+                                .cpu()
+                                .numpy()
+                            )
+                        flow_tile_sub = flow_tile[s_src[:actual_n_dims]]
+                        flow[s_dst[:actual_n_dims]] = flow_tile_sub
 
                         # Cartesian coordinates
                         subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
-                        subpix_tile_sub = subpix_tile[s_src[:2]]
-                        _subpix[s_dst[:2]] = subpix_tile_sub
+                        subpix_tile_sub = subpix_tile[s_src[:actual_n_dims]]
+                        _subpix[s_dst[:actual_n_dims]] = subpix_tile_sub
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
-            y = center_crop(y, img.shape[:2])
+            y = center_crop(y, img.shape[:actual_n_dims])
             if subpix_radius >= 0:
-                flow = center_crop(flow, img.shape[:2])
-                _subpix = center_crop(_subpix, img.shape[:2])
+                flow = center_crop(flow, img.shape[:actual_n_dims])
+                _subpix = center_crop(_subpix, img.shape[:actual_n_dims])
 
             points = np.concatenate(points, axis=0)
 
             # Remove padding
-            points = points - np.array((padding[0][0], padding[1][0]))[None]
+            padding_to_correct = (padding[0][0], padding[1][0])
+            if self.config.is_3d:
+                padding_to_correct = (*padding_to_correct, padding[2][0])
+                points = points - np.array(padding_to_correct)[None]
 
             probs = np.array(probs)
             # if scale is not None and scale != 1:
             #     points = np.round((points.astype(float) / scale)).astype(int)
 
-            probs = filter_shape(probs, img.shape[:2], idxr_array=points)
-            pts = filter_shape(points, img.shape[:2], idxr_array=points)
+            probs = filter_shape(probs, img.shape[:actual_n_dims], idxr_array=points)
+            pts = filter_shape(points, img.shape[:actual_n_dims], idxr_array=points)
 
         if verbose:
             log.info(f"Found {len(pts)} spots")
@@ -849,14 +872,10 @@ class Spotiflow(nn.Module):
             _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
             # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
-            if not self.config.is_3d:
-                pts = pts.clip(
-                    0, np.array(img.shape[:2]) - 1
-                )
-            else:
-                pts = pts.clip(
-                    0, np.array(img.shape[:3]) - 1
-                )
+            pts = pts.clip(
+                0, np.array(img.shape[:actual_n_dims]) - 1
+            )
+
 
         else:
             _subpix = None

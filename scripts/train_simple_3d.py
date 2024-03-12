@@ -26,8 +26,8 @@ def get_data(data_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", type=Path, default="/data/spots/other/virus_3d/virus_snr7_densmid")
-    parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotiflow_3d_debug/virus_snr7_densmid")
+    parser.add_argument("--data-dir", type=Path, default="/data/spots/datasets_3d/synth3d")
+    parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotiflow_3d_debug/synth3d")
     parser.add_argument("--sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -58,8 +58,8 @@ if __name__ == "__main__":
         logger="none",
         train_config={
             "num_epochs": 200,
-            "crop_size": 128,
-            "crop_size_depth": 8,
+            "crop_size": 64,
+            "crop_size_depth": 16,
         }
     )
     print("Done!")
