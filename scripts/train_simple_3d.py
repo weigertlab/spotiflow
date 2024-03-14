@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotiflow_3d_debug/synth3d")
     parser.add_argument("--sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--levels", type=int, default=3)
     args = parser.parse_args()
 
     pl.seed_everything(args.seed, workers=True)
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     print(f"Validation data loaded (N={len(val_images)}).")
 
     print("Instantiating model...")
-    model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True, levels=3))
+    model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True, levels=args.levels))
 
     print("Launching training...")
     model.fit(
@@ -52,14 +53,15 @@ if __name__ == "__main__":
         val_images,
         val_spots,
         save_dir=args.save_dir,
-        augment_train=False,
+        augment_train=True,
         device="auto",
         deterministic=False,
         logger="none",
         train_config={
-            "num_epochs": 200,
-            "crop_size": 64,
+            "num_epochs": 300,
+            "crop_size": 128,
             "crop_size_depth": 16,
+            "smart_crop": True,
         }
     )
     print("Done!")

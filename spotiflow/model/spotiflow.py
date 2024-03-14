@@ -475,14 +475,24 @@ class Spotiflow(nn.Module):
             if crop_size is not None
             else AugmentationPipeline()
         )
-        augmenter.add(transforms.FlipRot90(probability=0.5))
-        augmenter.add(transforms.Rotation(probability=0.5, order=1))
-        augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
-        augmenter.add(
-            transforms.IntensityScaleShift(
-                probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
+        if not self.config.is_3d:
+            augmenter.add(transforms.FlipRot90(probability=0.5))
+            augmenter.add(transforms.Rotation(probability=0.5, order=1))
+            augmenter.add(transforms.GaussianNoise(probability=0.5, sigma=(0, 0.05)))
+            augmenter.add(
+                transforms.IntensityScaleShift(
+                    probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
+                )
             )
-        )
+        else:
+            augmenter.add(transforms3d.FlipRot903D(probability=0.5))
+            augmenter.add(transforms3d.RotationYX3D(probability=0.5, order=1))
+            augmenter.add(transforms3d.GaussianNoise3D(probability=0.5, sigma=(0, 0.05)))
+            augmenter.add(
+                transforms3d.IntensityScaleShift3D(
+                    probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
+                )
+            )
         return augmenter
 
     def save(
