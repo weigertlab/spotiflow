@@ -100,6 +100,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         kernel_sizes: Optional[Tuple[Tuple[int, int]]] = None,
         dropout: float = 0.0,
         sigma: Number = 1.0,
+        warning_flag: bool = False,
         **kwargs,
     ):
         self.backbone = backbone
@@ -113,16 +114,16 @@ class SpotiflowModelConfig(SpotiflowConfig):
                 (downsample_factor, downsample_factor) for _ in range(levels)
             )
         else:
-            log.warning(
-                "Using downsample_factors argument. downsample_factor will be ignored."
-            )
+			if warning_flag:
+	            log.warning("Using downsample_factors argument. downsample_factor will be ignored.")
             self.downsample_factors = downsample_factors
         if kernel_sizes is None:
             self.kernel_sizes = tuple(
                 (kernel_size, kernel_size) for _ in range(n_convs_per_level)
             )
         else:
-            log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
+			if warning_flag:
+	            log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
             self.kernel_sizes = kernel_sizes
 
         if padding == "same":
