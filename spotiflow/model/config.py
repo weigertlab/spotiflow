@@ -113,7 +113,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
                 (downsample_factor, downsample_factor) for _ in range(levels)
             )
         else:
-            log.warning(
+            log.debug(
                 "Using downsample_factors argument. downsample_factor will be ignored."
             )
             self.downsample_factors = downsample_factors
@@ -122,7 +122,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
                 (kernel_size, kernel_size) for _ in range(n_convs_per_level)
             )
         else:
-            log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
+            log.debug("Using kernel_sizes argument. kernel_size will be ignored.")
             self.kernel_sizes = kernel_sizes
 
         if padding == "same":
