@@ -22,6 +22,7 @@ from tqdm.auto import tqdm
 
 from ..data import SpotsDataset
 from ..utils import (
+    bilinear_interp_points,
     center_crop,
     center_pad,
     filter_shape,
@@ -590,7 +591,7 @@ class Spotiflow(nn.Module):
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
 
         Returns:
-            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
+            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities (`prob`), the heatmap (`heatmap`), the stereographic flow (`flow`), the 2D local offset vector field (`subpix`) and the spot intensities (`intens`).
         """
 
         if subpix is False:
@@ -804,7 +805,17 @@ class Spotiflow(nn.Module):
             _subpix = None
             flow = None
 
-        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
+        # Retrieve intensity of the spots
+        if subpix_radius < 0: # no need to interpolate if subpixel precision is not used
+            intens = img[tuple(pts.astype(int).T)]
+        else:
+            try:
+                intens = bilinear_interp_points(img, pts)
+            except Exception as _:
+                log.warn("Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead.")
+                intens = img[tuple(pts.round().astype(int).T)]
+
+        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens)
         return pts, details
 
     def predict_dataset(
