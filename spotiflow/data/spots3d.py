@@ -47,7 +47,7 @@ class Spots3DDataset(SpotsDataset):
 
         # Build target at different resolution levels
         heatmaps = [
-            utils.multiscale_decimate(heatmap_lv0, ds)
+            utils.multiscale_decimate(heatmap_lv0, ds, is_3d=True)
             for ds in self._downsample_factors
         ]
 

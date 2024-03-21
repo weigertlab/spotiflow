@@ -77,9 +77,17 @@ class Rotation(BaseAugmentation):
         
         affine_mat = _affine_rotation_matrix(phi_rad, (center_y, center_x)).to(img.device)
         # Rotate points
-        affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
+        if pts.shape[2] == 2: # no class labels
+            should_add_cls_label = False
+            affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
+        else:
+            should_add_cls_label = True
+            affine_coords = torch.cat([pts[..., :-1].float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
+
         pts_r = (affine_coords@affine_mat.T)
         pts_r = pts_r[..., :-1] # Homogeneous -> Euclidean coordinates
+        if should_add_cls_label:
+            pts_r = torch.cat([pts_r, pts[..., -1:]], axis=-1)
 
         idxs_in = _filter_points_idx(pts_r, img_r.shape[-2:])
         return img_r, pts_r[idxs_in].view(*pts.shape[:-2], -1, pts.shape[-1])

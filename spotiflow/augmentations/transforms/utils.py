@@ -2,8 +2,14 @@ import torch
 
 def _filter_points_idx(pts: torch.Tensor, shape: tuple[int]) -> torch.Tensor:
     """returns indices of points that are within the image boundaries"""
-    assert pts.shape[-1] == len(shape)
-    return torch.all(torch.logical_and(pts >= 0, pts < torch.tensor(shape, device=pts.device)), dim=-1)
+    if pts.shape[-1] == len(shape):
+        return torch.all(torch.logical_and(pts >= 0, pts < torch.tensor(shape, device=pts.device)), dim=-1)
+    elif pts.shape[-1] == len(shape)+1: # Last dimension is class label, ignore it
+        # Ignore last dimension, then add it back
+        return torch.all(torch.logical_and(pts[..., :-1] >= 0, pts[..., :-1] < torch.tensor(shape, device=pts.device)), dim=-1)
+    else:
+        raise ValueError(f"Points should have shape (N, {len(shape)}) or (N, {len(shape)+1}) if class labels are given")
+
 
 def _flatten_axis(ndim, axis=None):
     """Adapted from https://github.com/stardist/augmend/blob/main/augmend/transforms/affine.py not to depend on numpy

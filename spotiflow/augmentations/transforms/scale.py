@@ -89,10 +89,18 @@ class IsotropicScale(BaseAugmentation):
         affine_mat = _affine_scaling_matrix(sampled_scaling_factor, (center_y, center_x)).to(img.device)
 
         # Scale points
-        affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
+        if pts.shape[2] == 2: # no class labels
+            should_add_cls_label = False
+            affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
+        else:
+            should_add_cls_label = True
+            affine_coords = torch.cat([pts[..., :-1].float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
         pts_scaled = (affine_coords@affine_mat.T)
         pts_scaled = pts_scaled[..., :-1] # Homogeneous -> Euclidean coordinates
-
+        if should_add_cls_label:
+            pts_scaled = torch.cat([pts_scaled, pts[..., -1:]], axis=-1)
+        
+        
         idxs_in = _filter_points_idx(pts_scaled, img_scaled.shape[-2:])
         return img_scaled, pts_scaled[idxs_in].view(*pts.shape[:-2], -1, pts.shape[-1])
 
@@ -101,6 +109,7 @@ class IsotropicScale(BaseAugmentation):
     
     def __repr__(self) -> str:
         return f"IsotropicScale(scaling_factor={self._scaling_factor}, probability={self.probability})"
+
 class AnisotropicScale(BaseAugmentation):
     # TODO
     def __init__(self, probability: float):

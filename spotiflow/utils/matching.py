@@ -3,13 +3,21 @@ from types import SimpleNamespace
 import logging
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
+from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-def points_matching(p1, p2, cutoff_distance=3, eps=1e-8):
+def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):
     """finds matching that minimizes sum of mean squared distances"""
+
+    if class_label_p1 is not None:
+        p1 = p1[p1[:, -1] == class_label_p1][:, :-1]
+    elif class_label_p2 is not None:
+        p2 = p2[p2[:, -1] == class_label_p2][:, :-1]
+
+    assert p1.shape[1] == p2.shape[1], "Last dimensions of p1, p2 must match"
 
     if len(p1) == 0 or len(p2) == 0:
         D = np.zeros((0, 0))
@@ -53,13 +61,14 @@ def points_matching(p1, p2, cutoff_distance=3, eps=1e-8):
     return res
 
 
-def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8):
+def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):
     """
     by_image is True -> metrics are computed by image and then averaged
     by_image is False -> TP/FP/FN are aggregated and only then are metrics computed
     """
+
     stats = tuple(
-        points_matching(p1, p2, cutoff_distance=cutoff_distance, eps=eps)
+        points_matching(p1, p2, cutoff_distance=cutoff_distance, eps=eps, class_label_p1=class_label_p1, class_label_p2=class_label_p2)
         for p1, p2 in zip(p1s, p2s)
     )
 

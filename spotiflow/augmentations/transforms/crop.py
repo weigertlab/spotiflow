@@ -39,7 +39,10 @@ class Crop(BaseAugmentation):
         img_c = tvf.crop(img, top=cy, left=cx, height=self.size[0], width=self.size[1])
 
         # Crop points
-        pts_c = pts - torch.FloatTensor([cy, cx])
+        if pts.shape[-1] == 2:
+            pts_c = pts - torch.FloatTensor([cy, cx])
+        else:
+            pts_c = pts - torch.FloatTensor([cy, cx, 0])
         idxs_in = _filter_points_idx(pts_c, self.size)
         return img_c, pts_c[idxs_in].view(*pts.shape[:-2], -1, pts.shape[-1])
     
@@ -53,7 +56,7 @@ class Crop(BaseAugmentation):
         else:
             width = self.size[0]//4, self.size[1]//4
             # Remove points that are not anchor candidates
-            valid_pt_coords = pts[(pts[..., 0] >= self.size[0]//2-width[0]) & (pts[..., 0] < y-self.size[0]//2+width[0]) & (pts[..., 1] >= self.size[1]//2-width[1]) & (pts[..., 1] < x-self.size[1]//2+width[1])]
+            valid_pt_coords = pts[(pts[..., 0] >= self.size[0]//2-width[0]) & (pts[..., 0] < y-self.size[0]//2+width[0]) & (pts[..., 1] >= self.size[1]//2-width[1]) & (pts[..., 1] < x-self.size[1]//2+width[1])][:, :2]
             if valid_pt_coords.shape[0] == 0:
                 # sample randomly if no points are valid
                 cy, cx = torch.FloatTensor(1).uniform_(0, y-self.size[0]).item(), torch.FloatTensor(1).uniform_(0, x-self._size[1]).item()

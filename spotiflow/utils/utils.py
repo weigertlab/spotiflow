@@ -16,18 +16,20 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-def read_coords_csv(fname: str) -> np.ndarray:
+# TODO: add_class_column is set to False for now not to break downstream code, but it shouldn't even be a parameter
+def read_coords_csv(fname: str, add_class_column: bool=False) -> np.ndarray:
     """Parses a csv file and returns correctly ordered points array
     
     Args:
         fname (str): Path to the csv file
+        add_class_column (bool, optional): Whether to add a class column to the points array. Defaults to False.
     Returns:
-        np.ndarray: A 2D array of spot coordinates
+        np.ndarray: A 2D array of spot coordinates. If `add_class_column` is True, then the array will have shape (N, 3) where N is the number of points. Otherwise, the array will have shape (N, 2)
     """
     try:
         df = pd.read_csv(fname)
     except pd.errors.EmptyDataError:
-        return np.zeros((0, 2), dtype=np.float32)
+        return np.zeros((0, 2 if not add_class_column else 3), dtype=np.float32)
 
     df = df.rename(columns=str.lower)
     cols = set(df.columns)
@@ -38,7 +40,19 @@ def read_coords_csv(fname: str) -> np.ndarray:
         if cols.issuperset(set(possible_columns)):
             points = df[list(possible_columns)].to_numpy()
             break
+        
+    if add_class_column:
+        
+        class_col_candidates = ("class", "label", "category", "channel")
 
+        class_labels = np.zeros((points.shape[0], 1), dtype=np.float32)
+        for possible_class_column in class_col_candidates:
+            if possible_class_column in cols:
+                class_labels = df[possible_class_column].to_numpy().reshape(-1, 1).astype(np.uint8)
+                break
+        points = np.concatenate((points, class_labels), axis=1)
+
+    
     if points is None:
         raise ValueError(f"could not get points from csv file {fname}")
 
@@ -95,27 +109,32 @@ def filter_shape(points: np.ndarray,
     return points[idx]
 
 
-def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: float=1.) -> np.ndarray:
+def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: float=1., is_3d: bool=False) -> np.ndarray:
     """Decimate an image by a factor of `decimate` and apply a Gaussian filter with standard deviation `sigma`
 
     Args:
         y (np.ndarray): Image to be decimated
-        decimate (Tuple[int, int], optional): downsampling factor. Defaults to (4, 4).
+        decimate (Tuple[int, int], optional): downsampling factor. Defaults to (2, 2).
         sigma (float, optional): standard deviation of the Gaussian filter. Defaults to 1.
 
     Returns:
         np.ndarray: Decimated image
     """
-    if len(decimate) == 2 and y.ndim == 3:
-        decimate = (decimate[0], *decimate)
+    from skimage.measure import block_reduce
+
+    if is_3d:
+        if len(decimate) == 2 and y.ndim == 3: # 3D Image
+            decimate = (decimate[0], *decimate)
+    else:
+        if len(decimate) == 2 and y.ndim == 3: # Multichannel image
+            decimate = (1, *decimate)
     assert y.ndim == len(decimate), f"decimate {decimate} and y.ndim {y.ndim} do not match"
     if decimate == (1, 1) or decimate == (1, 1, 1):
         return y
-    assert y.ndim == len(decimate)
-    from skimage.measure import block_reduce
+
 
     y = block_reduce(y, decimate, np.max)
-    y = 2 * np.pi * sigma**2 * ndi.gaussian_filter(y, sigma)
+    y = 2 * np.pi * sigma**2 * ndi.gaussian_filter(y, sigma, axes=(-2, -1) if not is_3d else (-3, -2, -1))
     y = np.clip(y, 0, 1)
     return y
 

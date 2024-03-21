@@ -30,7 +30,8 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", type=Path, default="/data/tmp/spotiflow_3d_debug/synth3d")
     parser.add_argument("--sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--levels", type=int, default=3)
+    parser.add_argument("--levels", type=int, default=4)
+    parser.add_argument("--pretrained-path", type=Path, default=None)
     args = parser.parse_args()
 
     pl.seed_everything(args.seed, workers=True)
@@ -43,10 +44,15 @@ if __name__ == "__main__":
     val_images, val_spots = get_data(args.data_dir / "val")
     print(f"Validation data loaded (N={len(val_images)}).")
 
-    print("Instantiating model...")
-    model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True, levels=args.levels))
+    if args.pretrained_path is not None:
+        print("Loading pretrained model...")
+        model = Spotiflow.from_folder(args.pretrained_path)
+        print("Launching fine-tuning...")
+    else:
+        print("Instantiating new model...")
+        model = Spotiflow(SpotiflowModelConfig(in_channels=1, sigma=args.sigma, is_3d=True, levels=args.levels))
+        print("Launching training...")
 
-    print("Launching training...")
     model.fit(
         train_images,
         train_spots,
@@ -58,9 +64,9 @@ if __name__ == "__main__":
         deterministic=False,
         logger="none",
         train_config={
-            "num_epochs": 300,
+            "num_epochs": 1000,
             "crop_size": 128,
-            "crop_size_depth": 16,
+            "crop_size_depth": 32,
             "smart_crop": True,
         }
     )

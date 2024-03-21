@@ -136,27 +136,15 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
 
     def _common_step(self, batch):
         heatmap_lvs = [batch[f"heatmap_lv{lv}"] for lv in range(self._loss_levels)]
+
         imgs = batch["img"]
         orig_imgs_shape = imgs.shape
 
         if self.model.config.compute_flow:
             flow = batch["flow"]
 
-        """
-        # Pad third dimension if necessary
-        if self.model.config.is_3d and orig_imgs_shape[-3] < 2**self._loss_levels:
-            pad = 2**self._loss_levels - orig_imgs_shape[-3]
-            imgs = torch.nn.functional.pad(imgs, (0, 0, 0, 0, 0, pad))
-        """
         out = self(imgs)
 
-        """
-        # Unpad third dimension if necessary
-        if self.model.config.is_3d and orig_imgs_shape[-3] < 2**self._loss_levels:
-            out["heatmaps"] = [h[..., :orig_imgs_shape[-3], :, :] for h in out["heatmaps"]]
-            if self.model.config.compute_flow:
-                out["flow"] = out["flow"][:, :, :orig_imgs_shape[-3], :, :]
-        """
         pred_heatmap = out["heatmaps"]
 
         loss_heatmaps = list(
@@ -176,8 +164,9 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
 
         if self.model.config.compute_flow:
             pred_flow = out["flow"]
+            n_dims = len(pred_flow.shape)
             loss_flow = self._flow_loss_func(pred_flow, flow)
-            loss_flow = (loss_flow * loss_weight).mean()
+            loss_flow = (loss_flow * loss_weight.repeat(1, 3 if not self.model.config.is_3d else 4, *(1,)*(n_dims-2))).mean()
             loss = loss + loss_flow
         else:
             pred_flow = None
@@ -231,11 +220,12 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
         out = self._common_step(batch)
 
         heatmap = (
-            self.model._sigmoid(out["pred_heatmap"][0].squeeze(0).squeeze(0))
+            self.model._sigmoid(out["pred_heatmap"][0].squeeze(0)) # HM is of shape (N_classes, H, W)
             .detach()
             .cpu()
             .numpy()
         )
+
         if self.model.config.compute_flow:
             flow = out["pred_flow"].squeeze(0).detach().cpu().numpy()
         else:
@@ -243,7 +233,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
 
         self._valid_inputs.append(img[0].detach().cpu().numpy())
         self._valid_targets.append(batch["pts"][0].detach().cpu().numpy())
-        self._valid_targets_hm.append(batch["heatmap_lv0"][0,0].detach().cpu().numpy())
+        self._valid_targets_hm.append(batch["heatmap_lv0"][0].detach().cpu().numpy())
         self._valid_outputs.append(heatmap)
         self._valid_flows.append(flow)
 
@@ -262,34 +252,68 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
         """Called when the validation epoch ends.
         Logs the F1 score and accuracy of the model on the validation set, as well as some sample images.
         """
-        valid_pred_centers = [
-            prob_to_points(
-                p,
-                exclude_border=False,
-                min_distance=self.model.config.sigma,
-                mode="fast",
+        if self.model.config.out_channels == 1:
+            valid_pred_centers = [
+                prob_to_points(
+                    p[0], # Get rid of leading singleton dimension
+                    exclude_border=False,
+                    min_distance=self.model.config.sigma,
+                    mode="fast",
+                )
+                for p in self._valid_outputs
+            ]
+            stats = points_matching_dataset(
+                self._valid_targets,
+                valid_pred_centers,
+                cutoff_distance=2 * self.model.config.sigma + 1,
+                by_image=True,
             )
-            for p in self._valid_outputs
-        ]
-        stats = points_matching_dataset(
-            self._valid_targets,
-            valid_pred_centers,
-            cutoff_distance=2 * self.model.config.sigma + 1,
-            by_image=True,
-        )
 
-        val_f1, val_acc = stats.f1, stats.accuracy
-        self.log_dict(
-            {
-                "val_f1": np.float32(val_f1),
-                "val_acc": np.float32(val_acc),
-            },
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=self.training_config.batch_size,
-        )
+            val_f1, val_acc = stats.f1, stats.accuracy
+            self.log_dict(
+                {
+                    "val_f1": np.float32(val_f1),
+                    "val_acc": np.float32(val_acc),
+                },
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                logger=True,
+                batch_size=self.training_config.batch_size,
+            )
+        else:
+            to_log = {}
+            for cl in range(self.model.config.out_channels):
+                valid_pred_centers = [
+                    prob_to_points(
+                        p[cl], # Subset according to class
+                        exclude_border=False,
+                        min_distance=2 * self.model.config.sigma + 1,
+                        mode="fast",
+                    )
+                    for p in self._valid_outputs
+                ]
+                stats = points_matching_dataset(
+                    self._valid_targets,
+                    valid_pred_centers,
+                    cutoff_distance=2 * self.model.config.sigma + 1,
+                    by_image=True,
+                    class_label_p1=cl,
+                    class_label_p2=None,
+                )
+                to_log.update(
+                    {
+                        f"val_f1_class{cl}": np.float32(stats.f1),
+                    }
+                )
+            self.log_dict(
+                to_log,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                logger=True,
+                batch_size=self.training_config.batch_size,
+            )
 
         if not self.trainer.sanity_checking:
             self.log_images()
@@ -301,11 +325,9 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
 
     def log_images(self):
         """Helper function to log sample images according to different loggers (wandb and tensorboard)."""
-        # TODO: make logging 3d compatible
-        if self.model.config.is_3d:
+        # TODO: make image logging 3d, multichannel compatible
+        if self.model.config.is_3d or self.model.config.out_channels > 1:
             return
-         
-
 
         n_images_to_log = min(3, len(self._valid_inputs))
         if isinstance(self.logger, pl.loggers.WandbLogger):  # Wandb logger
@@ -433,8 +455,8 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
             else None,
             shuffle=True if num_train_samples is None else False,
             num_workers=num_workers,
-            collate_fn=collate_spots,
             pin_memory=True,
+            collate_fn=collate_spots,
         )
         val_dl = torch.utils.data.DataLoader(
             val_ds,
@@ -512,8 +534,8 @@ class SpotiflowModelCheckpoint(pl.callbacks.Callback):
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
-                device=pl_module.device,
                 subpix=trainer.model.model.config.compute_flow,
+                device=pl_module.device,
             )
             pl_module.model.save(self._logdir, which="last", update_thresholds=True)
             log.info("Saved last model with optimized thresholds.")
@@ -527,6 +549,7 @@ class SpotiflowModelCheckpoint(pl.callbacks.Callback):
                 exclude_border=False,
                 batch_size=1,
                 subpix=trainer.model.model.config.compute_flow,
+                device=pl_module.device,
             )
             pl_module.model.save(self._logdir, which="best", update_thresholds=True)
             log.info("Saved best model with optimized thresholds.")

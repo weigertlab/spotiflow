@@ -94,6 +94,7 @@ class Spotiflow(nn.Module):
         ConvModule = nn.Conv2d if not self.config.is_3d else nn.Conv3d
         BatchNormModule = nn.BatchNorm2d if not self.config.is_3d else nn.BatchNorm3d
 
+
         if self.config.compute_flow:
             self._flow = nn.Sequential(
                 ConvModule(
@@ -118,12 +119,12 @@ class Spotiflow(nn.Module):
                 if self.config.batch_norm
                 else nn.Identity(),
                 nn.ReLU(inplace=True),
-                ConvModule(self._backbone.out_channels_list[0], 3 if not self.config.is_3d else 4, 3, padding=1),
+                ConvModule(self._backbone.out_channels_list[0], 3*self.config.out_channels if not self.config.is_3d else 4*self.config.out_channels, 3, padding=1),
             )
 
         self._levels = self.config.levels
         self._sigmoid = nn.Sigmoid()
-        self._prob_thresh = 0.5
+        self._prob_thresh = [0.5]*self.config.out_channels
 
     @classmethod
     def from_folder(
@@ -434,7 +435,7 @@ class Spotiflow(nn.Module):
                 ), f"Input images should be in channel-last format (..., C) for {split} set"
             if not self.config.is_3d:
                 assert all(
-                    pts.ndim == 2 and pts.shape[1] == 2 for pts in pts
+                    pts.ndim == 2 and pts.shape[1] in (2, 3) for pts in pts
                 ), f"Points must be 2D (Y,X) for {split} set"
             else:
                 assert all(
@@ -579,18 +580,16 @@ class Spotiflow(nn.Module):
 
         states_path = Path(path) / f"{which}.pt"
 
-        # ! For retrocompatibility, remove in the future
-        if not states_path.exists():
-            states_path = Path(path) / f"{which}.ckpt"
-
         checkpoint = torch.load(states_path, map_location=map_location)
         model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
         self.load_state_dict(model_state)
 
         if f"prob_thresh_{which}" in thresholds.keys():
             self._prob_thresh = thresholds[f"prob_thresh_{which}"]
+            if isinstance(self._prob_thresh, float):
+                self._prob_thresh = [self._prob_thresh]
         else:  # ! For retrocompatibility, remove in the future
-            self._prob_thresh = thresholds.get("prob_thresh", 0.5)
+            self._prob_thresh = thresholds.get("prob_thresh", [0.5])
         if inference_mode:
             self.eval()
             return
@@ -656,7 +655,7 @@ class Spotiflow(nn.Module):
         if verbose:
             log.info(f"Will use device: {str(device)}")
             log.info(
-                f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh:.3f}, min_distance = {min_distance}"
+                f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}"
             )
 
         if not self.config.is_3d and img.ndim == 2:
@@ -717,11 +716,11 @@ class Spotiflow(nn.Module):
                 out = self(img_t)
 
                 y = (
-                    self._sigmoid(out["heatmaps"][0].squeeze(0).squeeze(0))
+                    self._sigmoid(out["heatmaps"][0].squeeze(0))
                     .detach()
                     .cpu()
                     .numpy()
-                )
+                ) # C'HW
                 if subpix_radius >= 0:
                     if not self.config.is_3d:
                         flow = (
@@ -730,7 +729,7 @@ class Spotiflow(nn.Module):
                             .detach()
                             .cpu()
                             .numpy()
-                        )
+                        ) # HW(3*C')
                     else:
                         flow = (
                             F.normalize(out["flow"], dim=1)[0]
@@ -738,18 +737,22 @@ class Spotiflow(nn.Module):
                             .detach()
                             .cpu()
                             .numpy()
-                        )
+                        ) # HW(4*C')
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
             if subpix_radius >= 0:
-                _subpix = flow_to_vector(
-                    flow,
-                    sigma=self.config.sigma,
-                )
-                out_shape = img.shape[:actual_n_dims]
-                flow = center_crop(flow, out_shape)
-                _subpix = center_crop(_subpix, out_shape)
+
+                _subpix = np.empty((self.config.out_channels,)+x.shape[:actual_n_dims]+(actual_n_dims,), np.float32) # C'HW(2|3)
+                flow_dim = actual_n_dims + 1
+                for cl in range(self.config.out_channels):
+                    _subpix_curr = flow_to_vector(
+                        flow[..., cl*(flow_dim):(cl+1)*(flow_dim)],
+                        sigma=self.config.sigma,
+                    )
+                    out_shape = img.shape[:actual_n_dims]
+                    flow_curr = center_crop(flow, out_shape)
+                    _subpix_curr = center_crop(_subpix, out_shape)
 
             y = center_crop(y, img.shape[:2])
 
@@ -763,6 +766,8 @@ class Spotiflow(nn.Module):
             probs = y[tuple(pts.astype(int).T)].tolist()
 
         else:  # Predict with tiling
+            if self.config.out_channels > 1:
+                raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
             y = np.empty(x.shape[:actual_n_dims], np.float32)
             if subpix_radius >= 0:
                 _subpix = np.empty(x.shape[:actual_n_dims] + (actual_n_dims,), np.float32)
@@ -934,9 +939,12 @@ class Spotiflow(nn.Module):
         log.info(f"Will use device: {device}")
 
         device = torch.device(device)
-        log.info(
-            f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}"
-        )
+        if self.config.out_channels == 1:
+            log.info(
+                f"Predicting with prob_thresh = {self._prob_thresh[0] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0]}, min_distance = {min_distance}"
+            )
+        else:
+            raise NotImplementedError("Multichannel prediction not implemented yet.")
         self.eval()
         with torch.inference_mode():
             for batch in tqdm(dataloader, desc="Predicting"):
@@ -953,7 +961,7 @@ class Spotiflow(nn.Module):
         p = [
             prob_to_points(
                 pred,
-                prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh,
+                prob_thresh=self._prob_thresh[0] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
                 exclude_border=exclude_border,
                 min_distance=min_distance,
             )
@@ -1010,7 +1018,7 @@ class Spotiflow(nn.Module):
 
                 out = self(imgs)
                 high_lv_hm_preds = (
-                    self._sigmoid(out["heatmaps"][0].squeeze(1)).detach().cpu().numpy()
+                    self._sigmoid(out["heatmaps"][0]).detach().cpu().numpy()
                 )
                 if subpix:
                     curr_flow_preds = []
@@ -1035,20 +1043,24 @@ class Spotiflow(nn.Module):
                 for p in val_batch["pts"]:
                     val_gt_pts.append(p.numpy())
 
+                val_flow_preds = []
                 for batch_elem in range(high_lv_hm_preds.shape[0]):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
                     if subpix:
-                        val_flow_preds += [
+                        flow_dim = 3 if not self.config.is_3d else 4
+                        assert flow_dim*self.config.out_channels == curr_flow_preds[batch_elem].shape[-1], "Unexpected flow dimensions."
+                        curr_val_flow_preds = np.concatenate([
                             flow_to_vector(
-                                curr_flow_preds[batch_elem], sigma=self.config.sigma
-                            )
-                        ]
+                                curr_flow_preds[batch_elem][..., cl*flow_dim:(cl+1)*flow_dim], sigma=self.config.sigma,
+                            )[None, ...]
+                        for cl in range(self.config.out_channels)], axis=0)
+                        val_flow_preds += [curr_val_flow_preds]
                 del out, imgs, val_batch
 
-        def _metric_at_threshold(thr):
+        def _metric_at_threshold(thr, class_label: int=0):
             val_pred_pts = [
                 prob_to_points(
-                    p,
+                    p[class_label],
                     prob_thresh=thr,
                     exclude_border=exclude_border,
                     min_distance=min_distance,
@@ -1057,28 +1069,32 @@ class Spotiflow(nn.Module):
             ]
             if subpix:
                 val_pred_pts = [
-                    pts + _subpix[tuple(pts.astype(int).T)]
+                    pts + _subpix[class_label][tuple(pts.astype(int).T)]
                     for pts, _subpix in zip(val_pred_pts, val_flow_preds)
                 ]
             stats = points_matching_dataset(
-                val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True
+                val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True, class_label_p1=class_label
             )
             return stats.f1
 
-        def _grid_search(tmin, tmax):
+        def _grid_search(tmin, tmax, class_label: int=0):
             thr = np.linspace(tmin, tmax, niter)
             ys = tuple(
-                _metric_at_threshold(t) for t in tqdm(thr, desc="optimizing threshold")
+                _metric_at_threshold(t, class_label) for t in tqdm(thr, desc="optimizing threshold")
             )
             i = np.argmax(ys)
             i1, i2 = max(0, i - 1), min(i + 1, len(thr) - 1)
             return thr[i], (thr[i1], thr[i2]), ys[i]
 
-        _, t_bounds, _ = _grid_search(*threshold_range)
-        best_thr, _, best_f1 = _grid_search(*t_bounds)
-        log.info(f"Best threshold: {best_thr:.3f}")
-        log.info(f"Best F1-score: {best_f1:.3f}")
-        self._prob_thresh = float(best_thr)
+        best_thrs, best_f1s = [], []
+        for cl in tqdm(range(self.config.out_channels), desc="Optimizing thresholds (class-wise)", disable=self.config.out_channels==1):
+            _, t_bounds, _ = _grid_search(*threshold_range, cl)
+            best_thr, _, best_f1 = _grid_search(*t_bounds, cl)
+            best_thrs += [float(best_thr)]
+            best_f1s += [float(best_f1)]
+        log.info(f"Best thresholds: {tuple(np.round(th, 3) for th in best_thrs)}")
+        log.info(f"Best F1-score: {tuple(np.round(f1, 3) for f1 in best_f1s)}")
+        self._prob_thresh = best_thrs
         return
 
     def _retrieve_device_str(

@@ -73,6 +73,11 @@ class SpotsDataset(Dataset):
             augmenter if augmenter is not None else lambda img, pts: (img, pts)
         )
         self._image_files = image_files
+        self._n_classes = 1
+        assert all(p.shape[1] == centers[0].shape[1] for p in centers), "All center arrays should have the same number of columns!"
+        if centers[0].shape[1] == 3:
+            assert min(p[:, 2].min() for p in centers) == 0, "Class labels should start at 0!"
+            self._n_classes = max(p[:, 2].astype(int).max() for p in centers) + 1
 
     @classmethod
     def from_folder(
@@ -128,12 +133,14 @@ class SpotsDataset(Dataset):
                 f"Different number of images and centers found! {len(image_files)} images, {len(center_files)} centers."
             )
 
+
         images = [io.imread(img) for img in tqdm(image_files, desc="Loading images")]
 
         centers = [
-            utils.read_coords_csv(center).astype(np.float32)
+            utils.read_coords_csv(center, add_class_column=True).astype(np.float32)
             for center in tqdm(center_files, desc="Loading centers")
         ]
+
 
         return cls(
             images=images,
@@ -152,10 +159,11 @@ class SpotsDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
+
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
-        # rgb images should be in channel last format
+        # rgb/multichannel images should be in channel last format
         if img.ndim == 4:
             img = img.permute(0, 3, 1, 2)
         else:
@@ -165,14 +173,29 @@ class SpotsDataset(Dataset):
         img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B dimension
 
         if self._compute_flow:
-            flow = utils.points_to_flow(
-                centers.numpy(), img.shape[-2:], sigma=self._sigma
-            ).transpose((2, 0, 1))
-            flow = torch.from_numpy(flow).float()
+            for cl in range(self._n_classes):
+                curr_centers = centers[centers[:,2]==cl][:,:2]
+                curr_flow = utils.points_to_flow(
+                    curr_centers.numpy(), img.shape[-2:], sigma=self._sigma
+                ).transpose((2, 0, 1))
+                curr_flow = torch.from_numpy(curr_flow).float() # shape is (3,H,W)
+                if cl == 0:
+                    flow = curr_flow.clone()
+                else:
+                    flow = torch.cat([flow, curr_flow], dim=0) # shape will be (3*n_classes, H, W)
+                del curr_flow
 
-        heatmap_lv0 = utils.points_to_prob(
-            centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
-        )
+        for cl in range(self._n_classes):
+            curr_centers = centers[centers[:,2]==cl][:,:2]
+            curr_heatmap = utils.points_to_prob(
+                curr_centers.numpy(), img.shape[-2:], mode=self._mode, sigma=self._sigma
+            )[None, ...]
+            if cl == 0:
+                heatmap_lv0 = curr_heatmap.copy()
+                del curr_heatmap
+            else:
+                heatmap_lv0 = np.concatenate([heatmap_lv0, curr_heatmap], axis=0) # shape will be (n_classes,H,W)
+                del curr_heatmap
 
         # Build target at different resolution levels
         heatmaps = [
@@ -180,7 +203,7 @@ class SpotsDataset(Dataset):
             for ds in self._downsample_factors
         ]
 
-        # Cast to tensor and add channel dimension
+        # Cast to float
         ret_obj = {"img": img.float(), "pts": centers.float()}
 
         if self._compute_flow:
@@ -188,7 +211,7 @@ class SpotsDataset(Dataset):
 
         ret_obj.update(
             {
-                f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy()).unsqueeze(0)
+                f"heatmap_lv{lv}": torch.from_numpy(heatmap.copy())
                 for lv, heatmap in enumerate(heatmaps)
             }
         )
@@ -220,6 +243,15 @@ class SpotsDataset(Dataset):
             Sequence[np.ndarray]: Sequence of images.
         """
         return self._images
+    
+    @property
+    def n_classes(self) -> int:
+        """Return number of classes in the dataset.
+
+        Returns:
+            int: number of spot classes.
+        """
+        return self._n_classes
 
     @property
     def image_files(self) -> Sequence[str]:
