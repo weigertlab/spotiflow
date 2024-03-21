@@ -79,7 +79,7 @@ def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     )
 
 
-def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, vals:Union[np.ndarray, float]=1., mode:str="max", ):
+def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str="max", ):
     """ 
     create a probability map from a set of points
     
@@ -93,7 +93,7 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, vals:Union
         sigma of the gaussians, by default 1.5
     mode : str, optional
         mode of the filter, by default "max"
-    vals : float or list/array of floats 
+    val : float or list/array of floats 
         Value or array of shape (N,) containing the value at the center of each point, by default 1.
     """
 
@@ -106,12 +106,12 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, vals:Union
     else: 
         sigma = np.asarray(sigma, np.float32)
     
-    if isinstance(vals, Number):
-        vals = np.ones(len(points), np.float32) * vals
+    if isinstance(val, Number):
+        val = np.ones(len(points), np.float32) * val
     else: 
-        vals = np.asarray(vals, np.float32)
+        val = np.asarray(val, np.float32)
             
-    if not len(points) == len(vals) or not len(points) == len(sigma):
+    if not len(points) == len(val) or not len(points) == len(sigma):
         raise ValueError("points, sigmas, and probs must have the same length")
             
     if len(points) == 0:
@@ -120,7 +120,7 @@ def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, vals:Union
     if mode == "max":
         x = c_gaussian2d(
             points.astype(np.float32, copy=False),
-            vals.astype(np.float32, copy=False),
+            val.astype(np.float32, copy=False),
             sigma.astype(np.float32, copy=False),
             np.int32(shape[0]),
             np.int32(shape[1])
