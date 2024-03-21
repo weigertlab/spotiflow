@@ -68,11 +68,13 @@ static PyObject *c_gaussian2d(PyObject *self, PyObject *args)
 {
 
     PyArrayObject *points = NULL;
+    PyArrayObject *probs = NULL;
+    PyArrayObject *sigmas = NULL;
     PyArrayObject *dst = NULL;
     int shape_y, shape_x;
     float sigma;
 
-    if (!PyArg_ParseTuple(args, "O!iif", &PyArray_Type, &points, &shape_y, &shape_x, &sigma))
+    if (!PyArg_ParseTuple(args, "O!O!O!ii", &PyArray_Type, &points, &PyArray_Type, &probs, &PyArray_Type, &sigmas, &shape_y, &shape_x))
         return NULL;
 
     npy_intp *dims = PyArray_DIMS(points);
@@ -110,8 +112,7 @@ static PyObject *c_gaussian2d(PyObject *self, PyObject *args)
     index.buildIndex();
 
 
-    const float sigma_denom = 2 * sigma * sigma;
-
+    
 #ifdef __APPLE__
 #pragma omp parallel for
 #else
@@ -134,13 +135,17 @@ static PyObject *c_gaussian2d(PyObject *self, PyObject *args)
             const float px = cloud.pts[ret_index].x;
             const float py = cloud.pts[ret_index].y;
 
+            const float prob = *(float *)PyArray_GETPTR1(probs, ret_index);
+            const float sigma = *(float *)PyArray_GETPTR1(sigmas, ret_index);
+            const float sigma_denom = 2 * sigma * sigma;
+
             const float y = py - i;
             const float x = px - j;
 
             const float r2 = x * x + y * y;
 
             // the gaussian value
-            const float val = exp(-r2 / sigma_denom);
+            const float val = prob*exp(-r2 / sigma_denom);
 
             // const float val = 0;
 

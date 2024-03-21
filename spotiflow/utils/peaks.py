@@ -1,3 +1,5 @@
+from numbers import Number
+from typing import Union
 import numpy as np
 import numpy as np
 from skimage.feature import corner_peaks, corner_subpix
@@ -77,22 +79,51 @@ def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     )
 
 
-def points_to_prob(points, shape, sigma=1.5, mode="max"):
-    """points are in (y,x) order"""
+def points_to_prob(points, shape, sigma:Union[np.ndarray, float]=1.5, vals:Union[np.ndarray, float]=1., mode:str="max", ):
+    """ 
+    create a probability map from a set of points
+    
+    Parameters
+    ----------
+    points : np.ndarray
+        Array of shape (N,2) containing the points to be filtered.
+    shape : tuple
+        shape of the output array
+    sigma : float or list/array of floats 
+        sigma of the gaussians, by default 1.5
+    mode : str, optional
+        mode of the filter, by default "max"
+    vals : float or list/array of floats 
+        Value or array of shape (N,) containing the value at the center of each point, by default 1.
+    """
 
     x = np.zeros(shape, np.float32)
     assert points.ndim == 2 and points.shape[1] == 2
     points = filter_shape(points, shape)
 
+    if isinstance(sigma, Number):
+        sigma = np.ones(len(points), np.float32) * sigma
+    else: 
+        sigma = np.asarray(sigma, np.float32)
+    
+    if isinstance(vals, Number):
+        vals = np.ones(len(points), np.float32) * vals
+    else: 
+        vals = np.asarray(vals, np.float32)
+            
+    if not len(points) == len(vals) or not len(points) == len(sigma):
+        raise ValueError("points, sigmas, and probs must have the same length")
+            
     if len(points) == 0:
         return x
 
     if mode == "max":
         x = c_gaussian2d(
             points.astype(np.float32, copy=False),
+            vals.astype(np.float32, copy=False),
+            sigma.astype(np.float32, copy=False),
             np.int32(shape[0]),
-            np.int32(shape[1]),
-            np.float32(sigma),
+            np.int32(shape[1])
         )
     else:
         raise ValueError(mode)
