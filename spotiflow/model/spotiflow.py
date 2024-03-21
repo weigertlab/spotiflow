@@ -740,30 +740,47 @@ class Spotiflow(nn.Module):
                         ) # HW(4*C')
 
             if scale is not None and scale != 1:
-                y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
+                y = zoom(y, (1.0, 1.0 / scale, 1.0 / scale), order=1)
             if subpix_radius >= 0:
-
-                _subpix = np.empty((self.config.out_channels,)+x.shape[:actual_n_dims]+(actual_n_dims,), np.float32) # C'HW(2|3)
+                flow_cpt = flow.copy()
+                
+                _subpix = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims]+(actual_n_dims,), np.float32) # C'HW(2|3)
+                flow = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims]+(actual_n_dims+1,), np.float32) # C'HW(3|4)
                 flow_dim = actual_n_dims + 1
                 for cl in range(self.config.out_channels):
+                    flow_curr = flow_cpt[..., cl*(flow_dim):(cl+1)*(flow_dim)]
+
                     _subpix_curr = flow_to_vector(
-                        flow[..., cl*(flow_dim):(cl+1)*(flow_dim)],
+                        flow_curr,
                         sigma=self.config.sigma,
                     )
                     out_shape = img.shape[:actual_n_dims]
-                    flow_curr = center_crop(flow, out_shape)
-                    _subpix_curr = center_crop(_subpix, out_shape)
 
-            y = center_crop(y, img.shape[:2])
+                    _subpix_curr = center_crop(_subpix_curr, out_shape)
+                    _subpix[cl] = _subpix_curr
+                    
+                    flow_curr = center_crop(flow_curr, out_shape)
+                    flow[cl] = flow_curr
 
-            pts = prob_to_points(
-                y,
-                prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh,
-                exclude_border=exclude_border,
-                mode=peak_mode,
-                min_distance=min_distance,
-            )
-            probs = y[tuple(pts.astype(int).T)].tolist()
+            
+            ys = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims], np.float32) # C'HW
+
+            pts = []
+            probs = []
+            for cl in range(self.config.out_channels):
+                ys[cl] = center_crop(y[cl], img.shape[:2])
+                curr_pts = prob_to_points(
+                    ys[cl],
+                    prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh,
+                    exclude_border=exclude_border,
+                    mode=peak_mode,
+                    min_distance=min_distance,
+                )
+
+                curr_probs = ys[cl][tuple(curr_pts.astype(int).T)].tolist()
+                pts.append(curr_pts)
+                probs.append(curr_probs)
+
 
         else:  # Predict with tiling
             if self.config.out_channels > 1:
@@ -880,21 +897,33 @@ class Spotiflow(nn.Module):
             probs = filter_shape(probs, img.shape[:actual_n_dims], idxr_array=points)
             pts = filter_shape(points, img.shape[:actual_n_dims], idxr_array=points)
 
-        if verbose:
-            log.info(f"Found {len(pts)} spots")
 
-        if subpix_radius >= 0:
+        # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
+        if self.config.out_channels == 1:
+            if isinstance(pts, list): # non-tiled prediction, completely remove this once properly done
+                y = ys[0]
+                pts = pts[0]
+                if subpix_radius >= 0:
+                    _subpix = _subpix[0]
+                    flow = flow[0]
+
+        # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
+        if self.config.out_channels == 1 and subpix_radius >= 0:
             _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
             # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
             pts = pts.clip(
                 0, np.array(img.shape[:actual_n_dims]) - 1
             )
-
-
+        elif self.config.out_channels > 1 and subpix_radius >= 0:
+            raise NotImplementedError("Subpixel prediction not implemented for multi-channel output yet.")
         else:
             _subpix = None
             flow = None
+        
+        if verbose:
+            log.info(f"Found {len(pts)} spots")
+
 
         details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
         return pts, details

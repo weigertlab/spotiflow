@@ -96,9 +96,11 @@ def test_predict(img_size: Tuple[int, int],
 
 if __name__ == "__main__":
     test_predict(
-        img_size=(64, 64),
-        n_tiles=(2, 2, 1),
-        scale=1/3,
+        img_size=(101, 241),
+        n_tiles=(1,1,1),
+        # n_tiles=(2, 2, 1),
+        scale=1.,
+        # scale=1/3,
         in_channels=3,
         device=None,
         subpix=True,
