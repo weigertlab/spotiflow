@@ -143,7 +143,7 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
     else:
         raise ValueError("Wrong dimension of points!")
 
-def points_to_prob2d(points, shape, sigma:Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str="max") -> np.ndarray:
+def points_to_prob2d(points, shape, sigma: Union[np.ndarray, float]=1.5, val: Union[np.ndarray, float]=1., mode:str="max") -> np.ndarray:
     """ 
     Create a 2D probability map from a set of points
     

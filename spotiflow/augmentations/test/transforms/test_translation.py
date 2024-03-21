@@ -23,9 +23,10 @@ def test_translation_augmentation(img_size: Tuple[int, ...],
 
     img = torch.zeros(img_size)
     msize = min(img_size[-2:])
-    pts = torch.randint(msize//3, msize-msize//3, (img_size[0], n_pts, 2))
+    pts = torch.randint(msize//3, msize-msize//3, (img_size[0], n_pts, 3)) # 3 bcs of class label
     for b in range(img_size[0]):
-        img[b] = torch.from_numpy(_generate_img_from_points(pts[b].numpy(), img_size[-2:]))
+        img[b] = torch.from_numpy(_generate_img_from_points(pts[b,...,:2].numpy(), img_size[-2:]))
+
     if shift == (0, 0):
         with pytest.raises(ValueError):
             aug = Translation(order=0, shift=shift)
@@ -34,7 +35,7 @@ def test_translation_augmentation(img_size: Tuple[int, ...],
         img_aug, pts_aug = aug(img, pts)
         img_from_aug_pts = torch.zeros(img_size)
         for b in range(img_size[0]):
-            img_from_aug_pts[b] = torch.from_numpy(_generate_img_from_points(pts_aug[b].numpy(), img_size[-2:]))
+            img_from_aug_pts[b] = torch.from_numpy(_generate_img_from_points(pts_aug[b,...,:2].numpy(), img_size[-2:]))
         mse = ((img_aug - img_from_aug_pts)**2).mean()
         if __name__ == "__main__":
             import matplotlib.pyplot as plt
