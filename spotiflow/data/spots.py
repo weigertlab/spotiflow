@@ -33,6 +33,7 @@ class SpotsDataset(Dataset):
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
         normalizer: Union[Literal["auto"], Callable, None] = "auto",
+        add_class_label: bool = True,
     ) -> Self:
         """ Constructor
 
@@ -74,10 +75,13 @@ class SpotsDataset(Dataset):
         )
         self._image_files = image_files
         self._n_classes = 1
-        assert all(p.shape[1] == centers[0].shape[1] for p in centers), "All center arrays should have the same number of columns!"
-        if centers[0].shape[1] == 3:
-            assert min(p[:, 2].min() for p in centers) == 0, "Class labels should start at 0!"
-            self._n_classes = max(p[:, 2].astype(int).max() for p in centers) + 1
+        if add_class_label:
+            assert all(p.shape[1] == centers[0].shape[1] for p in centers), "All center arrays should have the same number of columns!"
+            if centers[0].shape[1] == 3:
+                assert min(p[:, 2].min() for p in centers) == 0, "Class labels should start at 0!"
+                self._n_classes = max(p[:, 2].astype(int).max() for p in centers) + 1
+            else:
+                self._centers = [np.concatenate([p, np.zeros((p.shape[0], 1))], axis=1) for p in self._centers]
 
     @classmethod
     def from_folder(
@@ -92,6 +96,7 @@ class SpotsDataset(Dataset):
         compute_flow: bool = False,
         normalizer: Optional[Union[Callable, Literal["auto"]]] = "auto",
         random_state: Optional[int] = None,
+        add_class_label: bool = True,
     ) -> Self:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
@@ -152,6 +157,7 @@ class SpotsDataset(Dataset):
             compute_flow=compute_flow,
             image_files=image_files,
             normalizer=normalizer,
+            add_class_label=add_class_label,
         )
 
     def __len__(self) -> int:

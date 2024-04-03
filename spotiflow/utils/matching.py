@@ -11,7 +11,6 @@ log = logging.getLogger(__name__)
 
 def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):
     """finds matching that minimizes sum of mean squared distances"""
-
     if class_label_p1 is not None:
         p1 = p1[p1[:, -1] == class_label_p1][:, :-1]
     elif class_label_p2 is not None:
@@ -66,7 +65,6 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
     by_image is True -> metrics are computed by image and then averaged
     by_image is False -> TP/FP/FN are aggregated and only then are metrics computed
     """
-
     stats = tuple(
         points_matching(p1, p2, cutoff_distance=cutoff_distance, eps=eps, class_label_p1=class_label_p1, class_label_p2=class_label_p2)
         for p1, p2 in zip(p1s, p2s)

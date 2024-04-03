@@ -267,6 +267,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                 valid_pred_centers,
                 cutoff_distance=2 * self.model.config.sigma + 1,
                 by_image=True,
+                class_label_p1=0,
             )
 
             val_f1, val_acc = stats.f1, stats.accuracy
@@ -341,19 +342,19 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
             )
             self.logger.log_image(
                 key="target",
-                images=[cm.magma(v) for v in self._valid_targets_hm[:n_images_to_log]],
+                images=[cm.magma(np.squeeze(v, axis=0)) for v in self._valid_targets_hm[:n_images_to_log]],
                 step=self.global_step,
             )
             self.logger.log_image(
                 key="output",
-                images=[cm.magma(v) for v in self._valid_outputs[:n_images_to_log]],
+                images=[cm.magma(np.squeeze(v, axis=0)) for v in self._valid_outputs[:n_images_to_log]],
                 step=self.global_step,
             )
             if self.model.config.compute_flow:
                 self.logger.log_image(
                     key="flow",
                     images=[
-                        0.5 * (1 + v.transpose(1, 2, 0))
+                        0.5 * (1 + np.squeeze(v, axis=0).transpose(1, 2, 0))
                         for v in self._valid_flows[:n_images_to_log]
                     ],
                     step=self.global_step,
@@ -371,13 +372,13 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                 )
                 self.logger.experiment.add_image(
                     f"images/target/{i}",
-                    cm.magma(self._valid_targets_hm[i]),
+                    cm.magma(np.squeeze(self._valid_targets_hm[i], axis=0)),
                     self.current_epoch,
                     dataformats="HWC",
                 )
                 self.logger.experiment.add_image(
                     f"images/output/{i}",
-                    cm.magma(self._valid_outputs[i]),
+                    cm.magma(np.squeeze(self._valid_outputs[i], axis=0)),
                     self.current_epoch,
                     dataformats="HWC",
                 )

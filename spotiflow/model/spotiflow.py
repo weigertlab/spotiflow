@@ -771,7 +771,7 @@ class Spotiflow(nn.Module):
                 ys[cl] = center_crop(y[cl], img.shape[:2])
                 curr_pts = prob_to_points(
                     ys[cl],
-                    prob_thresh=self._prob_thresh if prob_thresh is None else prob_thresh,
+                    prob_thresh=self._prob_thresh[cl] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
                     exclude_border=exclude_border,
                     mode=peak_mode,
                     min_distance=min_distance,
@@ -916,7 +916,12 @@ class Spotiflow(nn.Module):
                 0, np.array(img.shape[:actual_n_dims]) - 1
             )
         elif self.config.out_channels > 1 and subpix_radius >= 0:
-            raise NotImplementedError("Subpixel prediction not implemented for multi-channel output yet.")
+            for cl in range(self.config.out_channels):
+                _offset = subpixel_offset(pts[cl], _subpix[cl], ys[cl], radius=subpix_radius)
+                pts[cl] = pts[cl] + _offset
+                pts[cl] = pts[cl].clip(
+                    0, np.array(img.shape[:actual_n_dims]) - 1
+                )
         else:
             _subpix = None
             flow = None
@@ -1101,8 +1106,10 @@ class Spotiflow(nn.Module):
                     pts + _subpix[class_label][tuple(pts.astype(int).T)]
                     for pts, _subpix in zip(val_pred_pts, val_flow_preds)
                 ]
+
+            # TODO: class label for 3D dataset
             stats = points_matching_dataset(
-                val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True, class_label_p1=class_label
+                val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True, class_label_p1=class_label if not self.config.is_3d else None,
             )
             return stats.f1
 
