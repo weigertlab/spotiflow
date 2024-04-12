@@ -267,7 +267,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                 valid_pred_centers,
                 cutoff_distance=2 * self.model.config.sigma + 1,
                 by_image=True,
-                class_label_p1=0,
+                class_label_p1=0 if not self.model.config.is_3d else None, # FIXME
             )
 
             val_f1, val_acc = stats.f1, stats.accuracy

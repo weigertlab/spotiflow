@@ -278,7 +278,7 @@ def write_coords_csv(pts: np.ndarray, fname: Union[Path, str]) -> None:
     """Writes points in a NumPy array to a CSV file
 
     Args:
-        pts (np.ndarray): 2D array of points
+        pts (np.ndarray): 2D or 3D array of points
         fname (Union[Path, str]): Path to the CSV file
     """
     columns = ("y", "x")

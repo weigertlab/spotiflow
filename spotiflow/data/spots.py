@@ -142,7 +142,7 @@ class SpotsDataset(Dataset):
         images = [io.imread(img) for img in tqdm(image_files, desc="Loading images")]
 
         centers = [
-            utils.read_coords_csv(center, add_class_column=True).astype(np.float32)
+            utils.read_coords_csv(center, add_class_column=add_class_label).astype(np.float32)
             for center in tqdm(center_files, desc="Loading centers")
         ]
 

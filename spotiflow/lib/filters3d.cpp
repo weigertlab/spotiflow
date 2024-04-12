@@ -97,14 +97,17 @@ static PyObject *c_maximum_filter_3d_float(PyObject *self, PyObject *args)
 
     float *src_data = (float *)PyArray_DATA(src);
     float *dst_data = (float *)PyArray_DATA(dst);
-    float *tmp = new float[Nx * Ny * Nz];
 
-    _max_filter_horiz(src_data, tmp, kernel_size, Nx, Ny, Nz);
-    _max_filter_vert(tmp, tmp, kernel_size, Nx, Ny, Nz);
-    _max_filter_depth(tmp, dst_data, kernel_size, Nx, Ny, Nz);
+    float *tmp1 = new float[Nx * Ny * Nz];
+    float *tmp2 = new float[Nx * Ny * Nz];
+
+    _max_filter_horiz(src_data, tmp1, kernel_size, Nx, Ny, Nz);
+    _max_filter_vert(tmp1, tmp2, kernel_size, Nx, Ny, Nz);
+    _max_filter_depth(tmp2, dst_data, kernel_size, Nx, Ny, Nz);
 
 
-    delete[] tmp;
+    delete[] tmp1;
+    delete[] tmp2;
 
 
     return PyArray_Return(dst);
