@@ -888,7 +888,7 @@ class Spotiflow(nn.Module):
             padding_to_correct = (padding[0][0], padding[1][0])
             if self.config.is_3d:
                 padding_to_correct = (*padding_to_correct, padding[2][0])
-                points = points - np.array(padding_to_correct)[None]
+            points = points - np.array(padding_to_correct)[None]
 
             probs = np.array(probs)
             # if scale is not None and scale != 1:
