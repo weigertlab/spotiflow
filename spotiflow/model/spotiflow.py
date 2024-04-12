@@ -768,7 +768,7 @@ class Spotiflow(nn.Module):
             pts = []
             probs = []
             for cl in range(self.config.out_channels):
-                ys[cl] = center_crop(y[cl], img.shape[:2])
+                ys[cl] = center_crop(y[cl], img.shape[:actual_n_dims])
                 curr_pts = prob_to_points(
                     ys[cl],
                     prob_thresh=self._prob_thresh[cl] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
