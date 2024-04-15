@@ -84,7 +84,7 @@ class RotationYX3D(BaseAugmentation):
         y, x = img.shape[-2:]
         center_z, center_y, center_x = 0, (y-1)/2, (x-1)/2
         
-        affine_mat = _affine_rotation_matrix(phi_rad, (center_z, center_y, center_x)).to(img.device)
+        affine_mat = _affine_rotation_matrix(-phi_rad, (center_z, center_y, center_x)).to(img.device)
         # Rotate points
         affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
         pts_r = (affine_coords@affine_mat.T)
