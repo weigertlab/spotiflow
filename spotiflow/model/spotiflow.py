@@ -353,8 +353,13 @@ class Spotiflow(nn.Module):
             crop_size = (min(train_config.crop_size_depth, min_crop_size_depth),) + crop_size
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
+
         # Build augmenters
-        if augment_train:
+        if isinstance(augment_train, AugmentationPipeline):
+            _crop_cls = transforms.Crop if not self.config.is_3d else transforms3d.Crop3D
+            assert any(isinstance(p, _crop_cls) for p in augment_train.transforms), "Custom augmenter must contain a cropping transform!"
+            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
+        elif augment_train:
             tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
         else:
             tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
