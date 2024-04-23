@@ -1008,6 +1008,42 @@ class Spotiflow(nn.Module):
         ]
         return p
 
+
+    def predict_multichannel(self, img: np.ndarray, channels: Union[int, Tuple[int]]=None, **predict_kwargs) -> Tuple[np.ndarray, Sequence[SimpleNamespace]]:
+        """
+        Wrapper function to retrieve spots in a multi-channel array independently per channel.
+        Currently assumes that the array is in channel-last format ((Z)YXC).
+
+        Args:
+            img (np.ndarray): array to predict on. Should be in channel-last format ((Z)YXC).
+            channels (Union[int, Tuple[int]], optional): indices of channels to predict on. If None, will predict on all channels. Defaults to None.
+            **predict_kwargs: argument allows by Spotiflow.predict()
+
+        Returns:
+            Tuple[np.ndarray, Sequence[SimpleNamespace]: Detected spots and sequence of details. First item is a numpy array of shape (N, 3) or (N, 4) containing the coordinates of the spots with the channel they were found on as the last column. Each item in the second element correspond to the details,
+                                                         which is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
+        """
+        log.info("Data is assumed to be in channel-last format ((Z)YXC).") # TODO: needed?
+        n_channels = img.shape[-1]
+        if isinstance(channels, int):
+            channels = (channels,)
+        elif channels is None:
+            channels = tuple(range(n_channels))
+        
+        assert all(c<n_channels for c in channels), "All given channel indices should be smaller than the number of channels."
+        all_details = []
+        actual_n_dims = 3 if not self.config.is_3d else 4
+        spots = np.empty((0, actual_n_dims))
+        for c in tqdm(channels, desc="Predicting channels", total=len(channels)):
+            curr_spots, details = self.predict(img[..., c], verbose=False, **predict_kwargs)
+            curr_n_spots = curr_spots.shape[0]
+            curr_spots = np.hstack((curr_spots, c*np.ones((curr_n_spots, 1)))) # Add channel indices as last column
+            spots = np.vstack((spots, curr_spots))
+            all_details += [details]
+        
+        return spots, all_details
+
+
     def optimize_threshold(
         self,
         val_ds: torch.utils.data.Dataset,
