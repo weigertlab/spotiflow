@@ -37,13 +37,13 @@ class Spots3DDataset(SpotsDataset):
 
         if self._compute_flow:
             flow = utils.points_to_flow3d(
-                centers.numpy(), img.shape[-3:], sigma=self._sigma
+                centers.numpy(), img.shape[-3:], sigma=self._sigma, grid=self._grid,
             ).transpose((3, 0, 1, 2))
             flow = torch.from_numpy(flow).float()
 
 
         heatmap_lv0 = utils.points_to_prob3d(
-            centers.numpy(), img.shape[-3:], mode=self._mode, sigma=self._sigma
+            centers.numpy(), img.shape[-3:], mode=self._mode, sigma=self._sigma, grid=self._grid,
         )
 
         # Build target at different resolution levels
@@ -81,6 +81,7 @@ class Spots3DDataset(SpotsDataset):
         normalizer: Optional[Union[Callable, Literal["auto"]]] = "auto",
         random_state: Optional[int] = None,
         add_class_label: bool = False,
+        grid: Optional[Sequence[int]] = None,
     ) -> Self:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
@@ -142,6 +143,7 @@ class Spots3DDataset(SpotsDataset):
             image_files=image_files,
             normalizer=normalizer,
             add_class_label=add_class_label,
+            grid=grid,
         )
 
 

@@ -101,6 +101,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         dropout: float = 0.0,
         sigma: Number = 1.0,
         is_3d: bool = False,
+        grid: Union[int, Tuple[int, int, int]] = (1, 1, 1),
         **kwargs,
     ):
         self.backbone = backbone
@@ -141,7 +142,13 @@ class SpotiflowModelConfig(SpotiflowConfig):
         self.sigma = sigma
         self.downsample_factor = downsample_factor
         self.is_3d = bool(is_3d)
-
+        if isinstance(grid, int):
+            self.grid = (grid,)*(3 if self.is_3d else 2)
+        else:
+            self.grid = grid
+        
+        if any(s != 1 for s in self.grid) and not self.is_3d:
+            log.warning("Grid is only used in 3D mode. Ignoring grid argument.")
         super().__init__()
 
     def is_valid(self):
@@ -200,6 +207,9 @@ class SpotiflowModelConfig(SpotiflowConfig):
         assert (
             isinstance(self.downsample_factor, int) and self.downsample_factor > 0
         ), "downsample_factor must be a positive integer"
+        assert (
+            all(isinstance(s, int) and s > 0 and (s == 1 or s % 2 == 0) for s in self.grid)
+        ), "grid must be a tuple containing only 1 or even positive integers"
 
 
 class SpotiflowTrainingConfig(SpotiflowConfig):

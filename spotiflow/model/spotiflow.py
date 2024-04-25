@@ -94,7 +94,6 @@ class Spotiflow(nn.Module):
         ConvModule = nn.Conv2d if not self.config.is_3d else nn.Conv3d
         BatchNormModule = nn.BatchNorm2d if not self.config.is_3d else nn.BatchNorm3d
 
-
         if self.config.compute_flow:
             self._flow = nn.Sequential(
                 ConvModule(
@@ -102,7 +101,7 @@ class Spotiflow(nn.Module):
                     self._backbone.out_channels_list[0],
                     3,
                     padding=1,
-                    bias=False if self.config.batch_norm else True,
+                    bias=not self.config.batch_norm,
                 ),
                 BatchNormModule(self._backbone.out_channels_list[0])
                 if self.config.batch_norm
@@ -113,7 +112,7 @@ class Spotiflow(nn.Module):
                     self._backbone.out_channels_list[0],
                     3,
                     padding=1,
-                    bias=False if self.config.batch_norm else True,
+                    bias=not self.config.batch_norm,
                 ),
                 BatchNormModule(self._backbone.out_channels_list[0])
                 if self.config.batch_norm
@@ -121,6 +120,18 @@ class Spotiflow(nn.Module):
                 nn.ReLU(inplace=True),
                 ConvModule(self._backbone.out_channels_list[0], 3*self.config.out_channels if not self.config.is_3d else 4*self.config.out_channels, 3, padding=1),
             )
+
+        if self.config.is_3d and any(s != 1 for s in self.config.grid):
+            self._downsampler = ConvModule(
+                self.config.in_channels,
+                self.config.initial_fmaps,
+                kernel_size=(s+1 for s in self.config.grid), # s is even, so s+1 is odd and always greater than the stride
+                stride=self.config.grid,
+                padding=1,
+                bias=not self.config.batch_norm,
+            )
+        else:
+            self._downsampler = None
 
         self._levels = self.config.levels
         self._sigmoid = nn.Sigmoid()
@@ -206,6 +217,8 @@ class Spotiflow(nn.Module):
             out["flow"]:      (n+1)d flow estimate
         """
         x = self._bg_remover(x)
+        if self._downsampler is not None:
+            x = self._downsampler(x)
         x = self._backbone(x)
         heatmaps = tuple(self._post(x))
         if self.config.compute_flow:
@@ -368,10 +381,10 @@ class Spotiflow(nn.Module):
         ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
         train_ds = ActualSpotsDataset(
-            train_images, train_spots, augmenter=tr_augmenter, **train_dataset_kwargs
+            train_images, train_spots, augmenter=tr_augmenter, grid=self.config.grid, **train_dataset_kwargs
         )
         val_ds = ActualSpotsDataset(
-            val_images, val_spots, augmenter=val_augmenter, **val_dataset_kwargs
+            val_images, val_spots, augmenter=val_augmenter, grid=self.config.grid, **val_dataset_kwargs
         )
 
         # Add model checkpoint callback if not given (to save the model)
@@ -767,13 +780,14 @@ class Spotiflow(nn.Module):
                     flow_curr = center_crop(flow_curr, out_shape)
                     flow[cl] = flow_curr
 
-            
-            ys = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims], np.float32) # C'HW
+            corr_grid = np.asarray(self.config.grid) if not self.config.is_3d else 1
+            out_shape = tuple(np.asarray(img.shape[:actual_n_dims])//corr_grid)
+            ys = np.empty((self.config.out_channels,)+out_shape, np.float32) # C'HW
 
             pts = []
             probs = []
             for cl in range(self.config.out_channels):
-                ys[cl] = center_crop(y[cl], img.shape[:actual_n_dims])
+                ys[cl] = center_crop(y[cl], out_shape)
                 curr_pts = prob_to_points(
                     ys[cl],
                     prob_thresh=self._prob_thresh[cl] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
@@ -924,6 +938,8 @@ class Spotiflow(nn.Module):
             for cl in range(self.config.out_channels):
                 _offset = subpixel_offset(pts[cl], _subpix[cl], ys[cl], radius=subpix_radius)
                 pts[cl] = pts[cl] + _offset
+                if self.config.is_3d and any(s > 1 for s in self.config.grid):
+                    pts[cl] *= np.asarray(self.config.grid)
                 pts[cl] = pts[cl].clip(
                     0, np.array(img.shape[:actual_n_dims]) - 1
                 )
@@ -1133,6 +1149,7 @@ class Spotiflow(nn.Module):
                 del out, imgs, val_batch
 
         def _metric_at_threshold(thr, class_label: int=0):
+            corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
             val_pred_pts = [
                 prob_to_points(
                     p[class_label],
@@ -1146,6 +1163,12 @@ class Spotiflow(nn.Module):
                 val_pred_pts = [
                     pts + _subpix[class_label][tuple(pts.astype(int).T)]
                     for pts, _subpix in zip(val_pred_pts, val_flow_preds)
+                ]
+            
+            if corr_grid != 1:
+                val_pred_pts = [
+                    pts * corr_grid
+                    for pts in val_pred_pts
                 ]
 
             # TODO: class label for 3D dataset
@@ -1215,6 +1238,9 @@ class Spotiflow(nn.Module):
                 "batch_norm",
                 "padding",
             )
+            if self.config.is_3d and any (g > 1 for g in self.config.grid): # Gridded prediction, change in_channels to initial_fmaps, which is the output channels of the downsampler
+                backbone_params["in_channels"] = backbone_params["initial_fmaps"]
+
             return UNetBackbone(concat_mode="cat", use_3d_convs=self.config.is_3d, **backbone_params)
         elif self.config.backbone == "unet_res":
             backbone_params = pydash.pick(

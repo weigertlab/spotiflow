@@ -34,6 +34,7 @@ class SpotsDataset(Dataset):
         image_files: Optional[Sequence[str]] = None,
         normalizer: Union[Literal["auto"], Callable, None] = "auto",
         add_class_label: bool = True,
+        grid: Optional[Sequence[int]] = None,
     ) -> Self:
         """ Constructor
 
@@ -82,6 +83,12 @@ class SpotsDataset(Dataset):
                 self._n_classes = max(p[:, 2].astype(int).max() for p in centers) + 1
             else:
                 self._centers = [np.concatenate([p, np.zeros((p.shape[0], 1))], axis=1) for p in self._centers]
+        if grid is None:
+            grid = (1,)*centers[0].shape[1]
+        self._grid = grid
+        assert len(self._grid) == centers[0].shape[1], "Grid size should have the same dimensionality as the input!"
+        assert all(g > 0 for g in self._grid), "Grid size should be positive!"
+        assert all(g == 1 or g%2 == 0 for g in self._grid), "Grid elements should be either 1 or an odd integer > 1!"
 
     @classmethod
     def from_folder(
@@ -97,6 +104,7 @@ class SpotsDataset(Dataset):
         normalizer: Optional[Union[Callable, Literal["auto"]]] = "auto",
         random_state: Optional[int] = None,
         add_class_label: bool = True,
+        grid: Optional[Sequence[int]] = None,
     ) -> Self:
         """Build dataset from folder. Images and centers are loaded from disk and normalized.
 
@@ -158,6 +166,7 @@ class SpotsDataset(Dataset):
             image_files=image_files,
             normalizer=normalizer,
             add_class_label=add_class_label,
+            grid=grid,
         )
 
     def __len__(self) -> int:

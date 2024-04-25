@@ -252,6 +252,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
         """Called when the validation epoch ends.
         Logs the F1 score and accuracy of the model on the validation set, as well as some sample images.
         """
+        corr_grid = np.asarray(self.model.config.grid) if self.model.config.is_3d else 1
         if self.model.config.out_channels == 1:
             valid_pred_centers = [
                 prob_to_points(
@@ -259,7 +260,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                     exclude_border=False,
                     min_distance=self.model.config.sigma,
                     mode="fast",
-                )
+                )*corr_grid
                 for p in self._valid_outputs
             ]
             stats = points_matching_dataset(
@@ -291,7 +292,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                         exclude_border=False,
                         min_distance=2 * self.model.config.sigma + 1,
                         mode="fast",
-                    )
+                    )*corr_grid
                     for p in self._valid_outputs
                 ]
                 stats = points_matching_dataset(
