@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 import numpy as np
@@ -134,12 +134,12 @@ def maximum_filter_3d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     )
 
 
-def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max") -> np.ndarray:
+def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max", grid: Union[int, Tuple[int,int,int]]=(1,1,1)) -> np.ndarray:
     """Wrapper function for different cpp calls. Points should be in (y,x) or (z,y,x) order"""
     if points.shape[1] == 2:
         return points_to_prob2d(points, shape, sigma, val, mode)
     elif points.shape[1] == 3:
-        return points_to_prob3d(points, shape, sigma, mode)
+        return points_to_prob3d(points, shape, sigma, grid, mode)
     else:
         raise ValueError("Wrong dimension of points!")
 
@@ -195,10 +195,16 @@ def points_to_prob2d(points, shape, sigma: Union[np.ndarray, float]=1.5, val: Un
 
     return x
 
-def points_to_prob3d(points, shape, sigma=1.5, mode="max"):
+def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
     """points are in (z,y,x) order"""
 
-    x = np.zeros(shape, np.float32)
+    if isinstance(grid, int):
+        grid = (grid, grid, grid)
+    assert len(shape) == 3 and len(grid) == 3 and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
+
+    # TODO: needed?
+    assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
+    x = np.zeros(tuple(s//g for s, g in zip(shape, grid)), np.float32)
     assert points.ndim == 2 and points.shape[1] == 3
     points = filter_shape(points, shape)
 
@@ -211,6 +217,9 @@ def points_to_prob3d(points, shape, sigma=1.5, mode="max"):
             np.int32(shape[0]),
             np.int32(shape[1]),
             np.int32(shape[2]),
+            np.int32(grid[0]),
+            np.int32(grid[1]),
+            np.int32(grid[2]),
             np.float32(sigma),
         )
     else:
@@ -218,7 +227,7 @@ def points_to_prob3d(points, shape, sigma=1.5, mode="max"):
 
     return x
 
-def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
+def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
     """
     for each grid point in shape compute the vector d in R^N to the closest point
     and return its flow embedding onto S^(N+1)
@@ -227,7 +236,7 @@ def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5):
     if len(shape) == 2:
         return points_to_flow2d(points, shape, sigma)
     elif len(shape) == 3:
-        return points_to_flow3d(points, shape, sigma)
+        return points_to_flow3d(points, shape, sigma, grid)
     else:
         raise ValueError("Dimensionality of the input points should be 2 or 3!")
 
@@ -257,10 +266,10 @@ def points_to_flow2d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
             np.float32(sigma),
         )
 
-def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
+def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]] = (1,1,1)):
     """
     for each grid point in shape compute the vector d=(z,y,x) to the closest
-    point and return its flow embedding (w;, z',y',x') onto S^4
+    point and return its flow embedding (w',z',y',x') onto S^4
 
     w' = -(r^2 - sigma^2) / (r^2 + sigma^2);
     z' = 2 * sigma * z / (r^2 + sigma^2);
@@ -271,8 +280,13 @@ def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
 
     with r = sqrt(x^2+y^2+z^2)
     """
+    if isinstance(grid, int):
+        grid = (grid, grid, grid)
+    
+    assert len(shape) == 3 and len(grid) == 3 and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
+    assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
     if len(points) == 0:
-        flow = np.zeros(shape[:3] + (4,), np.float32)
+        flow = np.zeros(tuple(s//g for s, g in zip(shape[:3], grid)) + (4,), np.float32)
         flow[..., 0] = -1
         return flow
     else:
@@ -281,11 +295,14 @@ def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
             np.int32(shape[0]),
             np.int32(shape[1]),
             np.int32(shape[2]),
+            np.int32(grid[0]),
+            np.int32(grid[1]),
+            np.int32(grid[2]),
             np.float32(sigma),
         )
 
 
-def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20):
+def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20, grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
     if flow.ndim == 3:
         return flow_to_vector_2d(flow, sigma, eps)
     elif flow.ndim == 4:
@@ -309,9 +326,9 @@ def flow_to_vector_3d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     """from the 4d flow (w',z',y',x') compute back the 3d vector field (z,y,x) it corresponds to
 
     Args:
-        flow (np.ndarray): _description_
-        sigma (float): _description_
-        eps (float, optional): _description_. Defaults to 1e-20.
+        flow (np.ndarray): stereographic flow of shape (w',z',y',x')
+        sigma (float): scale length of the flow
+        eps (float, optional): epsilon for numerical stability. Defaults to 1e-20.
     """
     w, z, y, x = flow.transpose(3, 0, 1, 2)
     s = sigma / (1 + w + eps)

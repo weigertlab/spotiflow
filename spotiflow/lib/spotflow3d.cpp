@@ -62,17 +62,18 @@ static PyObject *c_spotflow3d(PyObject *self, PyObject *args)
     PyArrayObject *points = NULL;
     PyArrayObject *dst = NULL;
     int shape_z, shape_y, shape_x;
+    int grid_z, grid_y, grid_x;
     float scale;
 
-    if (!PyArg_ParseTuple(args, "O!iiif", &PyArray_Type, &points, &shape_z, &shape_y, &shape_x, &scale))
+    if (!PyArg_ParseTuple(args, "O!iiiiiif", &PyArray_Type, &points, &shape_z, &shape_y, &shape_x, &grid_z, &grid_y, &grid_x, &scale))
         return NULL;
 
     npy_intp *dims = PyArray_DIMS(points);
 
     npy_intp dims_dst[4];
-    dims_dst[0] = shape_z;
-    dims_dst[1] = shape_y;
-    dims_dst[2] = shape_x;
+    dims_dst[0] = shape_z / grid_z; // TODO: what if shape_z % grid_z != 0?
+    dims_dst[1] = shape_y / grid_y; // TODO: what if shape_y % grid_y != 0?
+    dims_dst[2] = shape_x / grid_x; // TODO: what if shape_x % grid_x != 0?
     dims_dst[3] = 4;
 
     dst = (PyArrayObject *)PyArray_SimpleNew(4, dims_dst, NPY_FLOAT32);
@@ -103,7 +104,7 @@ static PyObject *c_spotflow3d(PyObject *self, PyObject *args)
 
     index.buildIndex();
 
-    const float scale2 = scale * scale;
+    const float scale2 = scale * scale; // TODO: rescale?
 
 #ifdef __APPLE__
 #pragma omp parallel for
@@ -118,7 +119,7 @@ static PyObject *c_spotflow3d(PyObject *self, PyObject *args)
             {
 
                 // get the closest point
-                const float query_pt[3] = {(float)k, (float)j, (float)i};
+                const float query_pt[3] = {(float) grid_x*k, (float) grid_y*j, (float)grid_z*i};
                 size_t ret_index;
                 float out_dist_sqr;
 
@@ -130,9 +131,9 @@ static PyObject *c_spotflow3d(PyObject *self, PyObject *args)
                 const float py = cloud.pts[ret_index].y;
                 const float pz = cloud.pts[ret_index].z;
 
-                const float z = pz - i;
-                const float y = py - j;
-                const float x = px - k;
+                const float z = pz/grid_z - i;
+                const float y = py/grid_y - j;
+                const float x = px/grid_z - k;
 
                 const float r2 = x * x + y * y + z * z;
 
@@ -160,17 +161,18 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
     PyArrayObject *points = NULL;
     PyArrayObject *dst = NULL;
     int shape_z, shape_y, shape_x;
+    int grid_z, grid_y, grid_x;
     float sigma;
 
-    if (!PyArg_ParseTuple(args, "O!iiif", &PyArray_Type, &points, &shape_z, &shape_y, &shape_x, &sigma))
+    if (!PyArg_ParseTuple(args, "O!iiiiiif", &PyArray_Type, &points, &shape_z, &shape_y, &shape_x, &grid_z, &grid_y, &grid_x, &sigma))
         return NULL;
 
     npy_intp *dims = PyArray_DIMS(points);
 
     npy_intp dims_dst[3];
-    dims_dst[0] = shape_z;
-    dims_dst[1] = shape_y;
-    dims_dst[2] = shape_x;
+    dims_dst[0] = shape_z / grid_z; // TODO: what if shape_z % grid_z != 0?
+    dims_dst[1] = shape_y / grid_y; // TODO: what if shape_y % grid_y != 0?
+    dims_dst[2] = shape_x / grid_x; // TODO: what if shape_x % grid_x != 0?
 
     dst = (PyArrayObject *)PyArray_SimpleNew(3/* dim */, dims_dst, NPY_FLOAT32);
 
@@ -202,7 +204,7 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
     index.buildIndex();
 
 
-    const float sigma_denom = 2 * sigma * sigma;
+    const float sigma_denom = 2 * sigma * sigma / cbrt(grid_z * grid_y * grid_x);
 
     #ifdef __APPLE__
     #pragma omp parallel for
@@ -217,7 +219,7 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
             {
 
                 // get the closest point
-                const float query_pt[3] = {(float)k, (float)j, (float)i};
+                const float query_pt[3] = {(float) grid_x*k, (float) grid_y*j, (float) grid_z*i};
                 size_t ret_index;
                 float out_dist_sqr;
 
@@ -229,9 +231,9 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
                 const float py = cloud.pts[ret_index].y;
                 const float pz = cloud.pts[ret_index].z;
 
-                const float z = pz - i;
-                const float y = py - j;
-                const float x = px - k;
+                const float z = floor(pz/grid_z) - i;
+                const float y = floor(py/grid_y) - j;
+                const float x = floor(px/grid_x) - k;
 
                 const float r2 = x * x + y * y + z * z;
 
