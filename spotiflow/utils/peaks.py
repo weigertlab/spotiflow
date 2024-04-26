@@ -134,12 +134,28 @@ def maximum_filter_3d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     )
 
 
-def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max", grid: Union[int, Tuple[int,int,int]]=(1,1,1)) -> np.ndarray:
+def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max", grid: Union[int, Tuple[int,int,int]]=None) -> np.ndarray:
     """Wrapper function for different cpp calls. Points should be in (y,x) or (z,y,x) order"""
-    if points.shape[1] == 2:
-        return points_to_prob2d(points, shape, sigma, val, mode)
-    elif points.shape[1] == 3:
-        return points_to_prob3d(points, shape, sigma, grid, mode)
+
+    ndim=len(shape) 
+    if not points.shape[1] == ndim:
+        raise ValueError("Wrong dimension of points!")
+    
+    if grid is None and ndim == 2:
+        raise NotImplementedError("grid not yet implemented for 2d")
+    
+    if grid is None:
+        grid = (1, )*ndim
+    elif isinstance(grid, int):
+        grid = (grid, )*ndim
+
+    if len(grid) != ndim:
+        raise ValueError("grid must have the same dimension as shape")
+    
+    if ndim == 2:
+        return points_to_prob2d(points, shape=shape, sigma=sigma, val=val, mode=mode)
+    elif ndim == 3:
+        return points_to_prob3d(points, shape=shape, sigma=sigma, grid=grid, mode=mode)
     else:
         raise ValueError("Wrong dimension of points!")
 
@@ -195,17 +211,17 @@ def points_to_prob2d(points, shape, sigma: Union[np.ndarray, float]=1.5, val: Un
 
     return x
 
-def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
+def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tuple[int,int,int]]=None):
     """points are in (z,y,x) order"""
 
-    if isinstance(grid, int):
-        grid = (grid, grid, grid)
-    assert len(shape) == 3 and len(grid) == 3 and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
+    ndim=len(shape)
+    
+    assert len(grid) == ndim and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
 
     # TODO: needed?
     assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
     x = np.zeros(tuple(s//g for s, g in zip(shape, grid)), np.float32)
-    assert points.ndim == 2 and points.shape[1] == 3
+    assert points.ndim == 2 and points.shape[1] == ndim
     points = filter_shape(points, shape)
 
     if len(points) == 0:
@@ -227,16 +243,22 @@ def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tupl
 
     return x
 
-def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
+def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]]=None):
     """
     for each grid point in shape compute the vector d in R^N to the closest point
     and return its flow embedding onto S^(N+1)
     """
-    assert points.shape[-1] == len(shape)
-    if len(shape) == 2:
+    ndim=len(shape)
+    assert points.shape[-1] == ndim 
+    if grid is None:
+        grid = (1,)*ndim
+    elif isinstance(grid, int):
+        grid = (grid,)*ndim
+    
+    if ndim == 2:
         return points_to_flow2d(points, shape, sigma)
-    elif len(shape) == 3:
-        return points_to_flow3d(points, shape, sigma, grid)
+    elif ndim == 3:
+        return points_to_flow3d(points, shape=shape, sigma=sigma, grid=grid)
     else:
         raise ValueError("Dimensionality of the input points should be 2 or 3!")
 
@@ -302,11 +324,12 @@ def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid:
         )
 
 
-def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20, grid: Union[int, Tuple[int,int,int]]=(1,1,1)):
-    if flow.ndim == 3:
-        return flow_to_vector_2d(flow, sigma, eps)
-    elif flow.ndim == 4:
-        return flow_to_vector_3d(flow, sigma, eps)
+def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20):
+    ndim=flow.ndim-1
+    if ndim == 2:
+        return flow_to_vector_2d(flow, sigma=sigma, eps=eps)
+    elif ndim == 3:
+        return flow_to_vector_3d(flow, sigma=sigma, eps=eps)
     else:
         raise ValueError(f"Dimensionality of the stereographic flow should be 3 or 4!")
 
@@ -332,7 +355,8 @@ def flow_to_vector_3d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     """
     w, z, y, x = flow.transpose(3, 0, 1, 2)
     s = sigma / (1 + w + eps)
-    return np.stack((z * s, y * s, x * s), axis=-1)
+    offsets = np.stack((z * s, y * s, x * s), axis=-1)
+    return offsets
 
 def prob_to_points(
     prob,
@@ -406,3 +430,27 @@ def local_peaks(
     points = nms_fun(coord, min_distance=min_distance)
     return points
 
+
+
+def points_from_heatmap_flow(heatmap:np.ndarray, flow:np.ndarray, sigma:float, grid:tuple[int]=None, local_peak_kwargs=None):
+    """ Returns the points from the heatmap and flow field""" 
+    ndim = heatmap.ndim
+
+    if not flow.ndim == ndim+1:
+        raise ValueError("Flow and heatmap must have the same dimension")
+    if not flow.shape[-1] == ndim+1:
+        raise ValueError(f"Last dimension of flow must be {ndim+1}")
+    
+    if grid is None:
+        grid = (1,)*ndim
+
+    grid = np.asarray(grid)
+
+    if local_peak_kwargs is None:
+        local_peak_kwargs = {}
+
+    points_new = local_peaks(heatmap, **local_peak_kwargs)
+    flow_reversed = flow_to_vector(flow, sigma=sigma)    
+    offsets = flow_reversed[tuple(points_new.T.astype(int))]
+    points_new = grid[None]*(points_new + offsets)
+    return points_new
