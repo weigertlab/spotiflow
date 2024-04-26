@@ -127,7 +127,7 @@ class Spotiflow(nn.Module):
                 self.config.initial_fmaps,
                 kernel_size=(2*s+1 for s in self.config.grid),
                 stride=self.config.grid,
-                padding=1,
+                padding=self.config.grid,
                 bias=not self.config.batch_norm,
             )
         else:
