@@ -125,7 +125,7 @@ class Spotiflow(nn.Module):
             self._downsampler = ConvModule(
                 self.config.in_channels,
                 self.config.initial_fmaps,
-                kernel_size=(s+1 for s in self.config.grid), # s is even, so s+1 is odd and always greater than the stride
+                kernel_size=(2*s+1 for s in self.config.grid),
                 stride=self.config.grid,
                 padding=1,
                 bias=not self.config.batch_norm,
@@ -723,6 +723,8 @@ class Spotiflow(nn.Module):
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
+            corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
+            out_shape = tuple(np.asarray(img.shape[:actual_n_dims]//corr_grid))
             with torch.inference_mode():
                 img_t = (
                     torch.from_numpy(x).to(device).unsqueeze(0)
@@ -762,8 +764,8 @@ class Spotiflow(nn.Module):
             if subpix_radius >= 0:
                 flow_cpt = flow.copy()
                 
-                _subpix = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims]+(actual_n_dims,), np.float32) # C'HW(2|3)
-                flow = np.empty((self.config.out_channels,)+img.shape[:actual_n_dims]+(actual_n_dims+1,), np.float32) # C'HW(3|4)
+                _subpix = np.empty((self.config.out_channels,)+out_shape+(actual_n_dims,), np.float32) # C'HW(2|3)
+                flow = np.empty((self.config.out_channels,)+out_shape+(actual_n_dims+1,), np.float32) # C'HW(3|4)
                 flow_dim = actual_n_dims + 1
                 for cl in range(self.config.out_channels):
                     flow_curr = flow_cpt[..., cl*(flow_dim):(cl+1)*(flow_dim)]
@@ -772,7 +774,6 @@ class Spotiflow(nn.Module):
                         flow_curr,
                         sigma=self.config.sigma,
                     )
-                    out_shape = img.shape[:actual_n_dims]
 
                     _subpix_curr = center_crop(_subpix_curr, out_shape)
                     _subpix[cl] = _subpix_curr
@@ -780,8 +781,6 @@ class Spotiflow(nn.Module):
                     flow_curr = center_crop(flow_curr, out_shape)
                     flow[cl] = flow_curr
 
-            corr_grid = np.asarray(self.config.grid) if not self.config.is_3d else 1
-            out_shape = tuple(np.asarray(img.shape[:actual_n_dims])//corr_grid)
             ys = np.empty((self.config.out_channels,)+out_shape, np.float32) # C'HW
 
             pts = []
@@ -930,6 +929,9 @@ class Spotiflow(nn.Module):
         if self.config.out_channels == 1 and subpix_radius >= 0:
             _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
             pts = pts + _offset
+            if self.config.is_3d and any(s > 1 for s in self.config.grid):
+                pts *= np.asarray(self.config.grid)
+
             # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
             pts = pts.clip(
                 0, np.array(img.shape[:actual_n_dims]) - 1
@@ -946,7 +948,9 @@ class Spotiflow(nn.Module):
         else:
             _subpix = None
             flow = None
-        
+            if self.config.is_3d and any(s > 1 for s in self.config.grid):
+                pts *= np.asarray(self.config.grid)
+
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
@@ -1149,7 +1153,6 @@ class Spotiflow(nn.Module):
                 del out, imgs, val_batch
 
         def _metric_at_threshold(thr, class_label: int=0):
-            corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
             val_pred_pts = [
                 prob_to_points(
                     p[class_label],
@@ -1165,7 +1168,8 @@ class Spotiflow(nn.Module):
                     for pts, _subpix in zip(val_pred_pts, val_flow_preds)
                 ]
             
-            if corr_grid != 1:
+            if self.config.is_3d and any(s > 1 for s in self.config.grid):
+                corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
                 val_pred_pts = [
                     pts * corr_grid
                     for pts in val_pred_pts
