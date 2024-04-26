@@ -1,7 +1,6 @@
 import logging
 from collections import OrderedDict
 from copy import deepcopy
-from itertools import product
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Literal, Optional, Sequence, Tuple, Union
@@ -710,6 +709,11 @@ class Spotiflow(nn.Module):
             self.config.downsample_factors[0][0] ** self.config.levels
             for _ in range(img.ndim - 1)
         ) + (1,)
+        if self.config.is_3d and any(g>1 for g in self.config.grid):
+            div_by = tuple(
+                g*d for g, d in zip((*self.config.grid, 1), div_by)
+            )
+
         pad_shape = tuple(int(d * np.ceil(s / d)) for s, d in zip(x.shape, div_by))
         if verbose:
             log.info(f"Padding to shape {pad_shape}")
@@ -720,11 +724,12 @@ class Spotiflow(nn.Module):
         if normalizer is not None and callable(normalizer):
             x = normalizer(x)
 
+        corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
+        out_shape = tuple(np.asarray(img.shape[:actual_n_dims]//corr_grid))
+
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
-            corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
-            out_shape = tuple(np.asarray(img.shape[:actual_n_dims]//corr_grid))
             with torch.inference_mode():
                 img_t = (
                     torch.from_numpy(x).to(device).unsqueeze(0)
@@ -803,10 +808,14 @@ class Spotiflow(nn.Module):
         else:  # Predict with tiling
             if self.config.out_channels > 1:
                 raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
-            y = np.empty(x.shape[:actual_n_dims], np.float32)
+            # if self.config.is_3d and any(g>1 for g in self.config.grid):
+            #     raise NotImplementedError("Tiled prediction not implemented for gridded output yet.")
+
+            out_shape = tuple(np.asarray(x.shape[:actual_n_dims]//corr_grid))
+            y = np.empty(out_shape, np.float32)
             if subpix_radius >= 0:
-                _subpix = np.empty(x.shape[:actual_n_dims] + (actual_n_dims,), np.float32)
-                flow = np.empty(x.shape[:actual_n_dims] + (actual_n_dims+1,), np.float32)
+                _subpix = np.empty(out_shape + (actual_n_dims,), np.float32)
+                flow = np.empty(out_shape + (actual_n_dims+1,), np.float32)
             points = []
             probs = []
             actual_n_tiles = n_tiles
@@ -852,19 +861,27 @@ class Spotiflow(nn.Module):
                         mode=peak_mode,
                         min_distance=min_distance,
                     )
+                    if self.config.is_3d and any(g > 1 for g in self.config.grid):
+                        s_src_corr = tuple(
+                            slice(s.start//g, s.stop//g, s.step) for g, s in zip((*self.config.grid, 1), s_src)
+                        )
+                        s_dst_corr = tuple(
+                            slice(s.start//g, s.stop//g, s.step) for g, s in zip((*self.config.grid, 1), s_dst)
+                        )
+                    else:
+                        s_src_corr, s_dst_corr = s_src, s_dst
                     # remove global offset
-                    p -= np.array([s.start for s in s_src[:actual_n_dims]])[None]
-                    write_shape = tuple(s.stop - s.start for s in s_dst[:actual_n_dims])
+                    p -= np.array([s.start for s in s_src_corr[:actual_n_dims]])[None]
+                    write_shape = tuple(s.stop - s.start for s in s_dst_corr[:actual_n_dims])
                     p = filter_shape(p, write_shape, idxr_array=p)
 
-                    y_tile_sub = y_tile[s_src[:actual_n_dims]]
-
+                    y_tile_sub = y_tile[s_src_corr[:actual_n_dims]]
                     probs += y_tile_sub[tuple(p.astype(int).T)].tolist()
 
                     # add global offset
-                    p += np.array([s.start for s in s_dst[:actual_n_dims]])[None]
+                    p += np.array([s.start for s in s_dst_corr[:actual_n_dims]])[None]
                     points.append(p)
-                    y[s_dst[:actual_n_dims]] = y_tile_sub
+                    y[s_dst_corr[:actual_n_dims]] = y_tile_sub
 
                     # Flow
                     if subpix_radius >= 0:
@@ -884,21 +901,22 @@ class Spotiflow(nn.Module):
                                 .cpu()
                                 .numpy()
                             )
-                        flow_tile_sub = flow_tile[s_src[:actual_n_dims]]
-                        flow[s_dst[:actual_n_dims]] = flow_tile_sub
+                        flow_tile_sub = flow_tile[s_src_corr[:actual_n_dims]]
+
+                        flow[s_dst_corr[:actual_n_dims]] = flow_tile_sub
 
                         # Cartesian coordinates
                         subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
-                        subpix_tile_sub = subpix_tile[s_src[:actual_n_dims]]
-                        _subpix[s_dst[:actual_n_dims]] = subpix_tile_sub
+                        subpix_tile_sub = subpix_tile[s_src_corr[:actual_n_dims]]
+                        _subpix[s_dst_corr[:actual_n_dims]] = subpix_tile_sub
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
 
-            y = center_crop(y, img.shape[:actual_n_dims])
+            y = center_crop(y, out_shape)
             if subpix_radius >= 0:
-                flow = center_crop(flow, img.shape[:actual_n_dims])
-                _subpix = center_crop(_subpix, img.shape[:actual_n_dims])
+                flow = center_crop(flow, out_shape)
+                _subpix = center_crop(_subpix, out_shape)
 
             points = np.concatenate(points, axis=0)
 
@@ -912,8 +930,8 @@ class Spotiflow(nn.Module):
             # if scale is not None and scale != 1:
             #     points = np.round((points.astype(float) / scale)).astype(int)
 
-            probs = filter_shape(probs, img.shape[:actual_n_dims], idxr_array=points)
-            pts = filter_shape(points, img.shape[:actual_n_dims], idxr_array=points)
+            probs = filter_shape(probs, out_shape, idxr_array=points)
+            pts = filter_shape(points, out_shape, idxr_array=points)
 
 
         # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
