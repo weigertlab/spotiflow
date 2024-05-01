@@ -725,7 +725,7 @@ class Spotiflow(nn.Module):
             x = normalizer(x)
 
         corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
-        out_shape = tuple(np.asarray(img.shape[:actual_n_dims]//corr_grid))
+        out_shape = tuple(np.asarray(img.shape[:actual_n_dims])//corr_grid)
 
         self.eval()
         # Predict without tiling
@@ -811,7 +811,7 @@ class Spotiflow(nn.Module):
             # if self.config.is_3d and any(g>1 for g in self.config.grid):
             #     raise NotImplementedError("Tiled prediction not implemented for gridded output yet.")
 
-            out_shape = tuple(np.asarray(x.shape[:actual_n_dims]//corr_grid))
+            out_shape = tuple(np.asarray(x.shape[:actual_n_dims])//corr_grid)
             y = np.empty(out_shape, np.float32)
             if subpix_radius >= 0:
                 _subpix = np.empty(out_shape + (actual_n_dims,), np.float32)
