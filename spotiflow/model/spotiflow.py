@@ -808,14 +808,11 @@ class Spotiflow(nn.Module):
         else:  # Predict with tiling
             if self.config.out_channels > 1:
                 raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
-            # if self.config.is_3d and any(g>1 for g in self.config.grid):
-            #     raise NotImplementedError("Tiled prediction not implemented for gridded output yet.")
-
-            out_shape = tuple(np.asarray(x.shape[:actual_n_dims])//corr_grid)
-            y = np.empty(out_shape, np.float32)
+            padded_shape = x.shape[:actual_n_dims]
+            y = np.empty(padded_shape, np.float32)
             if subpix_radius >= 0:
-                _subpix = np.empty(out_shape + (actual_n_dims,), np.float32)
-                flow = np.empty(out_shape + (actual_n_dims+1,), np.float32)
+                _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
+                flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
             points = []
             probs = []
             actual_n_tiles = n_tiles
