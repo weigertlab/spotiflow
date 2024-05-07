@@ -79,8 +79,8 @@ class SpotsDataset(Dataset):
         if add_class_label:
             assert all(p.shape[1] == centers[0].shape[1] for p in centers), "All center arrays should have the same number of columns!"
             if centers[0].shape[1] == 3:
-                assert min(p[:, 2].min() for p in centers) == 0, "Class labels should start at 0!"
-                self._n_classes = max(p[:, 2].astype(int).max() for p in centers) + 1
+                assert min(p[:, 2].min() for p in centers if p.shape[0] > 0) == 0, "Class labels should start at 0!"
+                self._n_classes = max(p[:, 2].astype(int).max() for p in centers if p.shape[0] > 0) + 1
             else:
                 self._centers = [np.concatenate([p, np.zeros((p.shape[0], 1))], axis=1) for p in self._centers]
         if grid is None:

@@ -808,7 +808,7 @@ class Spotiflow(nn.Module):
         else:  # Predict with tiling
             if self.config.out_channels > 1:
                 raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
-            padded_shape = x.shape[:actual_n_dims]
+            padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
             y = np.empty(padded_shape, np.float32)
             if subpix_radius >= 0:
                 _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
@@ -921,8 +921,7 @@ class Spotiflow(nn.Module):
             padding_to_correct = (padding[0][0], padding[1][0])
             if self.config.is_3d:
                 padding_to_correct = (*padding_to_correct, padding[2][0])
-            points = points - np.array(padding_to_correct)[None]
-
+            points = points - np.array(padding_to_correct)[None]/corr_grid
             probs = np.array(probs)
             # if scale is not None and scale != 1:
             #     points = np.round((points.astype(float) / scale)).astype(int)
@@ -946,6 +945,7 @@ class Spotiflow(nn.Module):
             pts = pts + _offset
             if self.config.is_3d and any(s > 1 for s in self.config.grid):
                 pts *= np.asarray(self.config.grid)
+
 
             # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
             pts = pts.clip(
