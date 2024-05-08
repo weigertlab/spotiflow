@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 from typing_extensions import Self
 
+import dask.array as da
 import lightning.pytorch as pl
 import numpy as np
 import pydash
@@ -26,6 +27,7 @@ from ..utils import (
     filter_shape,
     flow_to_vector,
     normalize,
+    normalize_dask,
     points_matching_dataset,
     prob_to_points,
 )
@@ -614,7 +616,7 @@ class Spotiflow(nn.Module):
 
     def predict(
         self,
-        img: np.ndarray,
+        img: Union[np.ndarray, da.Array],
         prob_thresh: Optional[float] = None,
         n_tiles: Tuple[int, int] = (1, 1),
         min_distance: int = 1,
@@ -632,7 +634,7 @@ class Spotiflow(nn.Module):
         """Predict spots in an image.
 
         Args:
-            img (np.ndarray): input image
+            img (Union[np.ndarray, da.Array]): input image
             prob_thresh (Optional[float], optional): Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.
             n_tiles (Tuple[int, int], optional): Number of tiles to split the image into. Defaults to (1,1).
             min_distance (int, optional): Minimum distance between spots for NMS. Defaults to 1.
@@ -648,6 +650,8 @@ class Spotiflow(nn.Module):
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
+
+        skip_details = isinstance(img, da.Array) # Avoid computing details for non-NumPy inputs
 
         if subpix is False:
             subpix_radius = -1
@@ -696,6 +700,7 @@ class Spotiflow(nn.Module):
                 )
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
+            assert not (scale != 1 and isinstance(img, da.Array)), "Dask arrays are not supported for scaling != 1"
             if scale < 1:
                 # Make sure that the scaling can be inverted exactly at the same shape
                 inv_scale = int(1 / scale)
@@ -720,8 +725,10 @@ class Spotiflow(nn.Module):
         x, padding = center_pad(x, pad_shape, mode="reflect")
 
         if isinstance(normalizer, str) and normalizer == "auto":
-            normalizer = normalize
+            normalizer = normalize_dask if isinstance(x, da.Array) else normalize
         if normalizer is not None and callable(normalizer):
+            if verbose:
+                log.info("Normalizing...")
             x = normalizer(x)
 
         corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
@@ -731,6 +738,8 @@ class Spotiflow(nn.Module):
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):
             with torch.inference_mode():
+                if isinstance(x, da.Array):
+                    x = x.compute()
                 img_t = (
                     torch.from_numpy(x).to(device).unsqueeze(0)
                 )  # Add B dimension
@@ -809,8 +818,9 @@ class Spotiflow(nn.Module):
             if self.config.out_channels > 1:
                 raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
             padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
-            y = np.empty(padded_shape, np.float32)
-            if subpix_radius >= 0:
+            if not skip_details:
+                y = np.empty(padded_shape, np.float32)
+            if subpix_radius >= 0 and not skip_details:
                 _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
                 flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
             points = []
@@ -838,6 +848,8 @@ class Spotiflow(nn.Module):
                 )
 
             for tile, s_src, s_dst in iter_tiles:
+                if isinstance(tile, da.Array):
+                    tile = tile.compute()
                 with torch.inference_mode():
                     img_t = (
                         torch.from_numpy(tile).to(device).unsqueeze(0)
@@ -878,7 +890,8 @@ class Spotiflow(nn.Module):
                     # add global offset
                     p += np.array([s.start for s in s_dst_corr[:actual_n_dims]])[None]
                     points.append(p)
-                    y[s_dst_corr[:actual_n_dims]] = y_tile_sub
+                    if not skip_details:
+                        y[s_dst_corr[:actual_n_dims]] = y_tile_sub
 
                     # Flow
                     if subpix_radius >= 0:
@@ -909,8 +922,8 @@ class Spotiflow(nn.Module):
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
-
-            y = center_crop(y, out_shape)
+            if not skip_details:
+                y = center_crop(y, out_shape)
             if subpix_radius >= 0:
                 flow = center_crop(flow, out_shape)
                 _subpix = center_crop(_subpix, out_shape)
@@ -933,7 +946,8 @@ class Spotiflow(nn.Module):
         # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
         if self.config.out_channels == 1:
             if isinstance(pts, list): # non-tiled prediction, completely remove this once properly done
-                y = ys[0]
+                if not skip_details:
+                    y = ys[0]
                 pts = pts[0]
                 if subpix_radius >= 0:
                     _subpix = _subpix[0]
@@ -966,6 +980,8 @@ class Spotiflow(nn.Module):
             if self.config.is_3d and any(s > 1 for s in self.config.grid):
                 pts *= np.asarray(self.config.grid)
 
+        if skip_details:
+            y = None
         if verbose:
             log.info(f"Found {len(pts)} spots")
 

@@ -4,13 +4,14 @@ from itertools import product
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
 
+import dask
+import dask.array as da
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
 import wandb
 from csbdeep.utils import normalize_mi_ma
 from torch.utils.data import Dataset
-
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -139,16 +140,17 @@ def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: 
     return y
 
 
-def center_pad(x: np.ndarray, shape: Tuple[int, int], mode: str="reflect") -> Tuple[np.ndarray, Sequence[Tuple[int, int]]]:
-    """Pads x to shape. This function is the inverse of center_crop
+def center_pad(x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str="reflect") -> Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]:
+    """Pads x to shape. This function is the inverse of center_crop.
+       This function accepts both NumPy arrays and Dask arrays. For the latter, the padding is done lazily.
     
     Args:
-        x (np.ndarray): Image to be padded
+        x (Union[np.ndarray, da.Array]): Image to be padded
         shape (Tuple[int, int]): Shape of the padded image
         mode (str, optional): Padding mode. Defaults to "reflect".
     
     Returns:
-        Tuple[np.ndarray, Sequence[Tuple[int, int]]]: A tuple of the padded image and the padding sequence
+        Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]: A tuple of the padded image and the padding sequence
     """
     if x.shape == shape:
         return x, tuple((0, 0) for _ in x.shape)
@@ -159,10 +161,11 @@ def center_pad(x: np.ndarray, shape: Tuple[int, int], mode: str="reflect") -> Tu
         (int(np.ceil(d / 2)), d - int(np.ceil(d / 2))) if d > 0 else (0, 0)
         for d in diff
     )
-    return np.pad(x, pads, mode=mode), pads
+    _pad_func = da.pad if isinstance(x, da.Array) else np.pad
+    return _pad_func(x, pads, mode=mode), pads
 
 
-def center_crop(x: np.ndarray, shape: Tuple[int, int]) -> np.ndarray:
+def center_crop(x: Union[np.ndarray, da.Array], shape: Tuple[int, int]) -> Union[np.ndarray, da.Array]:
     """Crops x to given shape. This function is the inverse of center_pad
 
     y = center_pad(x,shape)
@@ -215,7 +218,7 @@ def normalize(
     Returns:
         np.ndarray: Normalized image
     """
-
+    assert not isinstance(x, da.Array), "Please use the `normalize_dask` function for Dask arrays!"
     # create subsampled version to compute percentiles
     ss_sample = tuple(
         slice(None, None, subsample) if s > 42 * subsample else slice(None, None)
@@ -234,6 +237,39 @@ def normalize(
 
     mi, ma = np.percentile(y[mask], (pmin, pmax))
     return normalize_mi_ma(x, mi, ma, clip=clip)
+
+def normalize_dask(
+    x: da.Array,
+    pmin: float=1.,
+    pmax: float=99.8,
+    eps: float=1e-20,
+    max_samples: int=1e5,
+) -> da.Array:
+    """
+    Lazily normalizes (percentile-based) an n-dimensional Dask array with the additional option to ignore a value. The normalization is done as follows:
+
+    x = (x - I_{p_{min}}) / (I_{p_{max}} - I_{p_{min}})
+
+    where I_{p_{min}} and I_{p_{max}} are the pmin and pmax percentiles of the image intensity, respectively.
+
+    Args:
+        x (da.Array): array to be normalized
+        pmin (float, optional): Minimum percentile. Defaults to 1..
+        pmax (float, optional): Maximum percentile. Defaults to 99.8.
+        eps (float, optional): Epsilon value to avoid division by zero. Defaults to 1e-20.
+        max_samples (int, optional): Maximum number of samples to use for percentile calculation. Defaults to 1e5.
+
+    Returns:
+        da.Array: lazily normalized image
+    """
+
+    assert not isinstance(x, np.ndarray), "Please use the `normalize` function for NumPy arrays!"
+
+    n_skip = int(max(1, x.size // max_samples))
+
+    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+        mi, ma = da.percentile(x.flatten()[::n_skip], (pmin, pmax)).compute()
+    return (x - mi) / (ma - mi + eps)
 
 
 def initialize_wandb(options: dict,
@@ -315,7 +351,7 @@ def get_data(path: Union[Path, str],
     Returns:
         Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: A 4-length tuple of arrays corresponding to the training images, training spots, validation images and validation spots.
     """
-    from ..data import SpotsDataset, Spots3DDataset
+    from ..data import Spots3DDataset, SpotsDataset
 
     SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
     if isinstance(path, str):
