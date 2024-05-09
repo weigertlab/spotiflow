@@ -256,6 +256,9 @@ class Spotiflow(nn.Module):
             benchmark (Optional[bool], optional): whether to use benchmarking. Set to False for deterministic behaviour at a cost of performance. Defaults to False.
         """
 
+        if self.config.is_3d and deterministic:
+            log.warning("Deterministic training is currently not supported in 3D mode. Disabling.")
+            deterministic = False
         if not (train_ds._sigma == val_ds._sigma == self.config.sigma):
             raise ValueError(
                 "Different sigma values given for training/validation data and model!"
