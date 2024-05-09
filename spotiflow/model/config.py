@@ -147,6 +147,8 @@ class SpotiflowModelConfig(SpotiflowConfig):
         else:
             self.grid = grid
         
+        if len(self.grid) == 3 and not self.is_3d:
+            self.grid = self.grid[:2]
         if any(s != 1 for s in self.grid) and not self.is_3d:
             log.warning("Grid is only used in 3D mode. Ignoring grid argument.")
         super().__init__()

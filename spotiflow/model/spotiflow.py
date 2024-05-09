@@ -385,10 +385,10 @@ class Spotiflow(nn.Module):
         ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
         train_ds = ActualSpotsDataset(
-            train_images, train_spots, augmenter=tr_augmenter, grid=self.config.grid, **train_dataset_kwargs
+            train_images, train_spots, augmenter=tr_augmenter, grid=self.config.grid, add_class_label=not self.config.is_3d, **train_dataset_kwargs
         )
         val_ds = ActualSpotsDataset(
-            val_images, val_spots, augmenter=val_augmenter, grid=self.config.grid, **val_dataset_kwargs
+            val_images, val_spots, augmenter=val_augmenter, grid=self.config.grid, add_class_label=not self.config.is_3d, **val_dataset_kwargs
         )
 
         # Add model checkpoint callback if not given (to save the model)

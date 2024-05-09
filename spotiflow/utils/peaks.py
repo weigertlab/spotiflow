@@ -140,10 +140,10 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
     ndim=len(shape) 
     if not points.shape[1] == ndim:
         raise ValueError("Wrong dimension of points!")
-    
-    if grid is None and ndim == 2:
+
+    if grid is not None and any(s != 1 for s in grid) and ndim == 2:
         raise NotImplementedError("grid not yet implemented for 2d")
-    
+
     if grid is None:
         grid = (1, )*ndim
     elif isinstance(grid, int):

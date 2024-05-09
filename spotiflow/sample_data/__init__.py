@@ -7,8 +7,7 @@ def __abspath(path):
 
 def test_image_hybiss_2d():
     # TODO: proper docstring after paper is published :)
-    """ HybISS data from the paper
-    ???
+    """ Single test HybISS image from the Spotiflow paper (doi.org/10.1101/2024.02.01.578426)
     """
     from tifffile import imread
     img = imread(__abspath("images/img_hybiss_2d.tif"))
@@ -16,9 +15,16 @@ def test_image_hybiss_2d():
 
 def test_image_terra_2d():
     # TODO: proper docstring after paper is published :)
-    """ Terra data from the paper
-    ???
+    """ Single test Terra frame from the Spotiflow paper (doi.org/10.1101/2024.02.01.578426)
     """
     from tifffile import imread
     img = imread(__abspath("images/img_terra_2d.tif"))
+    return img
+
+def test_image_synth_3d():
+    # TODO: proper docstring after paper is published :)
+    """ Single synthetic volumetric stack from the Spotiflow paper (doi.org/10.1101/2024.02.01.578426)
+    """
+    from tifffile import imread
+    img = imread(__abspath("images/img_synth_3d.tif"))
     return img
