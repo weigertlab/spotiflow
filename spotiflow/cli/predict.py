@@ -49,7 +49,7 @@ def get_args():
                             type=int, required=False, default=1,
                             help="Minimum distance between spots for NMS. Defaults to 1.")
     predict.add_argument("-eb", "--exclude-border",
-                            action="store-true", required=False,
+                            action="store_true", required=False,
                             help="Exclude spots within this distance from the border. Defaults to 0.")
     predict.add_argument("-s", "--scale",
                             type=int, required=False, default=None,
