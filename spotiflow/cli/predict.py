@@ -122,7 +122,7 @@ def main():
     images = [imread(img) for img in image_files]
     for img, fname in tqdm(zip(images, image_files), desc="Predicting", total=len(images)):
         spots, _ = model.predict(img,
-                                 probability_threshold=args.probability_threshold,
+                                 prob_thresh=args.probability_threshold,
                                  n_tiles=tuple(args.n_tiles),
                                  min_distance=args.min_distance,
                                  exclude_border=args.exclude_border,
