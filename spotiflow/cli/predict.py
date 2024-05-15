@@ -22,7 +22,7 @@ def get_args():
     parser = argparse.ArgumentParser("spotiflow-predict",
                                      description="Predict spots in image(s) using Spotiflow.")
 
-    required = parser.add_argument_group(Title="Required arguments",
+    required = parser.add_argument_group(title="Required arguments",
                                          description="Arguments required to run the prediction model")
     required.add_argument("data_path",
                           type=Path,
@@ -37,7 +37,7 @@ def get_args():
                           type=Path, required=False, default=None,
                           help="Output directory. If not provided, will create a 'spotiflow_results' subfolder in the input folder and write the CSV(s) there.")
 
-    predict = parser.add_argument_group(Title="Prediction arguments",
+    predict = parser.add_argument_group(title="Prediction arguments",
                                         description="Arguments to change the behaviour of spotiflow during prediction. To keep the default behaviour, do not provide these arguments.")
     predict.add_argument("-t", "--probability-threshold",
                             type=float, required=False, default=None,
