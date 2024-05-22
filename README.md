@@ -63,10 +63,14 @@ where PATH can be either an image or a folder. By default, the command will use 
 
 Alternatively to installing Spotiflow as command line tool on your operating system, you can also use it directly from our Docker container. To do so, you can use the following command:
 
+To pull the Docker container from Dockerhub use:
+``` console
+docker pull miguelib/spotiflow:0.0.1
+```
+
+Then, run spotiflow-predict with:
 ```console
-
-docker run -v [/path/to/local/input.tif]:/spotiflow miguelib/spotiflow:0.0.1 spotiflow-predict input.tif -o .
-
+docker run -it -v [/local/input/folder]:/spotiflow/input miguelib/spotiflow:0.0.1 spotiflow-predict input/your_file.tif -o .
 ```
 Where:  
 `-v`: represents the volume flag, which allows you to mount a folder from your local machine to the container.    
