@@ -218,7 +218,9 @@ def normalize(
     Returns:
         np.ndarray: Normalized image
     """
-    assert not isinstance(x, da.Array), "Please use the `normalize_dask` function for Dask arrays!"
+    if isinstance(x, da.Array):
+        raise TypeError("Please use the `normalize_dask` function for Dask arrays!")
+
     # create subsampled version to compute percentiles
     ss_sample = tuple(
         slice(None, None, subsample) if s > 42 * subsample else slice(None, None)
@@ -263,12 +265,13 @@ def normalize_dask(
         da.Array: lazily normalized image
     """
 
-    assert not isinstance(x, np.ndarray), "Please use the `normalize` function for NumPy arrays!"
+    if isinstance(x, np.ndarray):
+        raise TypeError("Please use the `normalize` function for NumPy arrays!")
 
     n_skip = int(max(1, x.size // max_samples))
 
     with dask.config.set(**{'array.slicing.split_large_chunks': False}):
-        mi, ma = da.percentile(x.flatten()[::n_skip], (pmin, pmax)).compute()
+        mi, ma = da.percentile(x.flatten()[::n_skip], (pmin, pmax), internal_method="tdigest").compute()
     return (x - mi) / (ma - mi + eps)
 
 

@@ -823,7 +823,7 @@ class Spotiflow(nn.Module):
             padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
             if not skip_details:
                 y = np.empty(padded_shape, np.float32)
-            if subpix_radius >= 0 and not skip_details:
+            if subpix_radius >= 0:
                 _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
                 flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
             points = []
