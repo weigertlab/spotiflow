@@ -1,5 +1,4 @@
 from spotiflow.model import SpotiflowModelConfig, Spotiflow
-from numerize.numerize import numerize
 import torch
 from utils import example_data
 
@@ -15,6 +14,6 @@ if __name__ == "__main__":
 
     model = Spotiflow(config)
 
-    print(f"Total params: {numerize(sum(p.numel() for p in model.parameters()))}")
+    print(f"Total params: {sum(p.numel() for p in model.parameters())}")
 
     model.fit(X, P, Xv, Pv, save_dir="tmp", train_config={"num_epochs": 10})
