@@ -8,4 +8,4 @@ dependencies:
   - "torchvision"
   - "cpuonly"
   - pip:
-      - "git+https://github.com/migueLib/spotiflow"
+      - "spotiflow"
