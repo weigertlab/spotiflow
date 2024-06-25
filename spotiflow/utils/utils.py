@@ -269,9 +269,8 @@ def normalize_dask(
         raise TypeError("Please use the `normalize` function for NumPy arrays!")
 
     n_skip = int(max(1, x.size // max_samples))
-
     with dask.config.set(**{'array.slicing.split_large_chunks': False}):
-        mi, ma = da.percentile(x.flatten()[::n_skip], (pmin, pmax), internal_method="tdigest").compute()
+        mi, ma = da.percentile(x.ravel()[::n_skip], (pmin, pmax), internal_method="tdigest").compute()
     return (x - mi) / (ma - mi + eps)
 
 

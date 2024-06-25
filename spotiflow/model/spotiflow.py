@@ -654,7 +654,7 @@ class Spotiflow(nn.Module):
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
 
-        skip_details = isinstance(img, da.Array) # Avoid computing details for non-NumPy inputs
+        skip_details = isinstance(img, da.Array) # Avoid computing details for non-NumPy inputs, which are assumed to be large
 
         if subpix is False:
             subpix_radius = -1
@@ -721,18 +721,17 @@ class Spotiflow(nn.Module):
             div_by = tuple(
                 g*d for g, d in zip((*self.config.grid, 1), div_by)
             )
-
-        pad_shape = tuple(int(d * np.ceil(s / d)) for s, d in zip(x.shape, div_by))
-        if verbose:
-            log.info(f"Padding to shape {pad_shape}")
-        x, padding = center_pad(x, pad_shape, mode="reflect")
-
         if isinstance(normalizer, str) and normalizer == "auto":
             normalizer = normalize_dask if isinstance(x, da.Array) else normalize
         if normalizer is not None and callable(normalizer):
             if verbose:
                 log.info("Normalizing...")
             x = normalizer(x)
+
+        pad_shape = tuple(int(d * np.ceil(s / d)) for s, d in zip(x.shape, div_by))
+        if verbose:
+            log.info(f"Padding to shape {pad_shape}")
+        x, padding = center_pad(x, pad_shape, mode="reflect")
 
         corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
         out_shape = tuple(np.asarray(img.shape[:actual_n_dims])//corr_grid)
@@ -823,9 +822,9 @@ class Spotiflow(nn.Module):
             padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
             if not skip_details:
                 y = np.empty(padded_shape, np.float32)
-            if subpix_radius >= 0:
-                _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
-                flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
+                if subpix_radius >= 0:
+                    _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
+                    flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
             points = []
             probs = []
             actual_n_tiles = n_tiles
@@ -847,7 +846,7 @@ class Spotiflow(nn.Module):
                 iter_tiles = progress_bar_wrapper(iter_tiles)
             elif verbose:
                 iter_tiles = tqdm(
-                    iter_tiles, desc="Predicting tiles", total=np.prod(n_tiles)
+                    iter_tiles, desc="Predicting tiles", total=np.prod(actual_n_tiles)
                 )
 
             for tile, s_src, s_dst in iter_tiles:
@@ -892,42 +891,35 @@ class Spotiflow(nn.Module):
 
                     # add global offset
                     p += np.array([s.start for s in s_dst_corr[:actual_n_dims]])[None]
-                    points.append(p)
                     if not skip_details:
                         y[s_dst_corr[:actual_n_dims]] = y_tile_sub
 
                     # Flow
                     if subpix_radius >= 0:
-                        if not self.config.is_3d:
-                            flow_tile = (
-                                F.normalize(out["flow"], dim=1)[0]
-                                .permute(1, 2, 0)
-                                .detach()
-                                .cpu()
-                                .numpy()
-                            )
-                        else:
-                            flow_tile = (
-                                F.normalize(out["flow"], dim=1)[0]
-                                .permute(1, 2, 3, 0)
-                                .detach()
-                                .cpu()
-                                .numpy()
-                            )
-                        flow_tile_sub = flow_tile[s_src_corr[:actual_n_dims]]
-
-                        flow[s_dst_corr[:actual_n_dims]] = flow_tile_sub
-
+                        permute_dims = (1, 2, 0) if not self.config.is_3d else (1, 2, 3, 0)
+                        flow_tile = (
+                            F.normalize(out["flow"], dim=1)[0]
+                            .permute(*permute_dims)
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
                         # Cartesian coordinates
                         subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
-                        subpix_tile_sub = subpix_tile[s_src_corr[:actual_n_dims]]
-                        _subpix[s_dst_corr[:actual_n_dims]] = subpix_tile_sub
+                        _offset = subpixel_offset(p, subpix_tile, y_tile, radius=subpix_radius)
+
+                        p = p + _offset
+                        if not skip_details:
+                            flow_tile_sub = flow_tile[s_src_corr[:actual_n_dims]]
+                            flow[s_dst_corr[:actual_n_dims]] = flow_tile_sub
+                            _subpix[s_dst_corr[:actual_n_dims]] = subpix_tile[s_src_corr[:actual_n_dims]]
+                    points.append(p)
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)
             if not skip_details:
                 y = center_crop(y, out_shape)
-            if subpix_radius >= 0:
+            if subpix_radius >= 0 and not skip_details:
                 flow = center_crop(flow, out_shape)
                 _subpix = center_crop(_subpix, out_shape)
 
@@ -938,53 +930,21 @@ class Spotiflow(nn.Module):
             if self.config.is_3d:
                 padding_to_correct = (*padding_to_correct, padding[2][0])
             points = points - np.array(padding_to_correct)[None]/corr_grid
-            probs = np.array(probs)
+            probs = np.asarray(probs)
             # if scale is not None and scale != 1:
             #     points = np.round((points.astype(float) / scale)).astype(int)
 
             probs = filter_shape(probs, out_shape, idxr_array=points)
             pts = filter_shape(points, out_shape, idxr_array=points)
 
-
-        # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
-        if self.config.out_channels == 1:
-            if isinstance(pts, list): # non-tiled prediction, completely remove this once properly done
-                if not skip_details:
-                    y = ys[0]
-                pts = pts[0]
-                if subpix_radius >= 0:
-                    _subpix = _subpix[0]
-                    flow = flow[0]
-
-        # FIXME: this distinction shouldnt be necessary after correctly coding for tiled prediction too
-        if self.config.out_channels == 1 and subpix_radius >= 0:
-            _offset = subpixel_offset(pts, _subpix, y, radius=subpix_radius)
-            pts = pts + _offset
-            if self.config.is_3d and any(s > 1 for s in self.config.grid):
-                pts *= np.asarray(self.config.grid)
-
-
-            # FIXME: Quick fix for a corner case - should be done by subsetting the points instead similar to filter_shape
-            pts = pts.clip(
-                0, np.array(img.shape[:actual_n_dims]) - 1
-            )
-        elif self.config.out_channels > 1 and subpix_radius >= 0:
-            for cl in range(self.config.out_channels):
-                _offset = subpixel_offset(pts[cl], _subpix[cl], ys[cl], radius=subpix_radius)
-                pts[cl] = pts[cl] + _offset
-                if self.config.is_3d and any(s > 1 for s in self.config.grid):
-                    pts[cl] *= np.asarray(self.config.grid)
-                pts[cl] = pts[cl].clip(
-                    0, np.array(img.shape[:actual_n_dims]) - 1
-                )
-        else:
-            _subpix = None
-            flow = None
-            if self.config.is_3d and any(s > 1 for s in self.config.grid):
+            if self.config.is_3d and any(s>1 for s in self.config.grid):
                 pts *= np.asarray(self.config.grid)
 
         if skip_details:
             y = None
+            _subpix = None
+            flow = None
+
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
