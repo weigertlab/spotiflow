@@ -405,6 +405,7 @@ def subpixel_offset_2d(
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
+    eps: float=1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     2D local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -414,6 +415,7 @@ def subpixel_offset_2d(
         subpix (np.ndarray): local vector field in Euclidean space. Should be a 3D array with shape (H, W, 2)
         prob (np.ndarray): 2D array of probabilities of shape (H, W)
         radius (int): Radius for aggregation
+        eps (float, optional): Epsilon value to avoid division by zero. Defaults to 1e-8.
 
     Returns:
         np.ndarray: 2D array of offsets
@@ -436,7 +438,7 @@ def subpixel_offset_2d(
         p, mask = filter_shape(p, prob.shape, return_mask=True)
         _p = tuple(p.astype(int).T)
 
-        _w = np.zeros((n, 1), np.float32)
+        _w = np.zeros((n, 1), np.float32)+eps
         _w[mask] = prob[_p][:, None]
 
         _correct = np.zeros((n, 2), np.float32)
@@ -453,6 +455,7 @@ def subpixel_offset_3d(
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
+    eps: float=1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     3D local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -462,6 +465,7 @@ def subpixel_offset_3d(
         subpix (np.ndarray): local vector field in Euclidean space. Should be a 4D array with shape (D, H, W, 2)
         prob (np.ndarray): heatmap of probabilities of shape (D, H, W)
         radius (int): Radius for aggregation
+        eps (float, optional): Epsilon value to avoid division by zero. Defaults to 1e-8.
 
     Returns:
         np.ndarray: 3D array of offsets
@@ -484,7 +488,7 @@ def subpixel_offset_3d(
         p, mask = filter_shape(p, prob.shape, return_mask=True)
         _p = tuple(p.astype(int).T)
 
-        _w = np.zeros((n, 1), np.float32)
+        _w = np.zeros((n, 1), np.float32)+eps
         _w[mask] = prob[_p][:, None]
 
         _correct = np.zeros((n, 3), np.float32)
@@ -501,6 +505,7 @@ def subpixel_offset(
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
+    eps: float=1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     Euclidean local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -515,9 +520,9 @@ def subpixel_offset(
         np.ndarray: 2D or 3D array of offsets
     """
     if pts.shape[1] == 2:
-        return subpixel_offset_2d(pts, subpix, prob, radius)
+        return subpixel_offset_2d(pts, subpix, prob, radius, eps)
     elif pts.shape[1] == 3:
-        return subpixel_offset_3d(pts, subpix, prob, radius)
+        return subpixel_offset_3d(pts, subpix, prob, radius, eps)
     else:
         raise ValueError(f"Invalid shape {pts.shape} for points array.")
 
