@@ -70,7 +70,7 @@ docker pull miguelib/spotiflow:0.0.3
 
 Then, run spotiflow-predict with:
 ```console
-docker run -it -v [/local/input/folder]:/spotiflow/input miguelib/spotiflow:0.0.1 spotiflow-predict input/your_file.tif -o .
+docker run -it -v [/local/input/folder]:/spotiflow/input weigertlab/spotiflow:main spotiflow-predict input/your_file.tif -o .
 ```
 Where:  
 `-v`: represents the volume flag, which allows you to mount a folder from your local machine to the container.    
