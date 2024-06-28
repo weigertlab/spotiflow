@@ -65,7 +65,7 @@ Alternatively to installing Spotiflow as command line tool on your operating sys
 
 To pull the Docker container from Dockerhub use:
 ``` console
-docker pull miguelib/spotiflow:0.0.3
+docker pull weigertlab/spotiflow:main
 ```
 
 Then, run spotiflow-predict with:
