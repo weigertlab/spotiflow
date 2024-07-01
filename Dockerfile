@@ -1,9 +1,9 @@
 FROM mambaorg/micromamba:lunar
-LABEL maintainer="Miguel Ibarra"
+LABEL authors="Albert Dominguez, Miguel Ibarra"
 
 # Set the base layer for micromamba
 USER root
-COPY environment.yml .
+COPY docker-env-config.yml .
 
 RUN apt-get update -qq && apt-get install -y \
     build-essential \
