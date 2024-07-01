@@ -61,7 +61,7 @@ where PATH can be either an image or a folder. By default, the command will use 
 
 ### Inference (Docker)
 
-Alternatively to installing Spotiflow as command line tool on your operating system, you can also use it directly from our Docker container. To do so, you can use the following command:
+Alternatively to installing Spotiflow as command line tool on your operating system, you can also use it directly from our Docker container (thanks to @migueLib for the contribution!). To do so, you can use the following command:
 
 To pull the Docker container from Dockerhub use:
 ``` console
