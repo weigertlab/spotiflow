@@ -16,6 +16,7 @@ import torch.nn.functional as F
 import yaml
 from csbdeep.internals.predict import tile_iterator
 from scipy.ndimage import zoom
+from multigpu_tiled_prediction import tile_iterator as mg_tile_iterator
 from spotiflow.augmentations import transforms, transforms3d
 from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
@@ -633,6 +634,7 @@ class Spotiflow(nn.Module):
         device: Optional[
             Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
         ] = None,
+        distributed_params: Optional[dict]=None,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -835,21 +837,55 @@ class Spotiflow(nn.Module):
             n_block_overlaps = (4, 4, 0)
             if self.config.is_3d:
                 n_block_overlaps = (4,) + n_block_overlaps
-            iter_tiles = tile_iterator(
-                x,
-                n_tiles=actual_n_tiles,
-                block_sizes=div_by,
-                n_block_overlaps=n_block_overlaps,
-            )
+            
+            if distributed_params is not None:
+                gpu_id = distributed_params.get("gpu_id", 0)
+                iter_tiles = mg_tile_iterator(
+                    x,
+                    n_tiles=actual_n_tiles,
+                    block_sizes=div_by,
+                    n_block_overlaps=n_block_overlaps,
+                    gpu_id=gpu_id,
+                    num_workers=distributed_params.get("num_workers", 0),
+                )
+                # ds = TiledDataset(
+                #     img=x,
+                #     n_tiles=actual_n_tiles,
+                #     block_sizes=div_by,
+                #     n_block_overlaps=n_block_overlaps,
+                #     guarantee="size",
+                # )
+                # print(f"Total number of tiles before distributing is {len(ds)}")
+                # sampler = DistributedEvalSampler(ds, num_replicas=torch.cuda.device_count(), rank=gpu_id)
+                # iter_tiles = torch.utils.data.DataLoader(ds, sampler=sampler, shuffle=False, batch_size=1, num_workers=0, pin_memory=True, collate_fn=lambda x: x)
+            else:
+                iter_tiles = tile_iterator(
+                    x,
+                    n_tiles=actual_n_tiles,
+                    block_sizes=div_by,
+                    n_block_overlaps=n_block_overlaps,
+                )
 
             if verbose and callable(progress_bar_wrapper):
                 iter_tiles = progress_bar_wrapper(iter_tiles)
             elif verbose:
-                iter_tiles = tqdm(
-                    iter_tiles, desc="Predicting tiles", total=np.prod(actual_n_tiles)
-                )
+                if distributed_params is None:
+                    iter_tiles = tqdm(
+                        iter_tiles, desc="Predicting tiles", total=np.prod(actual_n_tiles)
+                    )
+                else:
+                    iter_tiles = tqdm(
+                        iter_tiles, desc=f"Predicting tiles (GPU {gpu_id})", total=np.prod(actual_n_tiles)//torch.cuda.device_count(), position=gpu_id
+                    )
 
-            for tile, s_src, s_dst in iter_tiles:
+            for item in iter_tiles:
+                if distributed_params is None:
+                    tile, s_src, s_dst = item
+                else:
+                    tile, s_src, s_dst = item[0]
+                    s_src = tuple(s_src)
+                    s_dst = tuple(s_dst)
+
                 if isinstance(tile, da.Array):
                     tile = tile.compute()
                 with torch.inference_mode():
