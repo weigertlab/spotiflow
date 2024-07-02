@@ -1,0 +1,11 @@
+name: spotiflow
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - "python=3.9"
+  - "pytorch"
+  - "torchvision"
+  - "cpuonly"
+  - pip:
+      - "spotiflow"
