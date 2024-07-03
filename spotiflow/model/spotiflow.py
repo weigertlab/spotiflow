@@ -4,7 +4,6 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Literal, Optional, Sequence, Tuple, Union
-from typing_extensions import Self
 
 import dask.array as da
 import lightning.pytorch as pl
@@ -16,12 +15,12 @@ import torch.nn.functional as F
 import yaml
 from csbdeep.internals.predict import tile_iterator
 from scipy.ndimage import zoom
-from multigpu_tiled_prediction import tile_iterator as mg_tile_iterator
-from spotiflow.augmentations import transforms, transforms3d
-from spotiflow.augmentations.pipeline import Pipeline as AugmentationPipeline
 from tqdm.auto import tqdm
+from typing_extensions import Self
 
-from ..data import SpotsDataset, Spots3DDataset
+from ..augmentations import transforms, transforms3d
+from ..augmentations.pipeline import Pipeline as AugmentationPipeline
+from ..data import Spots3DDataset, SpotsDataset
 from ..utils import (
     center_crop,
     center_pad,
@@ -31,6 +30,8 @@ from ..utils import (
     normalize_dask,
     points_matching_dataset,
     prob_to_points,
+    subpixel_offset,
+    tile_iterator as parallel_tile_iterator,
 )
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
@@ -38,7 +39,6 @@ from .config import SpotiflowModelConfig, SpotiflowTrainingConfig
 from .post import FeaturePyramidNetwork, MultiHeadProcessor
 from .pretrained import get_pretrained_model_path
 from .trainer import SpotiflowModelCheckpoint, SpotiflowTrainingWrapper
-from ..utils import subpixel_offset
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -840,24 +840,15 @@ class Spotiflow(nn.Module):
             
             if distributed_params is not None:
                 gpu_id = distributed_params.get("gpu_id", 0)
-                iter_tiles = mg_tile_iterator(
+                iter_tiles = parallel_tile_iterator(
                     x,
                     n_tiles=actual_n_tiles,
                     block_sizes=div_by,
                     n_block_overlaps=n_block_overlaps,
-                    gpu_id=gpu_id,
-                    num_workers=distributed_params.get("num_workers", 0),
+                    rank_id=gpu_id,
+                    num_replicas=distributed_params.get("num_replicas", torch.cuda.device_count()),
+                    dataloader_kwargs=distributed_params,
                 )
-                # ds = TiledDataset(
-                #     img=x,
-                #     n_tiles=actual_n_tiles,
-                #     block_sizes=div_by,
-                #     n_block_overlaps=n_block_overlaps,
-                #     guarantee="size",
-                # )
-                # print(f"Total number of tiles before distributing is {len(ds)}")
-                # sampler = DistributedEvalSampler(ds, num_replicas=torch.cuda.device_count(), rank=gpu_id)
-                # iter_tiles = torch.utils.data.DataLoader(ds, sampler=sampler, shuffle=False, batch_size=1, num_workers=0, pin_memory=True, collate_fn=lambda x: x)
             else:
                 iter_tiles = tile_iterator(
                     x,
@@ -875,22 +866,25 @@ class Spotiflow(nn.Module):
                     )
                 else:
                     iter_tiles = tqdm(
-                        iter_tiles, desc=f"Predicting tiles (GPU {gpu_id})", total=np.prod(actual_n_tiles)//torch.cuda.device_count(), position=gpu_id
+                        iter_tiles,
+                        desc=f"Predicting tiles (GPU {gpu_id})",
+                        total=np.prod(actual_n_tiles)//distributed_params.get("num_replicas", torch.cuda.device_count()),
+                        position=gpu_id,
+                        disable=True, # !
                     )
-
+            tile_idx = 0 # !
             for item in iter_tiles:
-                if distributed_params is None:
-                    tile, s_src, s_dst = item
-                else:
-                    tile, s_src, s_dst = item[0]
-                    s_src = tuple(s_src)
-                    s_dst = tuple(s_dst)
-
+                if tile_idx % 50 == 0:
+                    print(f"GPU {gpu_id} is processing tile {tile_idx}/{np.prod(actual_n_tiles)//distributed_params.get('num_replicas', torch.cuda.device_count())}")
+                tile_idx += 1 # !
+                tile, s_src, s_dst = item
                 if isinstance(tile, da.Array):
                     tile = tile.compute()
                 with torch.inference_mode():
+                    if isinstance(tile, np.ndarray):
+                        tile = torch.from_numpy(tile)
                     img_t = (
-                        torch.from_numpy(tile).to(device).unsqueeze(0)
+                        tile.to(device).unsqueeze(0)
                     )  # Add B and C dimensions
                     if not self.config.is_3d:
                         img_t = img_t.permute(0, 3, 1, 2) # BHWC -> BCHW
