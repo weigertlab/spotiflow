@@ -965,7 +965,7 @@ class Spotiflow(nn.Module):
             if self.config.is_3d and any(s>1 for s in self.config.grid):
                 pts *= np.asarray(self.config.grid)
 
-        if skip_details:
+        if skip_details or subpix_radius < 0:
             y = None
             _subpix = None
             flow = None
