@@ -870,13 +870,8 @@ class Spotiflow(nn.Module):
                         desc=f"Predicting tiles (GPU {gpu_id})",
                         total=np.prod(actual_n_tiles)//distributed_params.get("num_replicas", torch.cuda.device_count()),
                         position=gpu_id,
-                        disable=True, # !
                     )
-            tile_idx = 0 # !
             for item in iter_tiles:
-                if tile_idx % 50 == 0:
-                    print(f"GPU {gpu_id} is processing tile {tile_idx}/{np.prod(actual_n_tiles)//distributed_params.get('num_replicas', torch.cuda.device_count())}")
-                tile_idx += 1 # !
                 tile, s_src, s_dst = item
                 if isinstance(tile, da.Array):
                     tile = tile.compute()

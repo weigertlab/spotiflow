@@ -1,4 +1,6 @@
-""" Parallel processing utilities for inference-only with CNNs. Wraps csbdeep.internals.predict.tile_iterator (https://github.com/CSBDeep/CSBDeep/blob/b4edf699c7a6d2f7ddfcaf973063d15748daf825/csbdeep/internals/predict.py#L349).
+"""
+Parallel processing utilities for inference-only with CNNs.
+Wraps csbdeep.internals.predict.tile_iterator (https://github.com/CSBDeep/CSBDeep/blob/b4edf699c7a6d2f7ddfcaf973063d15748daf825/csbdeep/internals/predict.py#L349).
 DistributedEvalSampler adapted from https://github.com/SeungjunNah/DeepDeblur-PyTorch/blob/master/src/data/sampler.py
 """
 from typing import Literal, Optional, Tuple, Union
@@ -33,7 +35,7 @@ def tile_iterator(x: Union[np.ndarray, da.Array],
         dataloader_kwargs (Optional[dict], optional): additional arguments for the DataLoader. Defaults to None.
 
     Returns:
-        torch.utils.data.DataLoader: disjoint tile iterator for each GPU
+        torch.utils.data.DataLoader: disjoint tile iterator for each rank
     """
     assert rank_id >= 0, "rank_id must be >= 0"
     ds = _TiledDataset(
@@ -63,11 +65,11 @@ def tile_iterator(x: Union[np.ndarray, da.Array],
 
 
 class _TiledDataset(Dataset):
-    """TBD"""
+    """Auxiliary dataset class for parallel tiled prediction on n-d arrays.
+       Wraps csbdeep.internals.predict.tile_iterator (https://github.com/CSBDeep/CSBDeep/blob/b4edf699c7a6d2f7ddfcaf973063d15748daf825/csbdeep/internals/predict.py#L349)
+       For the arguments, please check the documentation of csbdeep.internals.predict.tile_iterator.
+    """
     def __init__(self, img, n_tiles, block_sizes, n_block_overlaps, guarantee):
-        """Auxiliary dataset class for parallel tiled prediction on n-d arrays.
-           Wraps csbdeep.internals.predict.tile_iterator (https://github.com/CSBDeep/CSBDeep/blob/b4edf699c7a6d2f7ddfcaf973063d15748daf825/csbdeep/internals/predict.py#L349)
-        """
         self._tile_iterator = tuple(csbd_tile_iterator(img, n_tiles, block_sizes, n_block_overlaps, guarantee))
         self._img = img
 
