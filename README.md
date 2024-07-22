@@ -18,7 +18,7 @@
 
 The documentation of the software can be found [here](https://weigertlab.github.io/spotiflow/).
 
-## Installation
+## Installation (pip, recommended)
 Create and activate a fresh conda environment (we currently support Python 3.9 to 3.11):
 
 ```console
@@ -43,6 +43,14 @@ Finally, install `spotiflow`:
 pip install spotiflow
 ```
 
+## Installation (conda)
+For Linux/MacOS users, you can also install Spotiflow using conda through the `conda-forge` channel:
+
+```console
+conda install -c conda-forge spotiflow
+```
+
+The conda package is, for now, not CUDA-compatible. We recommend using `pip` to install Spotiflow if available.
 
 ## Usage
 
