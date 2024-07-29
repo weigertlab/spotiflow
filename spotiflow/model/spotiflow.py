@@ -584,7 +584,7 @@ class Spotiflow(nn.Module):
             exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
             subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
-            peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
+            peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "fast".
             normalizer (Optional[Union[Literal["auto"], callable]], optional): Normalizer to use. If None, will use the default normalizer. Defaults to "auto" (percentile-based normalization with p_min=1, p_max=99.8).
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
