@@ -62,6 +62,11 @@ _REGISTERED = {
         md5_hash="d692fa21da47e4a50b4c52f49442508b",
         is_3d=False,
     ),
+    "synth_3d": RegisteredModel(
+        url="https://drive.switch.ch/index.php/s/VhDqgDoHc11yP6v/download",
+        md5_hash="a031f1284590886fbae37dc583c0270d",
+        is_3d=True,
+    ),
     "smfish_3d": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/Vym7tqiORZOP5Zt/download",
         md5_hash="c5ab30ba3b9ccb07b4c34442d1b5b615",
