@@ -12,7 +12,7 @@
 
 # Spotiflow - accurate and efficient spot detection with stereographic flow
 
-*Spotiflow* is a deep learning-based, threshold-agnostic, and subpixel-accurate spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images. A more detailed description of the method can be found in [our paper](https://doi.org/10.1101/2024.02.01.578426).
+*Spotiflow* is a deep learning-based, threshold-agnostic, subpixel-accurate 2D and 3D spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images and volumes. A more detailed description of the method can be found in [our paper](https://doi.org/10.1101/2024.02.01.578426).
 
 ![Overview](artwork/overview.png)
 
@@ -46,8 +46,11 @@ pip install spotiflow
 
 ## Usage
 
-### Training
+### Training (2D images)
 See the [example training script](scripts/train.py) or the [example notebook](examples/1_train.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
+
+### Training (3D volumes)
+See the [example 3D training script](scripts/train_simple_3d.py). For more information, please refer to the [3D training example notebook](examples/4_train_3d.ipynb). Fine-tuning a 3D model can be done by following the same workflow as to the 2D case.
 
 ### Inference (CLI)
 
@@ -61,7 +64,7 @@ where PATH can be either an image or a folder. By default, the command will use 
 
 ### Inference (API)
 
-The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/2_inference.ipynb) and the documentation for a more in-depth explanation.
+The API allows detecting spots in a new image in a few lines of code! Please check the [corresponding example notebook](examples/2_inference.ipynb) and the documentation for a more in-depth explanation. The same procedure can be followed for 3D volumes.
 
 ```python
 from spotiflow.model import Spotiflow
@@ -82,7 +85,7 @@ points, details = model.predict(img) # points contains the coordinates of the de
 ```
 
 ### Napari plugin
-Our napari plugin allows detecting spots directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
+Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
 
 
 ## For developers
@@ -128,13 +131,13 @@ If you use this code in your research, please cite [the Spotiflow paper](https:/
 
 ```bibtex
 @article {dominguezmantes24,
-	author = {Albert Dominguez Mantes and Antonio Herrera and Irina Khven and Anjalie Schlaeppi and Eftychia Kyriacou and Georgios Tsissios and Can Aztekin and Joachim Ligner and Gioele La Manno and Martin Weigert},
-	title = {Spotiflow: accurate and efficient spot detection for imaging-based spatial transcriptomics with stereographic flow regression},
+	author = {Dominguez Mantes, Albert and Herrera, Antonio and Khven, Irina and Schlaeppi, Anjalie and Kyriacou, Eftychia and Tsissios, Georgios and Skoufa, Evangelia and Santangeli, Luca and Buglakova, Elena and Durmus, Emine Berna and Manley, Suliana and Kreshuk, Anna and Arendt, Detlev and Aztekin, Can and Lingner, Joachim and La Manno, Gioele and Weigert, Martin},
+	title = {Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression},
 	elocation-id = {2024.02.01.578426},
 	year = {2024},
 	doi = {10.1101/2024.02.01.578426},
 	publisher = {Cold Spring Harbor Laboratory},
- URL = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426},
+	URL = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426},
 	eprint = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426.full.pdf},
 	journal = {bioRxiv}
 }

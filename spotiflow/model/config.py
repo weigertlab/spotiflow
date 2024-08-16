@@ -1,13 +1,14 @@
 import abc
 import argparse
-import logging
 import json
-import yaml
+import logging
 import sys
-
 from numbers import Number
 from pathlib import Path
 from typing import Literal, Optional, Tuple, Union
+
+import numpy as np
+import yaml
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 log = logging.getLogger(__name__)
@@ -144,6 +145,8 @@ class SpotiflowModelConfig(SpotiflowConfig):
         self.is_3d = bool(is_3d)
         if isinstance(grid, int):
             self.grid = (grid,)*(3 if self.is_3d else 2)
+        elif not isinstance(grid, tuple):
+            self.grid = tuple(grid)
         else:
             self.grid = grid
         
@@ -163,8 +166,8 @@ class SpotiflowModelConfig(SpotiflowConfig):
             isinstance(self.in_channels, int) and self.in_channels > 0
         ), "in_channels must be greater than 0"
         assert (
-            isinstance(self.out_channels, int) and self.out_channels > 0
-        ), "out_channels must be greater than 0"
+            isinstance(self.out_channels, int) and self.out_channels == 1
+        ), "out_channels must be equal to 1 (multi-channel output not supported yet)"
         assert (
             isinstance(self.initial_fmaps, int) and self.initial_fmaps > 0
         ), "initial_fmaps must be greater than 0"
@@ -212,6 +215,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
         assert (
             all(isinstance(s, int) and s > 0 and (s == 1 or s % 2 == 0) for s in self.grid)
         ), "grid must be a tuple containing only 1 or even positive integers"
+        assert len(np.unique(self.grid)) == 1, "grid must currently be isotropic (all dimensions must be equal)"
 
 
 class SpotiflowTrainingConfig(SpotiflowConfig):

@@ -15,7 +15,7 @@ class RegisteredModel:
 
     url: str
     md5_hash: str
-
+    is_3d: bool
 
 def list_registered():
     return list(_REGISTERED.keys())
@@ -50,13 +50,21 @@ _REGISTERED = {
     "hybiss": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/O4hqFSSGX6veLwa/download",
         md5_hash="254afa97c137d0bd74fd9c1827f0e323",
+        is_3d=False,
     ),
     "general": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/6AoTEgpIAeQMRvX/download",
-        md5_hash="9dd31a36b737204e91b040515e3d899e"
+        md5_hash="9dd31a36b737204e91b040515e3d899e",
+        is_3d=False,
     ),
     "synth_complex": RegisteredModel(
         url="https://drive.switch.ch/index.php/s/CiCjNJaJzpVVD2M/download",
-        md5_hash="d692fa21da47e4a50b4c52f49442508b"
+        md5_hash="d692fa21da47e4a50b4c52f49442508b",
+        is_3d=False,
     ),
+    "smfish_3d": RegisteredModel(
+        url="https://drive.switch.ch/index.php/s/Vym7tqiORZOP5Zt/download",
+        md5_hash="c5ab30ba3b9ccb07b4c34442d1b5b615",
+        is_3d=True,
+    )
 }

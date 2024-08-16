@@ -824,6 +824,7 @@ class Spotiflow(nn.Module):
                 points.append(curr_pts)
                 probs.append(curr_probs)
 
+            assert self.config.out_channels == 1, "Trying to predict using a multi-channel network, which is not supported yet."
             # ! FIXME: This is a temporary fix which will stop working when multi-channel output is implemented
             points = points[0]
             probs = probs[0]
@@ -833,8 +834,6 @@ class Spotiflow(nn.Module):
                 flow = flow[0]
 
         else:  # Predict with tiling
-            if self.config.out_channels > 1:
-                raise NotImplementedError("Tiled prediction not implemented for multi-channel output yet.")
             padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
             if not skip_details:
                 y = np.empty(padded_shape, np.float32)

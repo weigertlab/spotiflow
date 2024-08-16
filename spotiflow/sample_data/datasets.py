@@ -17,6 +17,7 @@ class RegisteredDataset:
 
     url: str
     md5_hash: str
+    is_3d: bool
 
 
 def list_registered():
@@ -56,17 +57,27 @@ def load_dataset(name: str, include_test: bool=False):
         name (str): the name of the dataset to load.
         include_test (bool, optional): whether to include the test set in the returned data. Defaults to False.
     """
+    if name not in _REGISTERED:
+        raise NotRegisteredError(f"No training dataset named {name} found. Available datasets: {','.join(sorted(list_registered()))}")
+    dataset = _REGISTERED[name]
     path = get_training_datasets_path(name)
-    return get_data(path, include_test=include_test)
+    return get_data(path, include_test=include_test, is_3d=dataset.is_3d)
 
 
 _REGISTERED = {
     "synth_complex": RegisteredDataset(
         url="https://drive.switch.ch/index.php/s/aWdxUHULLkLLtqS/download",
         md5_hash="5f44b03603fe1733ac0f2340a69ae238",
+        is_3d=False,
     ),
     "merfish": RegisteredDataset(
         url="https://drive.switch.ch/index.php/s/fsjOypn4ICpSF2w/download",
         md5_hash="17fcdbd12cc71630e4f49652ded837c7",
+        is_3d=False,
+    ),
+    "synth_3d": RegisteredDataset(
+        url="https://drive.switch.ch/index.php/s/EemgJK1Bno8c3n4/download",
+        md5_hash="f1715515763288362ee3351caca02825",
+        is_3d=True,
     ),
 }
