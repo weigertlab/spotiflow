@@ -12,7 +12,7 @@ sys.path.insert(0, Path(__file__).parents[2].resolve().as_posix())
 project = 'Spotiflow'
 copyright = '2023, Albert Dominguez Mantes'
 author = 'Albert Dominguez Mantes'
-release = '0.1'
+release = '0.4.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

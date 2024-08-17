@@ -31,7 +31,16 @@ The actual naming of the files is not important, but the ``.csv`` and ``.tif`` f
     252.99, 307.97
     ...
 
-The column names can also be `axis-0` (instead of `y`) and `axis-1` instead of `x`.
+The column names can also be `axis-0` (instead of `y`) and `axis-1` instead of `x`. For the 3D case, the format is similar but with an additional column corresponding to the `z` coordinate:
+
+.. code-block::
+
+    z,y,x 
+    12.4,42.3,24.24
+    61.2,252.99, 307.97
+    ...
+
+In this case, you can also use `axis-0`, `axis-1`, and `axis-2` instead of `z`, `y`, and `x`, respectively.
 
 
 Basic training
@@ -65,6 +74,24 @@ You can then load it by simply calling:
 
     model = Spotiflow.from_folder("/my/trained/model")
 
+
+In the 3D case, you should initialize a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and pass it to the `Spotiflow` constructor with the appropriate parameter set (see other options for the configuration at the end of the section):
+
+.. code-block:: python
+    # Same imports as before
+    from spotiflow.model import SpotiflowModelConfig
+
+    # Create the model config
+    model_config = SpotiflowModelConfig(
+        is_3d=True,
+        grid=2, # subsampling factor for prediction
+        # you can pass other arguments here
+    )
+
+    model = Spotiflow(model_config)
+    # Train and save the model as before
+
+
 Customizing the training
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -75,6 +102,7 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
     train_config = {
         "num_epochs": 100,
         "learning_rate": 0.001,
+        "smart_crop": True,
         # other parameters
     }
 
@@ -89,7 +117,7 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
     )
 
 
-In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and populate it accordingly. Then you can pass it to the `Spotiflow` constructor. For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
+In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and populate it accordingly. Then you can pass it to the `Spotiflow` constructor (note that this is necessary for 3D). For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
 
 .. code-block:: python
 

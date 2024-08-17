@@ -13,7 +13,7 @@ The plugin will then be available in the napari GUI under the name "Spotiflow wi
     :width: 700
     :align: center
 
-The plugin has two modes: for images (``2D``) and movies (``2D+t``), which can be toggled using the ``2D`` and ``2D+t`` buttons in the GUI. Other options can be tuned, `e.g.` rescaling the image.
+The plugin allows running on two modes: for images (``2D``) and volumes (``3D``), which can be toggled using the corresponding  buttons in the GUI. You can also run on movies by setting the appropriate axis order (should be leading with a `T`).
 
 Upon pressing the button ``Run``, The plugin will create a ``Points`` layer containing the predicted spots:
 
@@ -21,6 +21,6 @@ Upon pressing the button ``Run``, The plugin will create a ``Points`` layer cont
     :width: 700
     :align: center
 
-If the option ``Show CNN output`` is checked, the plugin will also create an ``Image`` layer containing the heatmap output of the CNN.
+If the option ``Show CNN output`` is checked, the plugin will also create two ``Image`` layers containing the heatmap output of the CNN as well as the stereographic flow.
 
-Finally, the plugin includes one sample image per dataset. These samples can be loaded from the ``File`` menu (``File -> Open sample -> napari-spotiflow``). You can try the plugin with these samples to get a better idea of how it works!
+Finally, the plugin includes two sample 2D images (HybISS and Terra) as well as a synthetic 3D volume. These samples can be loaded from the ``File`` menu (``File -> Open sample -> napari-spotiflow``). You can try the plugin with these samples to get a better idea of how it works!
