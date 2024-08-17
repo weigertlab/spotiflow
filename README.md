@@ -18,7 +18,7 @@
 
 The documentation of the software can be found [here](https://weigertlab.github.io/spotiflow/).
 
-## Installation
+## Installation (pip, recommended)
 Create and activate a fresh conda environment (we currently support Python 3.9 to 3.11):
 
 ```console
@@ -43,6 +43,14 @@ Finally, install `spotiflow`:
 pip install spotiflow
 ```
 
+## Installation (conda)
+For Linux/MacOS users, you can also install Spotiflow using conda through the `conda-forge` channel:
+
+```console
+conda install -c conda-forge spotiflow
+```
+
+The conda package is, for now, not CUDA-compatible. We recommend using `pip` to install Spotiflow if available.
 
 ## Usage
 
@@ -61,6 +69,28 @@ spotiflow-predict PATH
 ```
 
 where PATH can be either an image or a folder. By default, the command will use the `general` pretrained model. You can specify a different model by using the `--pretrained-model` flag. Moreover, spots are saved to a subfolder `spotiflow_results` created inside the input folder (this can be changed with the `--out-dir` flag). For more information, please refer to the help message of the CLI (`$ spotiflow-predict -h`).
+
+### Inference (Docker)
+
+Alternatively to installing Spotiflow as command line tool on your operating system, you can also use it directly from our Docker container (thanks to @migueLib for the contribution!). To do so, you can use the following command:
+
+To pull the Docker container from Dockerhub use:
+``` console
+docker pull weigertlab/spotiflow:main
+```
+
+Then, run spotiflow-predict with:
+```console
+docker run -it -v [/local/input/folder]:/spotiflow/input weigertlab/spotiflow:main spotiflow-predict input/your_file.tif -o .
+```
+Where:  
+`-v`: represents the volume flag, which allows you to mount a folder from your local machine to the container.    
+`/path/to/your/data:/spotiflow`: is the path to the folder containing the image you want to analyze.
+
+Note:
+- The current implementation of Spotiflow in Docker only supports CPU inference.
+
+
 
 ### Inference (API)
 
@@ -81,7 +111,7 @@ model = Spotiflow.from_pretrained("general")
 # model = Spotiflow.from_folder("./mymodel")
 
 # Predict
-points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contains the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`).
+points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contain the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`). Retrieved spot intensities are found in `details.intens`.
 ```
 
 ### Napari plugin

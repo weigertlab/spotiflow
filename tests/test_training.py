@@ -1,7 +1,6 @@
 from spotiflow.data import SpotsDataset
 from spotiflow.model import SpotiflowModelConfig, SpotiflowTrainingConfig, Spotiflow
 import lightning.pytorch as pl
-from numerize.numerize import numerize
 import torch
 from utils import example_data
 
@@ -54,7 +53,7 @@ if __name__ == "__main__":
 
     model = Spotiflow(config)
 
-    print(f"Total params: {numerize(sum(p.numel() for p in model.parameters()))}")
+    print(f"Total params: {sum(p.numel() for p in model.parameters())}")
 
     logger = pl.loggers.TensorBoardLogger(
         save_dir="foo",

@@ -22,6 +22,7 @@ from ..augmentations import transforms, transforms3d
 from ..augmentations.pipeline import Pipeline as AugmentationPipeline
 from ..data import Spots3DDataset, SpotsDataset
 from ..utils import (
+    bilinear_interp_points,
     center_crop,
     center_pad,
     filter_shape,
@@ -32,6 +33,7 @@ from ..utils import (
     prob_to_points,
     subpixel_offset,
     tile_iterator as parallel_tile_iterator,
+    trilinear_interp_points,
 )
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
@@ -646,14 +648,14 @@ class Spotiflow(nn.Module):
             exclude_border (bool, optional): Whether to exclude spots at the border. Defaults to False.
             scale (Optional[int], optional): Scale factor to apply to the image. Defaults to None.
             subpix (bool, optional): Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
-            peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "skimage".
+            peak_mode (str, optional): Peak detection mode (can be either "skimage" or "fast", which is a faster custom C++ implementation). Defaults to "fast".
             normalizer (Optional[Union[Literal["auto"], callable]], optional): Normalizer to use. If None, will use the default normalizer. Defaults to "auto" (percentile-based normalization with p_min=1, p_max=99.8).
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
 
         Returns:
-            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
+            Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities (`prob`), the heatmap (`heatmap`), the stereographic flow (`flow`), the 2D local offset vector field (`subpix`) and the spot intensities (`intens`).
         """
         if self.config.out_channels > 1:
             raise NotImplementedError("Predicting with multiple channels is not supported yet.")
@@ -988,7 +990,16 @@ class Spotiflow(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow)
+        # Retrieve intensity of the spots
+        if subpix_radius < 0: # no need to interpolate if subpixel precision is not used
+            intens = img[tuple(pts.astype(int).T)]
+        else:
+            try:
+                intens = bilinear_interp_points(img, pts) if not self.config.is_3d else trilinear_interp_points(img, pts)
+            except Exception as _:
+                log.warn("Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead.")
+                intens = img[tuple(pts.round().astype(int).T)]
+        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens)
         return pts, details
 
     def predict_dataset(

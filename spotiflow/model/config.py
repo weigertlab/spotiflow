@@ -116,7 +116,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
                 (downsample_factor,)*2 if not is_3d else (downsample_factor,)*3 for _ in range(levels)
             )
         else:
-            log.warning(
+            log.debug(
                 "Using downsample_factors argument. downsample_factor will be ignored."
             )
             self.downsample_factors = downsample_factors
@@ -126,7 +126,7 @@ class SpotiflowModelConfig(SpotiflowConfig):
                 for _ in range(n_convs_per_level)
             )
         else:
-            log.warning("Using kernel_sizes argument. kernel_size will be ignored.")
+            log.debug("Using kernel_sizes argument. kernel_size will be ignored.")
             self.kernel_sizes = kernel_sizes
 
         if padding == "same":

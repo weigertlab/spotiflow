@@ -553,3 +553,92 @@ def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
         else:
             raise ValueError(f"Unexpected key {key} in .npz file {fname}")
     return ret_data
+
+def bilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -> np.ndarray:
+    """ Return the bilinearly interpolated iamge intensities at each (subpixel) location.
+
+
+    Args:
+        img (np.ndarray): image in YX or YXC format.
+        pts (np.ndarray): spot locations to interpolate the intensities from. Array shape should be (N,2).
+        eps (float, optional): will clip spot locations to SHAPE-eps to avoid numerical issues at image border. Defaults to 1e-9.
+
+    Returns:
+        np.ndarray: array of shape (N,C) containing intensities for each spot
+    """
+    assert img.ndim in (2,3), "Expected YX or YXC image for interpolating intensities."
+    assert pts.shape[1] == 2, "Point coordinates to be interpolated should be an (N,2) array"
+
+    if img.ndim == 2:
+        img = img[..., None]
+
+    if pts.shape[0] == 0:
+        return np.zeros((0, img.shape[-1]), dtype=img.dtype)
+    ys, xs = pts[:, 0], pts[:, 1]
+
+    # Avoid out of bounds coordinates
+    ys.clip(0, img.shape[0]-1-eps, out=ys)
+    xs.clip(0, img.shape[1]-1-eps, out=xs)
+
+    pys = np.floor(ys).astype(int)
+    pxs = np.floor(xs).astype(int)
+
+    # Differences to floored coordinates
+    dys = ys-pys
+    dxs = xs-pxs
+    wxs, wys = 1.-dxs, 1.-dys
+
+    # Interpolate
+    weights =  np.multiply(img[pys, pxs, :].T      , wxs*wys).T
+    weights += np.multiply(img[pys, pxs+1, :].T    , dxs*wys).T
+    weights += np.multiply(img[pys+1, pxs, :].T    , wxs*dys).T
+    weights += np.multiply(img[pys+1, pxs+1, :].T  , dxs*dys).T
+    return weights
+
+def trilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -> np.ndarray:
+    """ Return the trilinearly interpolated iamge intensities at each (subpixel) location.
+
+
+    Args:
+        img (np.ndarray): image in ZYX or ZYXC format.
+        pts (np.ndarray): spot locations to interpolate the intensities from. Array shape should be (N,3).
+        eps (float, optional): will clip spot locations to SHAPE-eps to avoid numerical issues at image border. Defaults to 1e-9.
+
+    Returns:
+        np.ndarray: array of shape (N,C) containing intensities for each spot
+    """
+    assert img.ndim in (3,4), "Expected ZYX or ZYXC image for interpolating intensities."
+    assert pts.shape[1] == 3, "Point coordinates to be interpolated should be an (N,3) array"
+
+    if img.ndim == 3:
+        img = img[..., None]
+
+    if pts.shape[0] == 0:
+        return np.zeros((0, img.shape[-1]), dtype=img.dtype)
+    zs, ys, xs = pts[:, 0], pts[:, 1], pts[:, 2]
+
+    # Avoid out of bounds coordinates
+    zs.clip(0, img.shape[0]-1-eps, out=zs)
+    ys.clip(0, img.shape[1]-1-eps, out=ys)
+    xs.clip(0, img.shape[2]-1-eps, out=xs)
+
+    pzs = np.floor(zs).astype(int)
+    pys = np.floor(ys).astype(int)
+    pxs = np.floor(xs).astype(int)
+
+    # Differences to floored coordinates
+    dzs = zs-pzs
+    dys = ys-pys
+    dxs = xs-pxs
+    wzx, wzy, wys = 1.-dxs, 1.-dys, 1.-dzs
+
+    # Interpolate
+    weights =  np.multiply(img[pzs, pys, pxs, :].T         , wzx*wzy*wys).T
+    weights += np.multiply(img[pzs, pys, pxs+1, :].T       , dxs*wzy*wys).T
+    weights += np.multiply(img[pzs, pys+1, pxs, :].T       , wzx*dys*wys).T
+    weights += np.multiply(img[pzs, pys+1, pxs+1, :].T     , dxs*dys*wys).T
+    weights += np.multiply(img[pzs+1, pys, pxs, :].T       , wzx*wzy*dzs).T
+    weights += np.multiply(img[pzs+1, pys, pxs+1, :].T     , dxs*wzy*dzs).T
+    weights += np.multiply(img[pzs+1, pys+1, pxs, :].T     , wzx*dys*dzs).T
+    weights += np.multiply(img[pzs+1, pys+1, pxs+1, :].T   , dxs*dys*dzs).T
+    return weights
