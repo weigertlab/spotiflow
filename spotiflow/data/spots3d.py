@@ -1,35 +1,54 @@
+import logging
+import sys
+from itertools import chain
 from pathlib import Path
 from typing import Callable, Dict, Literal, Optional, Sequence, Union
-from typing_extensions import Self
+
+import numpy as np
+import pandas as pd
+import tifffile
+import torch
+from iohub import open_ome_zarr
+from iohub.ngff import ImageArray
+from iohub.zarr import open_ome_zarr
+from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
+from typing_extensions import Self
 
-from skimage import io
-import logging
-import numpy as np
-import sys
-import torch
-import tifffile
-from itertools import chain
-import pandas as pd
-
-from .spots import SpotsDataset
 from .. import utils
+from .spots import SpotsDataset
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger(__name__)
 
+
+def imread(path: Union[Path, str]) -> Union[np.ndarray, ImageArray]:
+    """Read image from disk and return as ImageArray."""
+    if not isinstance(path, Path):
+        path = Path(path)
+    if path.suffix == ".zarr":
+        with open_ome_zarr(
+            path,
+            mode="r",
+            layout="auto",
+        ) as ds:
+            return ds[0]  # lazy Zarr array for the raw image in the first position
+    else:
+        return io.imread(path)
 
 class Spots3DDataset(SpotsDataset):
     """Base spot dataset class instantiated with loaded images and centers."""
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
 
-        img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
+        if not isinstance(img, ImageArray):
+            img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
+
         assert img.ndim in (4, 5)  # Images should be in BCDWH or BDHW format
-        if img.ndim == 4:
+        if isinstance(img, torch.Tensor) and img.ndim == 4:
             img = img.unsqueeze(1) # Add C dimension
 
         img, centers = self.augmenter(img, centers)
@@ -74,7 +93,7 @@ class Spots3DDataset(SpotsDataset):
         augmenter: Optional[Callable] = None,
         downsample_factors: Sequence[int] = (1,),
         sigma: float = 1.0,
-        image_extensions: Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg"),
+        image_extensions: Sequence[str] = ("tif", "tiff", "png", "jpg", "jpeg", ".zarr"),
         mode: str = "max",
         max_files: Optional[int] = None,
         compute_flow: bool = False,
@@ -90,7 +109,7 @@ class Spots3DDataset(SpotsDataset):
             augmenter (Callable): Augmenter function.
             downsample_factors (Sequence[int], optional): Downsample factors. Defaults to (1,).
             sigma (float, optional): Sigma of Gaussian kernel to generate heatmap. Defaults to 1.
-            image_extensions (Sequence[str], optional): Image extensions to look for in images. Defaults to ("tif", "tiff", "png", "jpg", "jpeg").
+            image_extensions (Sequence[str], optional): Image extensions to look for in images. Defaults to ("tif", "tiff", "png", "jpg", "jpeg", ".zarr").
             mode (str, optional): Mode of heatmap generation. Defaults to "max".
             max_files (Optional[int], optional): Maximum number of files to load. Defaults to None (all of them).
             compute_flow (bool, optional): Whether to compute flow from centers. Defaults to False.
@@ -103,7 +122,6 @@ class Spots3DDataset(SpotsDataset):
         assert not add_class_label, "add_class_label not supported for 3D datasets yet."
         if isinstance(path, str):
             path = Path(path)
-        image_files = sorted(path.glob("*.tif"))
         center_files = sorted(path.glob("*.csv"))
 
         image_files = sorted(
@@ -125,7 +143,7 @@ class Spots3DDataset(SpotsDataset):
             )
 
 
-        images = [io.imread(img) for img in tqdm(image_files, desc="Loading images")]
+        images = [imread(img) for img in tqdm(image_files, desc="Loading images")]
 
         centers = [
             utils.read_coords_csv3d(center).astype(np.float32)
