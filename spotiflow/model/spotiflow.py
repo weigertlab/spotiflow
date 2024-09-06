@@ -193,6 +193,7 @@ class Spotiflow(nn.Module):
             inference_mode (bool, optional): whether to set the model in eval mode. Defaults to True.
             which (str, optional): which checkpoint to load. Defaults to "best".
             map_location (str, optional): device string to load the model to. Defaults to 'auto' (hardware-based).
+            cache_dir (Optional[Union[Path, str]], optional): directory to cache the model. Defaults to None. If None, will use the default cache directory (given by the env var SPOTIFLOW_CACHE_DIR if set, otherwise ~/.spotiflow).
 
         Returns:
             Self: loaded model

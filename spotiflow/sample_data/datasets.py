@@ -1,8 +1,9 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
-from ..utils import get_data, NotRegisteredError
+from ..utils import NotRegisteredError, get_data
 from ..utils.get_file import get_file
 
 
@@ -23,9 +24,14 @@ class RegisteredDataset:
 def list_registered():
     return list(_REGISTERED.keys())
 
-
 def _default_cache_dir():
-    return Path("~").expanduser() / ".spotiflow" / "datasets"
+    default_cache_dir = os.getenv("SPOTIFLOW_CACHE_DIR", None)
+    if default_cache_dir is None:
+        return Path("~").expanduser() / ".spotiflow" / "datasets"
+    default_cache_dir = Path(default_cache_dir)
+    if default_cache_dir.stem != "datasets":
+        default_cache_dir = default_cache_dir / "datasets"
+    return default_cache_dir
 
 
 def get_training_datasets_path(name: str, cache_dir: Optional[Path] = None) -> Path:
@@ -57,6 +63,7 @@ def load_dataset(name: str, include_test: bool=False, cache_dir: Optional[Union[
     Args:
         name (str): the name of the dataset to load.
         include_test (bool, optional): whether to include the test set in the returned data. Defaults to False.
+        cache_dir (Optional[Union[Path, str]], optional): directory to cache the model. Defaults to None. If None, will use the default cache directory (given by the env var SPOTIFLOW_CACHE_DIR if set, otherwise ~/.spotiflow).
     """
     if name not in _REGISTERED:
         raise NotRegisteredError(f"No training dataset named {name} found. Available datasets: {','.join(sorted(list_registered()))}")

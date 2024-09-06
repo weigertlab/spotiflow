@@ -1,10 +1,10 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from ..utils import NotRegisteredError
 from ..utils.get_file import get_file
-
 
 
 @dataclass
@@ -25,8 +25,13 @@ def list_registered():
 
 
 def _default_cache_dir():
-    return Path("~").expanduser() / ".spotiflow" / "models"
-
+    default_cache_dir = os.getenv("SPOTIFLOW_CACHE_DIR", None)
+    if default_cache_dir is None:
+        return Path("~").expanduser() / ".spotiflow" / "models"
+    default_cache_dir = Path(default_cache_dir)
+    if default_cache_dir.stem != "models":
+        default_cache_dir = default_cache_dir / "models"
+    return default_cache_dir
 
 def get_pretrained_model_path(name: str, cache_dir: Optional[Path] = None) -> Path:
     """
