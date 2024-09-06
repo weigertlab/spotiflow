@@ -1,8 +1,11 @@
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
 
 from ..utils import NotRegisteredError
 from ..utils.get_file import get_file
+
+
 
 @dataclass
 class RegisteredModel:
@@ -21,14 +24,15 @@ def list_registered():
     return list(_REGISTERED.keys())
 
 
-def _cache_dir():
+def _default_cache_dir():
     return Path("~").expanduser() / ".spotiflow" / "models"
 
 
-def get_pretrained_model_path(name: str):
+def get_pretrained_model_path(name: str, cache_dir: Optional[Path] = None) -> Path:
     """
     Downloads and extracts the pretrained model with the given name.
-    The model is downloaded to ~/.spotiflow and extracted to ~/.spotiflow/name.
+    The model is downloaded and extracted in the given cache_dir. If it is not given, it will be
+    downloaded to ~/.spotiflow and extracted to ~/.spotiflow/models/name.
     """
     if name not in _REGISTERED:
         raise NotRegisteredError(f"No pretrained model named {name} found. Available models: {','.join(sorted(list_registered()))}")
@@ -38,7 +42,7 @@ def get_pretrained_model_path(name: str):
             fname=f"{name}.zip",
             origin=model.url,
             file_hash=model.md5_hash,
-            cache_dir=_cache_dir(),
+            cache_dir=_default_cache_dir() if cache_dir is None else cache_dir,
             cache_subdir="",
             extract=True,
         )

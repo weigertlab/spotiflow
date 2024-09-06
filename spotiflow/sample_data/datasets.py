@@ -1,6 +1,6 @@
-from pathlib import Path
-from ..utils import get_data
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Union
 
 from ..utils import get_data, NotRegisteredError
 from ..utils.get_file import get_file
@@ -24,14 +24,15 @@ def list_registered():
     return list(_REGISTERED.keys())
 
 
-def _cache_dir():
+def _default_cache_dir():
     return Path("~").expanduser() / ".spotiflow" / "datasets"
 
 
-def get_training_datasets_path(name: str):
+def get_training_datasets_path(name: str, cache_dir: Optional[Path] = None) -> Path:
     """
     Downloads and extracts the training dataset with the given name.
-    The dataset is downloaded to ~/.spotiflow/datasets and extracted to ~/.spotiflow/datasets/name.
+    The dataset is downloaded to the given cache_dir. If not given, it
+    will be downloaded to ~/.spotiflow/datasets and extracted to ~/.spotiflow/datasets/name.
     """
     if name not in _REGISTERED:
         raise NotRegisteredError(f"No training dataset named {name} found. Available datasets: {','.join(sorted(list_registered()))}")
@@ -41,14 +42,14 @@ def get_training_datasets_path(name: str):
             fname=f"{name}.zip",
             origin=dataset.url,
             file_hash=dataset.md5_hash,
-            cache_dir=_cache_dir(),
+            cache_dir=_default_cache_dir() if cache_dir is None else cache_dir,
             cache_subdir="",
             extract=True,
         )
     )
     return path.parent / name
 
-def load_dataset(name: str, include_test: bool=False):
+def load_dataset(name: str, include_test: bool=False, cache_dir: Optional[Union[Path, str]] = None):
     """
     Downloads and extracts the training dataset with the given name.
     The dataset is downloaded to ~/.spotiflow/datasets and extracted to ~/.spotiflow/datasets/name.
@@ -59,8 +60,10 @@ def load_dataset(name: str, include_test: bool=False):
     """
     if name not in _REGISTERED:
         raise NotRegisteredError(f"No training dataset named {name} found. Available datasets: {','.join(sorted(list_registered()))}")
+    if cache_dir is not None and isinstance(cache_dir, str):
+        cache_dir = Path(cache_dir)
     dataset = _REGISTERED[name]
-    path = get_training_datasets_path(name)
+    path = get_training_datasets_path(name, cache_dir=cache_dir)
     return get_data(path, include_test=include_test, is_3d=dataset.is_3d)
 
 

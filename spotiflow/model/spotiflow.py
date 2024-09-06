@@ -180,9 +180,10 @@ class Spotiflow(nn.Module):
     def from_pretrained(
         cls,
         pretrained_name: str,
-        inference_mode=True,
+        inference_mode: bool = True,
         which: str = "best",
         map_location: Literal["auto", "cpu", "cuda", "mps"] = "auto",
+        cache_dir: Optional[Union[Path, str]] = None,
         **kwargs,
     ) -> Self:
         """Load a pretrained model with given name
@@ -197,7 +198,9 @@ class Spotiflow(nn.Module):
             Self: loaded model
         """
         log.info(f"Loading pretrained model {pretrained_name}")
-        pretrained_path = get_pretrained_model_path(pretrained_name)
+        if cache_dir is not None and isinstance(cache_dir, str):
+            cache_dir = Path(cache_dir)
+        pretrained_path = get_pretrained_model_path(pretrained_name, cache_dir=cache_dir)
         if pretrained_path is not None:
             return cls.from_folder(
                 pretrained_path,
