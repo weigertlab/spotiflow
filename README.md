@@ -117,6 +117,8 @@ points, details = model.predict(img) # points contains the coordinates of the de
 ### Napari plugin
 Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
 
+### Changing the cache directory
+The default cache directory root folder (where pre-trained models and datasets are stored) is, by default, `~/.spotiflow`. If you want to change it for your use case, you can either set the environment variable `SPOTIFLOW_CACHE_DIR` to the path you want or directly pass the desired folder as an argument (`cache_dir`) to the `Spotiflow.from_pretrained()` method (note that if the latter is chosen, the path stored in the environment variable will be ignored). 
 
 ## For developers
 
