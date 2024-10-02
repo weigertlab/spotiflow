@@ -1,5 +1,14 @@
+import logging
+import sys
+from pathlib import Path
 from types import SimpleNamespace
+
+import configargparse
+import lightning.pytorch as pl
+import torch
 from spotiflow import utils
+from spotiflow.augmentations import transforms
+from spotiflow.augmentations.pipeline import Pipeline
 from spotiflow.data import SpotsDataset
 from spotiflow.model import (
     CustomEarlyStopping,
@@ -9,13 +18,7 @@ from spotiflow.model import (
     SpotiflowTrainingConfig,
 )
 
-from pathlib import Path
-import lightning.pytorch as pl
-from spotiflow.augmentations import transforms
-from spotiflow.augmentations.pipeline import Pipeline
-
-import configargparse
-import torch
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 
 def get_run_name(args: SimpleNamespace):

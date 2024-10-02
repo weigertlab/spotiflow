@@ -2,16 +2,21 @@
 """
 
 import argparse
-import numpy as np
-from pathlib import Path
-from skimage import io
+import logging
+import sys
 from itertools import chain
+from pathlib import Path
 
-from spotiflow.model import Spotiflow, SpotiflowModelConfig
-from spotiflow import utils
 import lightning.pytorch as pl
+import numpy as np
+from skimage import io
+from spotiflow import utils
+from spotiflow.model import Spotiflow, SpotiflowModelConfig
+
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 IMAGE_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg")
+
 
 
 def get_data(data_dir, debug=False):
