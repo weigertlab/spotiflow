@@ -5,8 +5,8 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 from typing import Optional
 
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):

@@ -10,8 +10,8 @@ from typing import Literal, Optional, Tuple, Union
 import numpy as np
 import yaml
 
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 class SpotiflowConfig(argparse.Namespace, abc.ABC):

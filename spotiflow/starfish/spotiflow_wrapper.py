@@ -18,8 +18,8 @@ from tqdm.auto import tqdm
 from ..model import Spotiflow
 from ..utils import NotRegisteredError, normalize
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 try:
     from starfish.core.imagestack.imagestack import ImageStack

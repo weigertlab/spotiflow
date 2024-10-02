@@ -13,8 +13,8 @@ import wandb
 from csbdeep.utils import normalize_mi_ma
 from torch.utils.data import Dataset
 
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 # TODO: add_class_column is set to False for now not to break downstream code, but it shouldn't even be a parameter

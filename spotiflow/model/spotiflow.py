@@ -42,8 +42,8 @@ from .post import FeaturePyramidNetwork, MultiHeadProcessor
 from .pretrained import get_pretrained_model_path
 from .trainer import SpotiflowModelCheckpoint, SpotiflowTrainingWrapper
 
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 class Spotiflow(nn.Module):

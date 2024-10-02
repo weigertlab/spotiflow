@@ -15,8 +15,8 @@ from .losses import AdaptiveWingLoss
 from ..data import collate_spots
 from ..utils import prob_to_points, points_matching_dataset, remove_device_id_from_device_str
 
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 def _img_to_rgb_or_gray(x: torch.Tensor):

@@ -15,8 +15,8 @@ import pandas as pd
 
 from .. import utils
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 class SpotsDataset(Dataset):
