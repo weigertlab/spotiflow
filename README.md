@@ -19,10 +19,10 @@
 The documentation of the software can be found [here](https://weigertlab.github.io/spotiflow/).
 
 ## Installation (pip, recommended)
-Create and activate a fresh conda environment (we currently support Python 3.9 to 3.11):
+Create and activate a fresh conda environment (we currently support Python 3.9 to 3.12):
 
 ```console
-conda create -n spotiflow python=3.9
+conda create -n spotiflow python=3.12
 conda activate spotiflow
 ```
 
@@ -31,7 +31,7 @@ conda activate spotiflow
 
 For Linux/Windows with a CUDA device, install PyTorch using conda/mamba (one might need to change the cuda version accordingly):
 ```console
-conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia # Might need to change the cuda version accordingly
+conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia # Might need to change the cuda version accordingly
 ```
 
 **Note (for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.

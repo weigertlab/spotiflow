@@ -2,7 +2,7 @@
 from __future__ import absolute_import, print_function
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
-from numpy.distutils.misc_util import get_numpy_include_dirs
+from numpy import get_include
 from os import path
 
 # ------------------------------------------------------------------------------------
@@ -76,37 +76,37 @@ setup(
             "spotiflow.lib.spotflow2d",
             sources=["spotiflow/lib/spotflow2d.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
         Extension(
             "spotiflow.lib.spotflow3d",
             sources=["spotiflow/lib/spotflow3d.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
         Extension(
             "spotiflow.lib.point_nms",
             sources=["spotiflow/lib/point_nms.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
         Extension(
             "spotiflow.lib.point_nms3d",
             sources=["spotiflow/lib/point_nms3d.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
         Extension(
             "spotiflow.lib.filters",
             sources=["spotiflow/lib/filters.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
         Extension(
             "spotiflow.lib.filters3d",
             sources=["spotiflow/lib/filters3d.cpp"],
             extra_compile_args=["-std=c++11"],
-            include_dirs=get_numpy_include_dirs() + [nanoflann_root],
+            include_dirs=[get_include()] + [nanoflann_root],
         ),
     ],
     include_package_data=True,
