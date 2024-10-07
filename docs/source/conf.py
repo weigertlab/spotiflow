@@ -7,12 +7,12 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 from pathlib import Path
 import sys
-sys.path.insert(0, Path(__file__).parents[2].resolve().as_posix())
+from spotiflow import __version__ as __spotiflow_version__
 
 project = 'Spotiflow'
-copyright = '2023, Albert Dominguez Mantes'
+copyright = '2024, Albert Dominguez Mantes'
 author = 'Albert Dominguez Mantes'
-release = '0.4.0'
+release = __spotiflow_version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

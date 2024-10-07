@@ -1,9 +1,10 @@
 name: documentation
 
 on:
-  release:
+  workflow_run:
+    workflows: [tests]
     types:
-      - published
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -11,13 +12,14 @@ permissions:
 
 jobs:
   docs:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - name: Install dependencies
         run: |
-          pip install sphinx sphinx-immaterial
+          pip install spotiflow[docs]
       - name: Sphinx build
         run: |
           sphinx-build docs/source docs/build
