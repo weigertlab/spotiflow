@@ -78,6 +78,7 @@ You can then load it by simply calling:
 In the 3D case, you should initialize a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and pass it to the `Spotiflow` constructor with the appropriate parameter set (see other options for the configuration at the end of the section):
 
 .. code-block:: python
+
     # Same imports as before
     from spotiflow.model import SpotiflowModelConfig
 
@@ -117,7 +118,7 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
     )
 
 
-In order to change the model architecture (`e.g.` number of input/output channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and populate it accordingly. Then you can pass it to the `Spotiflow` constructor (note that this is necessary for 3D). For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
+In order to change the model architecture (`e.g.` number of input channels, number of layers, variance for the heatmap generation, etc.), you can create a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and populate it accordingly. Then you can pass it to the `Spotiflow` constructor (note that this is necessary for 3D). For example, if our image is RGB and we need the network to use 3 input channels, we can do the following:
 
 .. code-block:: python
 
