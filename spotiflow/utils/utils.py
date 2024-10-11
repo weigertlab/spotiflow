@@ -1,14 +1,17 @@
+import argparse
 import logging
 import os
 from itertools import product
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
-import argparse
+
 import dask
 import dask.array as da
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
+import sys
+import torch
 import wandb
 from csbdeep.utils import normalize_mi_ma
 from torch.utils.data import Dataset
@@ -16,29 +19,62 @@ from torch.utils.data import Dataset
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
+
+
 def str2bool(value):
     value = value.lower()
-    if value in ('yes', 'true', 't', 'y', '1'):
+    if value in ("yes", "true", "t", "y", "1"):
         return True
-    elif value in ('no', 'false', 'f', 'n', '0'):
+    elif value in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError(f'{value}: Boolean value expected!')
-    
-def infer_n_tiles(shape:tuple[int], max_tile_size:tuple[int]=None) -> tuple[int]:
-    """ 
+        raise argparse.ArgumentTypeError(f"{value}: Boolean value expected!")
+
+
+def infer_n_tiles(
+    shape: Tuple[int],
+    max_tile_size: Optional[Tuple[int]] = None,
+    device: Optional[torch.device] = None,
+) -> Tuple[int]:
+    """
     infers number of tiles by dimension
     """
-    if max_tile_size is None:
-        max_tile_size = (2048, 2048) if len(shape) == 2 else (128, 256, 256)
+    should_auto_infer = max_tile_size is None
+    if should_auto_infer:
+        fallback_tile_size = ((2048, 2048), (128, 256, 256))
+        max_tile_size = fallback_tile_size[0] if len(shape) == 2 else fallback_tile_size[1]
+        if device is not None:
+            if device.type == "cuda":
+                gpu_mem_gb = torch.cuda.mem_get_info(device=device)[1]/1e9
+                mem_to_size = {
+                    1: ((512, 512),(64,64,64)),
+                    2: ((512, 1024),(64,128,128)),
+                    4: ((1024, 1024),(128,128,128)),
+                    8: ((1024, 2048),(64,256,256)),
+                    16: ((2048, 2048),(128,256,256)),
+                    32: ((2048, 4096),(256,256,256)),
+                    64: ((4096, 4096),(128,512,512)),
+                }
+                # Get closest power of 2 that is less than or equal to the available GPU memory
+                floored_gpu_mem_gb = 2**int(np.log2(gpu_mem_gb))
+                max_tile_size_both = mem_to_size.get(floored_gpu_mem_gb, fallback_tile_size)
+                max_tile_size = max_tile_size_both[0] if len(shape) == 2 else max_tile_size_both[1]
     if not len(shape) == len(max_tile_size):
-        raise ValueError(f"shape {shape} and max_tile_size {max_tile_size} should have the same length")
-    return tuple(int(np.ceil(s/m)) for s,m in zip(shape, max_tile_size))
+        raise ValueError(
+            f"shape {shape} and max_tile_size {max_tile_size} should have the same length"
+        )
+    return tuple(int(np.ceil(s / m)) for s, m in zip(shape, max_tile_size))
+
 
 # TODO: add_class_column is set to False for now not to break downstream code, but it shouldn't even be a parameter
-def read_coords_csv(fname: str, add_class_column: bool=False) -> np.ndarray:
+def read_coords_csv(fname: str, add_class_column: bool = False) -> np.ndarray:
     """Parses a csv file and returns correctly ordered points array
-    
+
     Args:
         fname (str): Path to the csv file
         add_class_column (bool, optional): Whether to add a class column to the points array. Defaults to False.
@@ -59,27 +95,28 @@ def read_coords_csv(fname: str, add_class_column: bool=False) -> np.ndarray:
         if cols.issuperset(set(possible_columns)):
             points = df[list(possible_columns)].to_numpy()
             break
-        
+
     if add_class_column:
-        
         class_col_candidates = ("class", "label", "category", "channel")
 
         class_labels = np.zeros((points.shape[0], 1), dtype=np.float32)
         for possible_class_column in class_col_candidates:
             if possible_class_column in cols:
-                class_labels = df[possible_class_column].to_numpy().reshape(-1, 1).astype(np.uint8)
+                class_labels = (
+                    df[possible_class_column].to_numpy().reshape(-1, 1).astype(np.uint8)
+                )
                 break
         points = np.concatenate((points, class_labels), axis=1)
 
-    
     if points is None:
         raise ValueError(f"could not get points from csv file {fname}")
 
     return points
 
+
 def read_coords_csv3d(fname: str) -> np.ndarray:
     """Parses a csv file and returns correctly ordered points array
-    
+
     Args:
         fname (str): Path to the csv file
     Returns:
@@ -106,10 +143,12 @@ def read_coords_csv3d(fname: str) -> np.ndarray:
     return points
 
 
-def filter_shape(points: np.ndarray,
-                 shape: Tuple[int, int],
-                 idxr_array: Optional[np.ndarray]=None,
-                 return_mask: bool=False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+def filter_shape(
+    points: np.ndarray,
+    shape: Tuple[int, int],
+    idxr_array: Optional[np.ndarray] = None,
+    return_mask: bool = False,
+) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """Returns all values in "points" that are inside the shape as given by the indexer array
     if the indexer array is None, then the array to be filtered itself is used
 
@@ -128,7 +167,12 @@ def filter_shape(points: np.ndarray,
     return points[idx]
 
 
-def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: float=1., is_3d: bool=False) -> np.ndarray:
+def multiscale_decimate(
+    y: np.ndarray,
+    decimate: Tuple[int, int] = (2, 2),
+    sigma: float = 1.0,
+    is_3d: bool = False,
+) -> np.ndarray:
     """Decimate an image by a factor of `decimate` and apply a Gaussian filter with standard deviation `sigma`
 
     Args:
@@ -142,31 +186,39 @@ def multiscale_decimate(y: np.ndarray, decimate: Tuple[int, int]=(2, 2), sigma: 
     from skimage.measure import block_reduce
 
     if is_3d:
-        if len(decimate) == 2 and y.ndim == 3: # 3D Image
+        if len(decimate) == 2 and y.ndim == 3:  # 3D Image
             decimate = (decimate[0], *decimate)
     else:
-        if len(decimate) == 2 and y.ndim == 3: # Multichannel image
+        if len(decimate) == 2 and y.ndim == 3:  # Multichannel image
             decimate = (1, *decimate)
-    assert y.ndim == len(decimate), f"decimate {decimate} and y.ndim {y.ndim} do not match"
+    assert y.ndim == len(
+        decimate
+    ), f"decimate {decimate} and y.ndim {y.ndim} do not match"
     if decimate == (1, 1) or decimate == (1, 1, 1):
         return y
 
-
     y = block_reduce(y, decimate, np.max)
-    y = 2 * np.pi * sigma**2 * ndi.gaussian_filter(y, sigma, axes=(-2, -1) if not is_3d else (-3, -2, -1))
+    y = (
+        2
+        * np.pi
+        * sigma**2
+        * ndi.gaussian_filter(y, sigma, axes=(-2, -1) if not is_3d else (-3, -2, -1))
+    )
     y = np.clip(y, 0, 1)
     return y
 
 
-def center_pad(x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str="reflect") -> Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]:
+def center_pad(
+    x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str = "reflect"
+) -> Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]:
     """Pads x to shape. This function is the inverse of center_crop.
        This function accepts both NumPy arrays and Dask arrays. For the latter, the padding is done lazily.
-    
+
     Args:
         x (Union[np.ndarray, da.Array]): Image to be padded
         shape (Tuple[int, int]): Shape of the padded image
         mode (str, optional): Padding mode. Defaults to "reflect".
-    
+
     Returns:
         Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]: A tuple of the padded image and the padding sequence
     """
@@ -183,7 +235,9 @@ def center_pad(x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str
     return _pad_func(x, pads, mode=mode), pads
 
 
-def center_crop(x: Union[np.ndarray, da.Array], shape: Tuple[int, int]) -> Union[np.ndarray, da.Array]:
+def center_crop(
+    x: Union[np.ndarray, da.Array], shape: Tuple[int, int]
+) -> Union[np.ndarray, da.Array]:
     """Crops x to given shape. This function is the inverse of center_pad
 
     y = center_pad(x,shape)
@@ -193,7 +247,7 @@ def center_crop(x: Union[np.ndarray, da.Array], shape: Tuple[int, int]) -> Union
     Args:
         x (np.ndarray): Image to be cropped
         shape (Tuple[int, int]): Shape of the cropped image
-    
+
     Returns:
         np.ndarray: Cropped image
     """
@@ -210,13 +264,14 @@ def center_crop(x: Union[np.ndarray, da.Array], shape: Tuple[int, int]) -> Union
     )
     return x[ss]
 
+
 def normalize(
     x: np.ndarray,
-    pmin: float=1.,
-    pmax: float=99.8,
-    subsample: int=1,
-    clip: bool=False,
-    ignore_val: Optional[Union[int, float]]=None
+    pmin: float = 1.0,
+    pmax: float = 99.8,
+    subsample: int = 1,
+    clip: bool = False,
+    ignore_val: Optional[Union[int, float]] = None,
 ) -> np.ndarray:
     """
     Normalizes (percentile-based) a 2d image with the additional option to ignore a value. The normalization is done as follows:
@@ -232,7 +287,7 @@ def normalize(
         subsample (int, optional): Subsampling factor for percentile calculation. Defaults to 1.
         clip (bool, optional): Whether to clip the normalized image. Defaults to False.
         ignore_val (Optional[Union[int, float]], optional): Value to be ignored. Defaults to None.
-    
+
     Returns:
         np.ndarray: Normalized image
     """
@@ -258,12 +313,13 @@ def normalize(
     mi, ma = np.percentile(y[mask], (pmin, pmax))
     return normalize_mi_ma(x, mi, ma, clip=clip)
 
+
 def normalize_dask(
     x: da.Array,
-    pmin: float=1.,
-    pmax: float=99.8,
-    eps: float=1e-20,
-    max_samples: int=1e5,
+    pmin: float = 1.0,
+    pmax: float = 99.8,
+    eps: float = 1e-20,
+    max_samples: int = 1e5,
 ) -> da.Array:
     """
     Lazily normalizes (percentile-based) an n-dimensional Dask array with the additional option to ignore a value. The normalization is done as follows:
@@ -287,17 +343,18 @@ def normalize_dask(
         raise TypeError("Please use the `normalize` function for NumPy arrays!")
 
     n_skip = int(max(1, x.size // max_samples))
-    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
-        mi, ma = da.percentile(x.ravel()[::n_skip], (pmin, pmax), internal_method="tdigest").compute()
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        mi, ma = da.percentile(
+            x.ravel()[::n_skip], (pmin, pmax), internal_method="tdigest"
+        ).compute()
     return (x - mi) / (ma - mi + eps)
 
 
-def initialize_wandb(options: dict,
-                     train_dataset: Dataset,
-                     val_dataset: Dataset,
-                     silent: bool=True) -> None:
+def initialize_wandb(
+    options: dict, train_dataset: Dataset, val_dataset: Dataset, silent: bool = True
+) -> None:
     """Helper function which initializes wandb for logging. If `options` contains the key `skip_logging`, then wandb will not be initialized.
-    
+
     Args:
         options (dict): Dictionary containing the options for wandb
         train_dataset (Dataset): Training dataset
@@ -346,6 +403,7 @@ def write_coords_csv(pts: np.ndarray, fname: Union[Path, str]) -> None:
     df.to_csv(fname, index=False)
     return
 
+
 def remove_device_id_from_device_str(device_str: str) -> str:
     """Helper function to remove the device id from the device string.
     For example, "cuda:0" will be converted to "cuda"
@@ -358,10 +416,13 @@ def remove_device_id_from_device_str(device_str: str) -> str:
     """
     return device_str.split(":")[0].strip()
 
-def get_data(path: Union[Path, str],
-             normalize: bool=True,
-             include_test: bool=False,
-             is_3d: bool=False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+def get_data(
+    path: Union[Path, str],
+    normalize: bool = True,
+    include_test: bool = False,
+    is_3d: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get data from a given path. The path should contain a 'train' and 'val' folder.
 
     Args:
@@ -376,16 +437,22 @@ def get_data(path: Union[Path, str],
     SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
     if isinstance(path, str):
         path = Path(path)
-    
+
     assert path.exists(), f"Given data path {path} does not exist!"
 
-    train_path = path/"train"
-    val_path = path/"val"
-    test_path = path/"test"
-    assert (train_path).exists(), f"Given data path {path} does not contain a 'train' folder!"
-    assert (val_path).exists(), f"Given data path {path} does not contain a 'val' folder!"
+    train_path = path / "train"
+    val_path = path / "val"
+    test_path = path / "test"
+    assert (
+        train_path
+    ).exists(), f"Given data path {path} does not contain a 'train' folder!"
+    assert (
+        val_path
+    ).exists(), f"Given data path {path} does not contain a 'val' folder!"
     if include_test:
-        assert (test_path).exists(), f"Given data path {path} does not contain a 'test' folder!"
+        assert (
+            test_path
+        ).exists(), f"Given data path {path} does not contain a 'test' folder!"
 
     test_ds = None
     if normalize:
@@ -396,10 +463,10 @@ def get_data(path: Union[Path, str],
     else:
         tr_ds = SpotsDatasetClass.from_folder(train_path, normalizer=None)
         val_ds = SpotsDatasetClass.from_folder(val_path, normalizer=None)
-        
+
         if include_test:
             test_ds = SpotsDatasetClass.from_folder(test_path, normalizer=None)
-    
+
     tr_imgs = tr_ds.images
     val_imgs = val_ds.images
     if include_test:
@@ -418,12 +485,13 @@ def get_data(path: Union[Path, str],
 
     return tr_imgs, tr_pts, val_imgs, val_pts
 
+
 def subpixel_offset_2d(
     pts: np.ndarray,
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
-    eps: float=1e-8,
+    eps: float = 1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     2D local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -456,7 +524,7 @@ def subpixel_offset_2d(
         p, mask = filter_shape(p, prob.shape, return_mask=True)
         _p = tuple(p.astype(int).T)
 
-        _w = np.zeros((n, 1), np.float32)+eps
+        _w = np.zeros((n, 1), np.float32) + eps
         _w[mask] = prob[_p][:, None]
 
         _correct = np.zeros((n, 2), np.float32)
@@ -468,12 +536,13 @@ def subpixel_offset_2d(
     _add /= _weight
     return _add
 
+
 def subpixel_offset_3d(
     pts: np.ndarray,
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
-    eps: float=1e-8,
+    eps: float = 1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     3D local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -506,7 +575,7 @@ def subpixel_offset_3d(
         p, mask = filter_shape(p, prob.shape, return_mask=True)
         _p = tuple(p.astype(int).T)
 
-        _w = np.zeros((n, 1), np.float32)+eps
+        _w = np.zeros((n, 1), np.float32) + eps
         _w[mask] = prob[_p][:, None]
 
         _correct = np.zeros((n, 3), np.float32)
@@ -518,12 +587,13 @@ def subpixel_offset_3d(
     _add /= _weight
     return _add
 
+
 def subpixel_offset(
     pts: np.ndarray,
     subpix: np.ndarray,
     prob: np.ndarray,
     radius: int,
-    eps: float=1e-8,
+    eps: float = 1e-8,
 ) -> np.ndarray:
     """Compute offset vector for subpixel localization at given locations by aggregating within a radius the
     Euclidean local vector field `subpix` around each point in `pts` weighted by the probability array `prob`
@@ -544,6 +614,7 @@ def subpixel_offset(
     else:
         raise ValueError(f"Invalid shape {pts.shape} for points array.")
 
+
 def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
     """Reads a spots dataset from a .npz file formatted as in deepBlink (Eichenberger et al. 2021))
 
@@ -553,16 +624,18 @@ def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
     Returns:
         Tuple[np.ndarray, ...]: A 6-length tuple corresponding to training images, training spots, validation images,
                                 validation spots, test images and test spots. Images are NumPy arrays of shape (N_i, H, W),
-                                while spots is an N_i-element list of 2D arrays of shape (N_p, 2) 
+                                while spots is an N_i-element list of 2D arrays of shape (N_p, 2)
     """
     if isinstance(fname, str):
         fname = Path(fname)
     assert fname.suffix == ".npz", f"Given file {fname} is not a .npz file!"
 
-    expected_keys = ['x_train', 'y_train', 'x_valid', 'y_valid', 'x_test', 'y_test']
+    expected_keys = ["x_train", "y_train", "x_valid", "y_valid", "x_test", "y_test"]
     data = np.load(fname, allow_pickle=True)
-    assert set(expected_keys).issubset(data.files), f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
-    ret_data = [None]*len(expected_keys)
+    assert set(expected_keys).issubset(
+        data.files
+    ), f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
+    ret_data = [None] * len(expected_keys)
     for i, key in enumerate(expected_keys):
         if key.startswith("x"):
             ret_data[i] = np.asarray(data[key])
@@ -572,8 +645,11 @@ def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
             raise ValueError(f"Unexpected key {key} in .npz file {fname}")
     return ret_data
 
-def bilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -> np.ndarray:
-    """ Return the bilinearly interpolated iamge intensities at each (subpixel) location.
+
+def bilinear_interp_points(
+    img: np.ndarray, pts: np.ndarray, eps: float = 1e-9
+) -> np.ndarray:
+    """Return the bilinearly interpolated iamge intensities at each (subpixel) location.
 
 
     Args:
@@ -584,8 +660,10 @@ def bilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) ->
     Returns:
         np.ndarray: array of shape (N,C) containing intensities for each spot
     """
-    assert img.ndim in (2,3), "Expected YX or YXC image for interpolating intensities."
-    assert pts.shape[1] == 2, "Point coordinates to be interpolated should be an (N,2) array"
+    assert img.ndim in (2, 3), "Expected YX or YXC image for interpolating intensities."
+    assert (
+        pts.shape[1] == 2
+    ), "Point coordinates to be interpolated should be an (N,2) array"
 
     if img.ndim == 2:
         img = img[..., None]
@@ -595,26 +673,29 @@ def bilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) ->
     ys, xs = pts[:, 0], pts[:, 1]
 
     # Avoid out of bounds coordinates
-    ys.clip(0, img.shape[0]-1-eps, out=ys)
-    xs.clip(0, img.shape[1]-1-eps, out=xs)
+    ys.clip(0, img.shape[0] - 1 - eps, out=ys)
+    xs.clip(0, img.shape[1] - 1 - eps, out=xs)
 
     pys = np.floor(ys).astype(int)
     pxs = np.floor(xs).astype(int)
 
     # Differences to floored coordinates
-    dys = ys-pys
-    dxs = xs-pxs
-    wxs, wys = 1.-dxs, 1.-dys
+    dys = ys - pys
+    dxs = xs - pxs
+    wxs, wys = 1.0 - dxs, 1.0 - dys
 
     # Interpolate
-    weights =  np.multiply(img[pys, pxs, :].T      , wxs*wys).T
-    weights += np.multiply(img[pys, pxs+1, :].T    , dxs*wys).T
-    weights += np.multiply(img[pys+1, pxs, :].T    , wxs*dys).T
-    weights += np.multiply(img[pys+1, pxs+1, :].T  , dxs*dys).T
+    weights = np.multiply(img[pys, pxs, :].T, wxs * wys).T
+    weights += np.multiply(img[pys, pxs + 1, :].T, dxs * wys).T
+    weights += np.multiply(img[pys + 1, pxs, :].T, wxs * dys).T
+    weights += np.multiply(img[pys + 1, pxs + 1, :].T, dxs * dys).T
     return weights
 
-def trilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -> np.ndarray:
-    """ Return the trilinearly interpolated iamge intensities at each (subpixel) location.
+
+def trilinear_interp_points(
+    img: np.ndarray, pts: np.ndarray, eps: float = 1e-9
+) -> np.ndarray:
+    """Return the trilinearly interpolated iamge intensities at each (subpixel) location.
 
 
     Args:
@@ -625,8 +706,13 @@ def trilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -
     Returns:
         np.ndarray: array of shape (N,C) containing intensities for each spot
     """
-    assert img.ndim in (3,4), "Expected ZYX or ZYXC image for interpolating intensities."
-    assert pts.shape[1] == 3, "Point coordinates to be interpolated should be an (N,3) array"
+    assert img.ndim in (
+        3,
+        4,
+    ), "Expected ZYX or ZYXC image for interpolating intensities."
+    assert (
+        pts.shape[1] == 3
+    ), "Point coordinates to be interpolated should be an (N,3) array"
 
     if img.ndim == 3:
         img = img[..., None]
@@ -636,27 +722,27 @@ def trilinear_interp_points(img: np.ndarray, pts: np.ndarray, eps: float=1e-9) -
     zs, ys, xs = pts[:, 0], pts[:, 1], pts[:, 2]
 
     # Avoid out of bounds coordinates
-    zs.clip(0, img.shape[0]-1-eps, out=zs)
-    ys.clip(0, img.shape[1]-1-eps, out=ys)
-    xs.clip(0, img.shape[2]-1-eps, out=xs)
+    zs.clip(0, img.shape[0] - 1 - eps, out=zs)
+    ys.clip(0, img.shape[1] - 1 - eps, out=ys)
+    xs.clip(0, img.shape[2] - 1 - eps, out=xs)
 
     pzs = np.floor(zs).astype(int)
     pys = np.floor(ys).astype(int)
     pxs = np.floor(xs).astype(int)
 
     # Differences to floored coordinates
-    dzs = zs-pzs
-    dys = ys-pys
-    dxs = xs-pxs
-    wzx, wzy, wys = 1.-dxs, 1.-dys, 1.-dzs
+    dzs = zs - pzs
+    dys = ys - pys
+    dxs = xs - pxs
+    wzx, wzy, wys = 1.0 - dxs, 1.0 - dys, 1.0 - dzs
 
     # Interpolate
-    weights =  np.multiply(img[pzs, pys, pxs, :].T         , wzx*wzy*wys).T
-    weights += np.multiply(img[pzs, pys, pxs+1, :].T       , dxs*wzy*wys).T
-    weights += np.multiply(img[pzs, pys+1, pxs, :].T       , wzx*dys*wys).T
-    weights += np.multiply(img[pzs, pys+1, pxs+1, :].T     , dxs*dys*wys).T
-    weights += np.multiply(img[pzs+1, pys, pxs, :].T       , wzx*wzy*dzs).T
-    weights += np.multiply(img[pzs+1, pys, pxs+1, :].T     , dxs*wzy*dzs).T
-    weights += np.multiply(img[pzs+1, pys+1, pxs, :].T     , wzx*dys*dzs).T
-    weights += np.multiply(img[pzs+1, pys+1, pxs+1, :].T   , dxs*dys*dzs).T
+    weights = np.multiply(img[pzs, pys, pxs, :].T, wzx * wzy * wys).T
+    weights += np.multiply(img[pzs, pys, pxs + 1, :].T, dxs * wzy * wys).T
+    weights += np.multiply(img[pzs, pys + 1, pxs, :].T, wzx * dys * wys).T
+    weights += np.multiply(img[pzs, pys + 1, pxs + 1, :].T, dxs * dys * wys).T
+    weights += np.multiply(img[pzs + 1, pys, pxs, :].T, wzx * wzy * dzs).T
+    weights += np.multiply(img[pzs + 1, pys, pxs + 1, :].T, dxs * wzy * dzs).T
+    weights += np.multiply(img[pzs + 1, pys + 1, pxs, :].T, wzx * dys * dzs).T
+    weights += np.multiply(img[pzs + 1, pys + 1, pxs + 1, :].T, dxs * dys * dzs).T
     return weights

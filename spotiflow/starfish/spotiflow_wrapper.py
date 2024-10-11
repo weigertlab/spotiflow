@@ -21,6 +21,12 @@ from ..utils import NotRegisteredError, normalize
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
+
 try:
     from starfish.core.imagestack.imagestack import ImageStack
     from starfish.core.spots.FindSpots._base import FindSpotsAlgorithm

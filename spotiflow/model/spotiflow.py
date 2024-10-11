@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections import OrderedDict
 from copy import deepcopy
 from pathlib import Path
@@ -27,14 +28,16 @@ from ..utils import (
     center_pad,
     filter_shape,
     flow_to_vector,
+    infer_n_tiles,
     normalize,
     normalize_dask,
     points_matching_dataset,
     prob_to_points,
     subpixel_offset,
-    tile_iterator as parallel_tile_iterator,
     trilinear_interp_points,
-    infer_n_tiles
+)
+from ..utils import (
+    tile_iterator as parallel_tile_iterator,
 )
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
@@ -45,6 +48,12 @@ from .trainer import SpotiflowModelCheckpoint, SpotiflowTrainingWrapper
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
 
 
 class Spotiflow(nn.Module):
@@ -123,14 +132,21 @@ class Spotiflow(nn.Module):
                 if self.config.batch_norm
                 else nn.Identity(),
                 nn.ReLU(inplace=True),
-                ConvModule(self._backbone.out_channels_list[0], 3*self.config.out_channels if not self.config.is_3d else 4*self.config.out_channels, 3, padding=1),
+                ConvModule(
+                    self._backbone.out_channels_list[0],
+                    3 * self.config.out_channels
+                    if not self.config.is_3d
+                    else 4 * self.config.out_channels,
+                    3,
+                    padding=1,
+                ),
             )
 
         if self.config.is_3d and any(s != 1 for s in self.config.grid):
             self._downsampler = ConvModule(
                 self.config.in_channels,
                 self.config.initial_fmaps,
-                kernel_size=(2*s+1 for s in self.config.grid),
+                kernel_size=(2 * s + 1 for s in self.config.grid),
                 stride=self.config.grid,
                 padding=self.config.grid,
                 bias=not self.config.batch_norm,
@@ -140,7 +156,7 @@ class Spotiflow(nn.Module):
 
         self._levels = self.config.levels
         self._sigmoid = nn.Sigmoid()
-        self._prob_thresh = [0.5]*self.config.out_channels
+        self._prob_thresh = [0.5] * self.config.out_channels
 
     @classmethod
     def from_folder(
@@ -149,6 +165,7 @@ class Spotiflow(nn.Module):
         inference_mode=True,
         which: str = "best",
         map_location: Literal["auto", "cpu", "cuda", "mps"] = "auto",
+        verbose: bool = False,
     ) -> Self:
         """Load a pretrained model.
 
@@ -161,6 +178,8 @@ class Spotiflow(nn.Module):
         Returns:
             Self: loaded model
         """
+        if verbose:
+            log.info(f"Loading model from folder: {pretrained_path}")
         model_config = SpotiflowModelConfig.from_config_file(
             Path(pretrained_path) / "config.yaml"
         )
@@ -185,6 +204,7 @@ class Spotiflow(nn.Module):
         which: str = "best",
         map_location: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         cache_dir: Optional[Union[Path, str]] = None,
+        verbose: bool = True,
         **kwargs,
     ) -> Self:
         """Load a pretrained model with given name
@@ -199,10 +219,13 @@ class Spotiflow(nn.Module):
         Returns:
             Self: loaded model
         """
-        log.info(f"Loading pretrained model {pretrained_name}")
+        if verbose:
+            log.info(f"Loading pretrained model: {pretrained_name}")
         if cache_dir is not None and isinstance(cache_dir, str):
             cache_dir = Path(cache_dir)
-        pretrained_path = get_pretrained_model_path(pretrained_name, cache_dir=cache_dir)
+        pretrained_path = get_pretrained_model_path(
+            pretrained_name, cache_dir=cache_dir
+        )
         if pretrained_path is not None:
             return cls.from_folder(
                 pretrained_path,
@@ -265,7 +288,9 @@ class Spotiflow(nn.Module):
         """
 
         if self.config.is_3d and deterministic:
-            log.warning("Deterministic training is currently not supported in 3D mode. Disabling.")
+            log.warning(
+                "Deterministic training is currently not supported in 3D mode. Disabling."
+            )
             deterministic = False
         if not (train_ds._sigma == val_ds._sigma == self.config.sigma):
             raise ValueError(
@@ -375,28 +400,52 @@ class Spotiflow(nn.Module):
         if self.config.is_3d:
             min_depth_size = min(img.shape[-3] for img in train_images)
             min_crop_size_depth = int(2 ** np.floor(np.log2(min_depth_size)))
-            crop_size = (min(train_config.crop_size_depth, min_crop_size_depth),) + crop_size
+            crop_size = (
+                min(train_config.crop_size_depth, min_crop_size_depth),
+            ) + crop_size
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
 
         # Build augmenters
         if isinstance(augment_train, AugmentationPipeline):
-            _crop_cls = transforms.Crop if not self.config.is_3d else transforms3d.Crop3D
-            assert any(isinstance(p, _crop_cls) for p in augment_train.transforms), "Custom augmenter must contain a cropping transform!"
-            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
+            _crop_cls = (
+                transforms.Crop if not self.config.is_3d else transforms3d.Crop3D
+            )
+            assert any(
+                isinstance(p, _crop_cls) for p in augment_train.transforms
+            ), "Custom augmenter must contain a cropping transform!"
+            tr_augmenter = self.build_image_augmenter(
+                crop_size, point_priority=point_priority
+            )
         elif augment_train:
-            tr_augmenter = self.build_image_augmenter(crop_size, point_priority=point_priority)
+            tr_augmenter = self.build_image_augmenter(
+                crop_size, point_priority=point_priority
+            )
         else:
-            tr_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
-        val_augmenter = self.build_image_cropper(crop_size, point_priority=point_priority)
+            tr_augmenter = self.build_image_cropper(
+                crop_size, point_priority=point_priority
+            )
+        val_augmenter = self.build_image_cropper(
+            crop_size, point_priority=point_priority
+        )
 
         ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
         train_ds = ActualSpotsDataset(
-            train_images, train_spots, augmenter=tr_augmenter, grid=self.config.grid, add_class_label=not self.config.is_3d, **train_dataset_kwargs
+            train_images,
+            train_spots,
+            augmenter=tr_augmenter,
+            grid=self.config.grid,
+            add_class_label=not self.config.is_3d,
+            **train_dataset_kwargs,
         )
         val_ds = ActualSpotsDataset(
-            val_images, val_spots, augmenter=val_augmenter, grid=self.config.grid, add_class_label=not self.config.is_3d, **val_dataset_kwargs
+            val_images,
+            val_spots,
+            augmenter=val_augmenter,
+            grid=self.config.grid,
+            add_class_label=not self.config.is_3d,
+            **val_dataset_kwargs,
         )
 
         # Add model checkpoint callback if not given (to save the model)
@@ -460,7 +509,8 @@ class Spotiflow(nn.Module):
                 ), f"Images must be 3D (Z,Y,X) or 4D (Z,Y,X,C) for {split} set"
             if self.config.in_channels > 1:
                 assert all(
-                    img.ndim == (3 if not self.config.is_3d else 4) and img.shape[-1] == self.config.in_channels
+                    img.ndim == (3 if not self.config.is_3d else 4)
+                    and img.shape[-1] == self.config.in_channels
                     for img in imgs
                 ), f"Input images should be in channel-last format (..., C) for {split} set"
             if not self.config.is_3d:
@@ -473,7 +523,11 @@ class Spotiflow(nn.Module):
                 ), f"Points must be 3D (Z,Y,X) for {split} set"
         return
 
-    def build_image_cropper(self, crop_size: Union[Tuple[int, int], Tuple[int, int, int]], point_priority: float = 0.):
+    def build_image_cropper(
+        self,
+        crop_size: Union[Tuple[int, int], Tuple[int, int, int]],
+        point_priority: float = 0.0,
+    ):
         """Build default cropper for a dataset.
 
         Args:
@@ -482,21 +536,33 @@ class Spotiflow(nn.Module):
         """
         cropper = AugmentationPipeline()
         if not self.config.is_3d:
-            assert len(crop_size) == 2, "Crop size must be a 2-length tuple if mode is 2D."
-            cropper.add(transforms.Crop(probability=1.0, size=crop_size, point_priority=point_priority))
+            assert (
+                len(crop_size) == 2
+            ), "Crop size must be a 2-length tuple if mode is 2D."
+            cropper.add(
+                transforms.Crop(
+                    probability=1.0, size=crop_size, point_priority=point_priority
+                )
+            )
         else:
-            assert len(crop_size) == 3, "Crop size must be a 3-length tuple if mode is 3D."
-            cropper.add(transforms3d.Crop3D(probability=1.0, size=crop_size, point_priority=point_priority))
+            assert (
+                len(crop_size) == 3
+            ), "Crop size must be a 3-length tuple if mode is 3D."
+            cropper.add(
+                transforms3d.Crop3D(
+                    probability=1.0, size=crop_size, point_priority=point_priority
+                )
+            )
 
         return cropper
 
     def build_image_augmenter(
         self,
         crop_size: Optional[Tuple[int, int]] = None,
-        point_priority: float = 0.,
+        point_priority: float = 0.0,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
-           
+
         Args:
             crop_size (Optional[Tuple[int, int]]): if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
             point_priority (float, optional): priority to sample regions containing spots when cropping. Defaults to 0.
@@ -518,7 +584,9 @@ class Spotiflow(nn.Module):
         else:
             augmenter.add(transforms3d.FlipRot903D(probability=0.5))
             augmenter.add(transforms3d.RotationYX3D(probability=0.5, order=1))
-            augmenter.add(transforms3d.GaussianNoise3D(probability=0.5, sigma=(0, 0.05)))
+            augmenter.add(
+                transforms3d.GaussianNoise3D(probability=0.5, sigma=(0, 0.05))
+            )
             augmenter.add(
                 transforms3d.IntensityScaleShift3D(
                     probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
@@ -610,7 +678,9 @@ class Spotiflow(nn.Module):
 
         states_path = Path(path) / f"{which}.pt"
 
-        checkpoint = torch.load(states_path, map_location=map_location, weights_only=True)
+        checkpoint = torch.load(
+            states_path, map_location=map_location, weights_only=True
+        )
         model_state = self.cleanup_state_dict_keys(checkpoint["state_dict"])
         self.load_state_dict(model_state)
 
@@ -642,7 +712,7 @@ class Spotiflow(nn.Module):
         device: Optional[
             Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
         ] = None,
-        distributed_params: Optional[dict]=None,
+        distributed_params: Optional[dict] = None,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -664,9 +734,13 @@ class Spotiflow(nn.Module):
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities (`prob`), the heatmap (`heatmap`), the stereographic flow (`flow`), the 2D local offset vector field (`subpix`) and the spot intensities (`intens`).
         """
         if self.config.out_channels > 1:
-            raise NotImplementedError("Predicting with multiple channels is not supported yet.")
+            raise NotImplementedError(
+                "Predicting with multiple channels is not supported yet."
+            )
 
-        skip_details = isinstance(img, da.Array) # Avoid computing details for non-NumPy inputs, which are assumed to be large
+        skip_details = isinstance(
+            img, da.Array
+        )  # Avoid computing details for non-NumPy inputs, which are assumed to be large
 
         if subpix is False:
             subpix_radius = -1
@@ -681,13 +755,11 @@ class Spotiflow(nn.Module):
         else:
             assert img.ndim in (3, 4), "Image must be 3D (Z,Y,X) or 4D (Z,Y,X,C)"
 
-        
         if device is None or isinstance(device, str):
             device = self._retrieve_device_str(device)
             device = torch.device(device)
             if device is not None:
                 self.to(device)
-
 
         if verbose:
             log.info(f"Will use device: {str(device)}")
@@ -701,13 +773,15 @@ class Spotiflow(nn.Module):
             img = img[..., None]
         elif self.config.is_3d and img.ndim == 3:
             img = img[..., None]
-        
+
         if n_tiles is None:
-            n_tiles = infer_n_tiles(img.shape[:-1], max_tile_size)
-        
+            n_tiles = infer_n_tiles(
+                img.shape[:-1], max_tile_size, device=next(self.parameters()).device
+            )
+
         if verbose:
-            log.info(f"Predicting with {n_tiles} tiles")    
-        
+            log.info(f"Predicting with {n_tiles} tiles")
+
         actual_n_dims = 2 if not self.config.is_3d else 3
 
         img = img.astype(np.float32)
@@ -719,12 +793,12 @@ class Spotiflow(nn.Module):
                     "Subpixel prediction is not supported yet when scale != 1."
                 )
             if self.config.is_3d:
-                raise NotImplementedError(
-                    "3D scaling is not supported yet."
-                )
+                raise NotImplementedError("3D scaling is not supported yet.")
             if verbose:
                 log.info(f"Scaling image by factor {scale}")
-            assert not (scale != 1 and isinstance(img, da.Array)), "Dask arrays are not supported for scaling != 1"
+            assert not (
+                scale != 1 and isinstance(img, da.Array)
+            ), "Dask arrays are not supported for scaling != 1"
             if scale < 1:
                 # Make sure that the scaling can be inverted exactly at the same shape
                 inv_scale = int(1 / scale)
@@ -738,10 +812,8 @@ class Spotiflow(nn.Module):
             self.config.downsample_factors[0][0] ** self.config.levels
             for _ in range(img.ndim - 1)
         ) + (1,)
-        if self.config.is_3d and any(g>1 for g in self.config.grid):
-            div_by = tuple(
-                g*d for g, d in zip((*self.config.grid, 1), div_by)
-            )
+        if self.config.is_3d and any(g > 1 for g in self.config.grid):
+            div_by = tuple(g * d for g, d in zip((*self.config.grid, 1), div_by))
         if isinstance(normalizer, str) and normalizer == "auto":
             normalizer = normalize_dask if isinstance(x, da.Array) else normalize
         if normalizer is not None and callable(normalizer):
@@ -755,7 +827,7 @@ class Spotiflow(nn.Module):
         x, padding = center_pad(x, pad_shape, mode="reflect")
 
         corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
-        out_shape = tuple(np.asarray(img.shape[:actual_n_dims])//corr_grid)
+        out_shape = tuple(np.asarray(img.shape[:actual_n_dims]) // corr_grid)
 
         self.eval()
         # Predict without tiling
@@ -763,21 +835,16 @@ class Spotiflow(nn.Module):
             with torch.inference_mode():
                 if isinstance(x, da.Array):
                     x = x.compute()
-                img_t = (
-                    torch.from_numpy(x).to(device).unsqueeze(0)
-                )  # Add B dimension
+                img_t = torch.from_numpy(x).to(device).unsqueeze(0)  # Add B dimension
                 if not self.config.is_3d:
-                    img_t = img_t.permute(0, 3, 1, 2) # BHWC -> BCHW
+                    img_t = img_t.permute(0, 3, 1, 2)  # BHWC -> BCHW
                 else:
-                    img_t = img_t.permute(0, 4, 1, 2, 3) # BDHWC -> BCDHW
+                    img_t = img_t.permute(0, 4, 1, 2, 3)  # BDHWC -> BCDHW
                 out = self(img_t)
 
                 y = (
-                    self._sigmoid(out["heatmaps"][0].squeeze(0))
-                    .detach()
-                    .cpu()
-                    .numpy()
-                ) # C'HW
+                    self._sigmoid(out["heatmaps"][0].squeeze(0)).detach().cpu().numpy()
+                )  # C'HW
                 if subpix_radius >= 0:
                     if not self.config.is_3d:
                         flow = (
@@ -786,7 +853,7 @@ class Spotiflow(nn.Module):
                             .detach()
                             .cpu()
                             .numpy()
-                        ) # HW(3*C')
+                        )  # HW(3*C')
                     else:
                         flow = (
                             F.normalize(out["flow"], dim=1)[0]
@@ -794,18 +861,24 @@ class Spotiflow(nn.Module):
                             .detach()
                             .cpu()
                             .numpy()
-                        ) # HW(4*C')
+                        )  # HW(4*C')
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0, 1.0 / scale, 1.0 / scale), order=1)
             if subpix_radius >= 0:
                 flow_cpt = flow.copy()
-                
-                _subpix = np.empty((self.config.out_channels,)+out_shape+(actual_n_dims,), np.float32) # C'HW(2|3)
-                flow = np.empty((self.config.out_channels,)+out_shape+(actual_n_dims+1,), np.float32) # C'HW(3|4)
+
+                _subpix = np.empty(
+                    (self.config.out_channels,) + out_shape + (actual_n_dims,),
+                    np.float32,
+                )  # C'HW(2|3)
+                flow = np.empty(
+                    (self.config.out_channels,) + out_shape + (actual_n_dims + 1,),
+                    np.float32,
+                )  # C'HW(3|4)
                 flow_dim = actual_n_dims + 1
                 for cl in range(self.config.out_channels):
-                    flow_curr = flow_cpt[..., cl*(flow_dim):(cl+1)*(flow_dim)]
+                    flow_curr = flow_cpt[..., cl * (flow_dim) : (cl + 1) * (flow_dim)]
 
                     _subpix_curr = flow_to_vector(
                         flow_curr,
@@ -814,11 +887,11 @@ class Spotiflow(nn.Module):
 
                     _subpix_curr = center_crop(_subpix_curr, out_shape)
                     _subpix[cl] = _subpix_curr
-                    
+
                     flow_curr = center_crop(flow_curr, out_shape)
                     flow[cl] = flow_curr
 
-            ys = np.empty((self.config.out_channels,)+out_shape, np.float32) # C'HW
+            ys = np.empty((self.config.out_channels,) + out_shape, np.float32)  # C'HW
 
             points = []
             probs = []
@@ -826,7 +899,11 @@ class Spotiflow(nn.Module):
                 ys[cl] = center_crop(y[cl], out_shape)
                 curr_pts = prob_to_points(
                     ys[cl],
-                    prob_thresh=self._prob_thresh[cl] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
+                    prob_thresh=self._prob_thresh[cl]
+                    if prob_thresh is None
+                    else prob_thresh
+                    if isinstance(prob_thresh, float)
+                    else prob_thresh[0],
                     exclude_border=exclude_border,
                     mode=peak_mode,
                     min_distance=min_distance,
@@ -834,14 +911,17 @@ class Spotiflow(nn.Module):
                 curr_probs = ys[cl][tuple(curr_pts.astype(int).T)].tolist()
                 if subpix_radius >= 0:
                     subpix_tile = flow_to_vector(flow[cl], sigma=self.config.sigma)
-                    _offset = subpixel_offset(curr_pts, subpix_tile, ys[cl], radius=subpix_radius)
+                    _offset = subpixel_offset(
+                        curr_pts, subpix_tile, ys[cl], radius=subpix_radius
+                    )
                     curr_pts = curr_pts + _offset
-
 
                 points.append(curr_pts)
                 probs.append(curr_probs)
 
-            assert self.config.out_channels == 1, "Trying to predict using a multi-channel network, which is not supported yet."
+            assert (
+                self.config.out_channels == 1
+            ), "Trying to predict using a multi-channel network, which is not supported yet."
             # ! FIXME: This is a temporary fix which will stop working when multi-channel output is implemented
             points = points[0]
             probs = probs[0]
@@ -851,12 +931,12 @@ class Spotiflow(nn.Module):
                 flow = flow[0]
 
         else:  # Predict with tiling
-            padded_shape = tuple(np.array(x.shape[:actual_n_dims])//corr_grid)
+            padded_shape = tuple(np.array(x.shape[:actual_n_dims]) // corr_grid)
             if not skip_details:
                 y = np.empty(padded_shape, np.float32)
                 if subpix_radius >= 0:
                     _subpix = np.empty(padded_shape + (actual_n_dims,), np.float32)
-                    flow = np.empty(padded_shape + (actual_n_dims+1,), np.float32)
+                    flow = np.empty(padded_shape + (actual_n_dims + 1,), np.float32)
             points = []
             probs = []
             actual_n_tiles = n_tiles
@@ -867,7 +947,7 @@ class Spotiflow(nn.Module):
             n_block_overlaps = (4, 4, 0)
             if self.config.is_3d:
                 n_block_overlaps = (4,) + n_block_overlaps
-            
+
             if distributed_params is not None:
                 gpu_id = distributed_params.get("gpu_id", 0)
                 iter_tiles = parallel_tile_iterator(
@@ -876,7 +956,9 @@ class Spotiflow(nn.Module):
                     block_sizes=div_by,
                     n_block_overlaps=n_block_overlaps,
                     rank_id=gpu_id,
-                    num_replicas=distributed_params.get("num_replicas", torch.cuda.device_count()),
+                    num_replicas=distributed_params.get(
+                        "num_replicas", torch.cuda.device_count()
+                    ),
                     dataloader_kwargs=distributed_params,
                 )
             else:
@@ -892,13 +974,18 @@ class Spotiflow(nn.Module):
             elif verbose:
                 if distributed_params is None:
                     iter_tiles = tqdm(
-                        iter_tiles, desc="Predicting tiles", total=np.prod(actual_n_tiles)
+                        iter_tiles,
+                        desc="Predicting tiles",
+                        total=np.prod(actual_n_tiles),
                     )
                 else:
                     iter_tiles = tqdm(
                         iter_tiles,
                         desc=f"Predicting tiles (GPU {gpu_id})",
-                        total=np.prod(actual_n_tiles)//distributed_params.get("num_replicas", torch.cuda.device_count()),
+                        total=np.prod(actual_n_tiles)
+                        // distributed_params.get(
+                            "num_replicas", torch.cuda.device_count()
+                        ),
                         position=gpu_id,
                     )
             for item in iter_tiles:
@@ -908,13 +995,11 @@ class Spotiflow(nn.Module):
                 with torch.inference_mode():
                     if isinstance(tile, np.ndarray):
                         tile = torch.from_numpy(tile)
-                    img_t = (
-                        tile.to(device).unsqueeze(0)
-                    )  # Add B and C dimensions
+                    img_t = tile.to(device).unsqueeze(0)  # Add B and C dimensions
                     if not self.config.is_3d:
-                        img_t = img_t.permute(0, 3, 1, 2) # BHWC -> BCHW
+                        img_t = img_t.permute(0, 3, 1, 2)  # BHWC -> BCHW
                     else:
-                        img_t = img_t.permute(0, 4, 1, 2, 3) # BDHWC -> BCDHW
+                        img_t = img_t.permute(0, 4, 1, 2, 3)  # BDHWC -> BCDHW
                     out = self(img_t)
                     y_tile = self._sigmoid(out["heatmaps"][0].squeeze(0).squeeze(0))
                     y_tile = y_tile.detach().cpu().numpy()
@@ -929,16 +1014,20 @@ class Spotiflow(nn.Module):
                     )
                     if self.config.is_3d and any(g > 1 for g in self.config.grid):
                         s_src_corr = tuple(
-                            slice(s.start//g, s.stop//g, s.step) for g, s in zip((*self.config.grid, 1), s_src)
+                            slice(s.start // g, s.stop // g, s.step)
+                            for g, s in zip((*self.config.grid, 1), s_src)
                         )
                         s_dst_corr = tuple(
-                            slice(s.start//g, s.stop//g, s.step) for g, s in zip((*self.config.grid, 1), s_dst)
+                            slice(s.start // g, s.stop // g, s.step)
+                            for g, s in zip((*self.config.grid, 1), s_dst)
                         )
                     else:
                         s_src_corr, s_dst_corr = s_src, s_dst
                     # remove global offset
                     p -= np.array([s.start for s in s_src_corr[:actual_n_dims]])[None]
-                    write_shape = tuple(s.stop - s.start for s in s_dst_corr[:actual_n_dims])
+                    write_shape = tuple(
+                        s.stop - s.start for s in s_dst_corr[:actual_n_dims]
+                    )
                     p = filter_shape(p, write_shape, idxr_array=p)
 
                     y_tile_sub = y_tile[s_src_corr[:actual_n_dims]]
@@ -951,7 +1040,9 @@ class Spotiflow(nn.Module):
 
                     # Flow
                     if subpix_radius >= 0:
-                        permute_dims = (1, 2, 0) if not self.config.is_3d else (1, 2, 3, 0)
+                        permute_dims = (
+                            (1, 2, 0) if not self.config.is_3d else (1, 2, 3, 0)
+                        )
                         flow_tile = (
                             F.normalize(out["flow"], dim=1)[0]
                             .permute(*permute_dims)
@@ -961,13 +1052,17 @@ class Spotiflow(nn.Module):
                         )
                         # Cartesian coordinates
                         subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
-                        _offset = subpixel_offset(p, subpix_tile, y_tile, radius=subpix_radius)
+                        _offset = subpixel_offset(
+                            p, subpix_tile, y_tile, radius=subpix_radius
+                        )
 
                         p = p + _offset
                         if not skip_details:
                             flow_tile_sub = flow_tile[s_src_corr[:actual_n_dims]]
                             flow[s_dst_corr[:actual_n_dims]] = flow_tile_sub
-                            _subpix[s_dst_corr[:actual_n_dims]] = subpix_tile[s_src_corr[:actual_n_dims]]
+                            _subpix[s_dst_corr[:actual_n_dims]] = subpix_tile[
+                                s_src_corr[:actual_n_dims]
+                            ]
                     points.append(p)
 
             if scale is not None and scale != 1:
@@ -980,18 +1075,18 @@ class Spotiflow(nn.Module):
 
             points = np.concatenate(points, axis=0)
 
-        # Remove padding
+            # Remove padding
             padding_to_correct = (padding[0][0], padding[1][0])
             if self.config.is_3d:
                 padding_to_correct = (*padding_to_correct, padding[2][0])
-            points = points - np.array(padding_to_correct)[None]/corr_grid
+            points = points - np.array(padding_to_correct)[None] / corr_grid
         probs = np.asarray(probs)
         # if scale is not None and scale != 1:
         #     points = np.round((points.astype(float) / scale)).astype(int)
         probs = filter_shape(probs, out_shape, idxr_array=points)
         pts = filter_shape(points, out_shape, idxr_array=points)
 
-        if self.config.is_3d and any(s>1 for s in self.config.grid):
+        if self.config.is_3d and any(s > 1 for s in self.config.grid):
             pts *= np.asarray(self.config.grid)
 
         if skip_details:
@@ -1006,15 +1101,25 @@ class Spotiflow(nn.Module):
             log.info(f"Found {len(pts)} spots")
 
         # Retrieve intensity of the spots
-        if subpix_radius < 0: # no need to interpolate if subpixel precision is not used
+        if (
+            subpix_radius < 0
+        ):  # no need to interpolate if subpixel precision is not used
             intens = img[tuple(pts.astype(int).T)]
         else:
             try:
-                intens = bilinear_interp_points(img, pts) if not self.config.is_3d else trilinear_interp_points(img, pts)
+                intens = (
+                    bilinear_interp_points(img, pts)
+                    if not self.config.is_3d
+                    else trilinear_interp_points(img, pts)
+                )
             except Exception as _:
-                log.warn("Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead.")
+                log.warn(
+                    "Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead."
+                )
                 intens = img[tuple(pts.round().astype(int).T)]
-        details = SimpleNamespace(prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens)
+        details = SimpleNamespace(
+            prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens
+        )
         return pts, details
 
     def predict_dataset(
@@ -1079,7 +1184,11 @@ class Spotiflow(nn.Module):
         p = [
             prob_to_points(
                 pred,
-                prob_thresh=self._prob_thresh[0] if prob_thresh is None else prob_thresh if isinstance(prob_thresh, float) else prob_thresh[0],
+                prob_thresh=self._prob_thresh[0]
+                if prob_thresh is None
+                else prob_thresh
+                if isinstance(prob_thresh, float)
+                else prob_thresh[0],
                 exclude_border=exclude_border,
                 min_distance=min_distance,
             )
@@ -1087,8 +1196,9 @@ class Spotiflow(nn.Module):
         ]
         return p
 
-
-    def predict_multichannel(self, img: np.ndarray, channels: Union[int, Tuple[int]]=None, **predict_kwargs) -> Tuple[np.ndarray, Sequence[SimpleNamespace]]:
+    def predict_multichannel(
+        self, img: np.ndarray, channels: Union[int, Tuple[int]] = None, **predict_kwargs
+    ) -> Tuple[np.ndarray, Sequence[SimpleNamespace]]:
         """
         Wrapper function to retrieve spots in a multi-channel array independently per channel.
         Currently assumes that the array is in channel-last format ((Z)YXC).
@@ -1102,26 +1212,33 @@ class Spotiflow(nn.Module):
             Tuple[np.ndarray, Sequence[SimpleNamespace]: Detected spots and sequence of details. First item is a numpy array of shape (N, 3) or (N, 4) containing the coordinates of the spots with the channel they were found on as the last column. Each item in the second element correspond to the details,
                                                          which is a namespace containing the spot-wise probabilities, the heatmap and the 2D flow field.
         """
-        log.info("Data is assumed to be in channel-last format ((Z)YXC).") # TODO: needed?
+        log.info(
+            "Data is assumed to be in channel-last format ((Z)YXC)."
+        )  # TODO: needed?
         n_channels = img.shape[-1]
         if isinstance(channels, int):
             channels = (channels,)
         elif channels is None:
             channels = tuple(range(n_channels))
-        
-        assert all(c<n_channels for c in channels), "All given channel indices should be smaller than the number of channels."
+
+        assert all(
+            c < n_channels for c in channels
+        ), "All given channel indices should be smaller than the number of channels."
         all_details = []
         actual_n_dims = 3 if not self.config.is_3d else 4
         spots = np.empty((0, actual_n_dims))
         for c in tqdm(channels, desc="Predicting channels", total=len(channels)):
-            curr_spots, details = self.predict(img[..., c], verbose=False, **predict_kwargs)
+            curr_spots, details = self.predict(
+                img[..., c], verbose=False, **predict_kwargs
+            )
             curr_n_spots = curr_spots.shape[0]
-            curr_spots = np.hstack((curr_spots, c*np.ones((curr_n_spots, 1)))) # Add channel indices as last column
+            curr_spots = np.hstack(
+                (curr_spots, c * np.ones((curr_n_spots, 1)))
+            )  # Add channel indices as last column
             spots = np.vstack((spots, curr_spots))
             all_details += [details]
-        
-        return spots, all_details
 
+        return spots, all_details
 
     def optimize_threshold(
         self,
@@ -1202,16 +1319,26 @@ class Spotiflow(nn.Module):
                     val_hm_preds += [high_lv_hm_preds[batch_elem]]
                     if subpix:
                         flow_dim = 3 if not self.config.is_3d else 4
-                        assert flow_dim*self.config.out_channels == curr_flow_preds[batch_elem].shape[-1], "Unexpected flow dimensions."
-                        curr_val_flow_preds = np.concatenate([
-                            flow_to_vector(
-                                curr_flow_preds[batch_elem][..., cl*flow_dim:(cl+1)*flow_dim], sigma=self.config.sigma,
-                            )[None, ...]
-                        for cl in range(self.config.out_channels)], axis=0)
+                        assert (
+                            flow_dim * self.config.out_channels
+                            == curr_flow_preds[batch_elem].shape[-1]
+                        ), "Unexpected flow dimensions."
+                        curr_val_flow_preds = np.concatenate(
+                            [
+                                flow_to_vector(
+                                    curr_flow_preds[batch_elem][
+                                        ..., cl * flow_dim : (cl + 1) * flow_dim
+                                    ],
+                                    sigma=self.config.sigma,
+                                )[None, ...]
+                                for cl in range(self.config.out_channels)
+                            ],
+                            axis=0,
+                        )
                         val_flow_preds += [curr_val_flow_preds]
                 del out, imgs, val_batch
 
-        def _metric_at_threshold(thr, class_label: int=0):
+        def _metric_at_threshold(thr, class_label: int = 0):
             val_pred_pts = [
                 prob_to_points(
                     p[class_label],
@@ -1226,31 +1353,37 @@ class Spotiflow(nn.Module):
                     pts + _subpix[class_label][tuple(pts.astype(int).T)]
                     for pts, _subpix in zip(val_pred_pts, val_flow_preds)
                 ]
-            
+
             if self.config.is_3d and any(s > 1 for s in self.config.grid):
                 corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
-                val_pred_pts = [
-                    pts * corr_grid
-                    for pts in val_pred_pts
-                ]
+                val_pred_pts = [pts * corr_grid for pts in val_pred_pts]
 
             # TODO: class label for 3D dataset
             stats = points_matching_dataset(
-                val_gt_pts, val_pred_pts, cutoff_distance=cutoff_distance, by_image=True, class_label_p1=class_label if not self.config.is_3d else None,
+                val_gt_pts,
+                val_pred_pts,
+                cutoff_distance=cutoff_distance,
+                by_image=True,
+                class_label_p1=class_label if not self.config.is_3d else None,
             )
             return stats.f1
 
-        def _grid_search(tmin, tmax, class_label: int=0):
+        def _grid_search(tmin, tmax, class_label: int = 0):
             thr = np.linspace(tmin, tmax, niter)
             ys = tuple(
-                _metric_at_threshold(t, class_label) for t in tqdm(thr, desc="optimizing threshold")
+                _metric_at_threshold(t, class_label)
+                for t in tqdm(thr, desc="optimizing threshold")
             )
             i = np.argmax(ys)
             i1, i2 = max(0, i - 1), min(i + 1, len(thr) - 1)
             return thr[i], (thr[i1], thr[i2]), ys[i]
 
         best_thrs, best_f1s = [], []
-        for cl in tqdm(range(self.config.out_channels), desc="Optimizing thresholds (class-wise)", disable=self.config.out_channels==1):
+        for cl in tqdm(
+            range(self.config.out_channels),
+            desc="Optimizing thresholds (class-wise)",
+            disable=self.config.out_channels == 1,
+        ):
             _, t_bounds, _ = _grid_search(*threshold_range, cl)
             best_thr, _, best_f1 = _grid_search(*t_bounds, cl)
             best_thrs += [float(best_thr)]
@@ -1301,10 +1434,14 @@ class Spotiflow(nn.Module):
                 "batch_norm",
                 "padding",
             )
-            if self.config.is_3d and any (g > 1 for g in self.config.grid): # Gridded prediction, change in_channels to initial_fmaps, which is the output channels of the downsampler
+            if (
+                self.config.is_3d and any(g > 1 for g in self.config.grid)
+            ):  # Gridded prediction, change in_channels to initial_fmaps, which is the output channels of the downsampler
                 backbone_params["in_channels"] = backbone_params["initial_fmaps"]
 
-            return UNetBackbone(concat_mode="cat", use_3d_convs=self.config.is_3d, **backbone_params)
+            return UNetBackbone(
+                concat_mode="cat", use_3d_convs=self.config.is_3d, **backbone_params
+            )
         elif self.config.backbone == "unet_res":
             backbone_params = pydash.pick(
                 self.config,

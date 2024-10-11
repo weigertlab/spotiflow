@@ -1,15 +1,30 @@
-import numpy as np
-from types import SimpleNamespace
 import logging
+import sys
+from types import SimpleNamespace
+from typing import Optional
+
+import numpy as np
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
-from typing import Optional
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
 
-def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):
+
+def points_matching(
+    p1,
+    p2,
+    cutoff_distance=3,
+    eps=1e-8,
+    class_label_p1: Optional[int] = None,
+    class_label_p2: Optional[int] = None,
+):
     """finds matching that minimizes sum of mean squared distances"""
     if class_label_p1 is not None:
         p1 = p1[p1[:, -1] == class_label_p1][:, :-1]
@@ -50,9 +65,9 @@ def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optiona
     res.dist = np.sqrt(D[i, j])
     res.mean_dist = np.mean(res.dist) if len(res.dist) > 0 else 0
 
-    pq_num = np.sum(cutoff_distance-res.dist)/cutoff_distance
-    pq_den = tp_eps + fp/2 + fn/2
-    res.panoptic_quality = pq_num/pq_den if tp_eps > 0 else 0
+    pq_num = np.sum(cutoff_distance - res.dist) / cutoff_distance
+    pq_den = tp_eps + fp / 2 + fn / 2
+    res.panoptic_quality = pq_num / pq_den if tp_eps > 0 else 0
 
     res.false_negatives = tuple(set(range(len(p1))).difference(set(i)))
     res.false_positives = tuple(set(range(len(p2))).difference(set(j)))
@@ -60,13 +75,28 @@ def points_matching(p1, p2, cutoff_distance=3, eps=1e-8, class_label_p1: Optiona
     return res
 
 
-def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8, class_label_p1: Optional[int]=None, class_label_p2: Optional[int]=None):
+def points_matching_dataset(
+    p1s,
+    p2s,
+    cutoff_distance=3,
+    by_image=True,
+    eps=1e-8,
+    class_label_p1: Optional[int] = None,
+    class_label_p2: Optional[int] = None,
+):
     """
     by_image is True -> metrics are computed by image and then averaged
     by_image is False -> TP/FP/FN are aggregated and only then are metrics computed
     """
     stats = tuple(
-        points_matching(p1, p2, cutoff_distance=cutoff_distance, eps=eps, class_label_p1=class_label_p1, class_label_p2=class_label_p2)
+        points_matching(
+            p1,
+            p2,
+            cutoff_distance=cutoff_distance,
+            eps=eps,
+            class_label_p1=class_label_p1,
+            class_label_p2=class_label_p2,
+        )
         for p1, p2 in zip(p1s, p2s)
     )
 
@@ -85,7 +115,7 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
         for s in stats:
             for k in ("tp", "fp", "fn"):
                 setattr(res, k, getattr(res, k) + getattr(s, k))
-        
+
         dists = np.concatenate([s.dist for s in stats])
 
         tp_eps = res.tp + eps
@@ -94,9 +124,9 @@ def points_matching_dataset(p1s, p2s, cutoff_distance=3, by_image=True, eps=1e-8
         res.recall = tp_eps / (tp_eps + res.fn) if tp_eps > 0 else 0
         res.f1 = (2 * tp_eps) / (2 * tp_eps + res.fp + res.fn) if tp_eps > 0 else 0
 
-        pq_num = np.sum(cutoff_distance-dists)/cutoff_distance
-        pq_den = tp_eps + res.fp/2 + res.fn/2
+        pq_num = np.sum(cutoff_distance - dists) / cutoff_distance
+        pq_den = tp_eps + res.fp / 2 + res.fn / 2
 
-        res.panoptic_quality = pq_num/pq_den if tp_eps > 0 else 0
+        res.panoptic_quality = pq_num / pq_den if tp_eps > 0 else 0
         res.mean_dist = np.mean(dists) if len(dists) > 0 else 0
         return res

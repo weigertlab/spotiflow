@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Callable, Dict, Literal, Optional, Sequence, Union
 from typing_extensions import Self
-from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
 from skimage import io
@@ -18,6 +17,12 @@ from .. import utils
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
 
 
 class Spots3DDataset(SpotsDataset):

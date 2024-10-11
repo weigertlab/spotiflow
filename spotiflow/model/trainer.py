@@ -7,6 +7,7 @@ import lightning.pytorch as pl
 import logging
 import matplotlib.cm as cm
 import numpy as np
+import sys
 import torch
 import torch.nn as nn
 
@@ -17,6 +18,12 @@ from ..utils import prob_to_points, points_matching_dataset, remove_device_id_fr
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
 
 
 def _img_to_rgb_or_gray(x: torch.Tensor):
