@@ -24,6 +24,16 @@ def str2bool(value):
         return False
     else:
         raise argparse.ArgumentTypeError(f'{value}: Boolean value expected!')
+    
+def infer_n_tiles(shape:tuple[int], max_tile_size:tuple[int]=None) -> tuple[int]:
+    """ 
+    infers number of tiles by dimension
+    """
+    if max_tile_size is None:
+        max_tile_size = (2048, 2048) if len(shape) == 2 else (128, 256, 256)
+    if not len(shape) == len(max_tile_size):
+        raise ValueError(f"shape {shape} and max_tile_size {max_tile_size} should have the same length")
+    return tuple(int(np.ceil(s/m)) for s,m in zip(shape, max_tile_size))
 
 # TODO: add_class_column is set to False for now not to break downstream code, but it shouldn't even be a parameter
 def read_coords_csv(fname: str, add_class_column: bool=False) -> np.ndarray:

@@ -34,6 +34,7 @@ from ..utils import (
     subpixel_offset,
     tile_iterator as parallel_tile_iterator,
     trilinear_interp_points,
+    infer_n_tiles
 )
 from .backbones import ResNetBackbone, UNetBackbone
 from .bg_remover import BackgroundRemover
@@ -628,7 +629,8 @@ class Spotiflow(nn.Module):
         self,
         img: Union[np.ndarray, da.Array],
         prob_thresh: Optional[float] = None,
-        n_tiles: Tuple[int, int] = (1, 1),
+        n_tiles: Tuple[int] = None,
+        max_tile_size: int = None,
         min_distance: int = 1,
         exclude_border: bool = False,
         scale: Optional[int] = None,
@@ -679,6 +681,7 @@ class Spotiflow(nn.Module):
         else:
             assert img.ndim in (3, 4), "Image must be 3D (Z,Y,X) or 4D (Z,Y,X,C)"
 
+        
         if device is None or isinstance(device, str):
             device = self._retrieve_device_str(device)
             device = torch.device(device)
@@ -691,11 +694,19 @@ class Spotiflow(nn.Module):
             log.info(
                 f"Predicting with prob_thresh = {self._prob_thresh if prob_thresh is None else prob_thresh}, min_distance = {min_distance}"
             )
+            log.info(f"Peak detection mode: {peak_mode}")
+            log.info(f"Image shape {img.shape}")
 
         if not self.config.is_3d and img.ndim == 2:
             img = img[..., None]
         elif self.config.is_3d and img.ndim == 3:
             img = img[..., None]
+        
+        if n_tiles is None:
+            n_tiles = infer_n_tiles(img.shape[:-1], max_tile_size)
+        
+        if verbose:
+            log.info(f"Predicting with {n_tiles} tiles")    
         
         actual_n_dims = 2 if not self.config.is_3d else 3
 
