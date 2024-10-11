@@ -3,7 +3,7 @@ import os
 from itertools import product
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
-
+import argparse
 import dask
 import dask.array as da
 import numpy as np
@@ -16,6 +16,14 @@ from torch.utils.data import Dataset
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+def str2bool(value):
+    value = value.lower()
+    if value in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif value in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError(f'{value}: Boolean value expected!')
 
 # TODO: add_class_column is set to False for now not to break downstream code, but it shouldn't even be a parameter
 def read_coords_csv(fname: str, add_class_column: bool=False) -> np.ndarray:

@@ -10,7 +10,7 @@ import torch
 
 from .. import __version__
 from ..model import Spotiflow
-from ..utils import write_coords_csv
+from ..utils import write_coords_csv, str2bool
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -49,14 +49,14 @@ def get_args():
                             type=int, required=False, default=1,
                             help="Minimum distance between spots for NMS. Defaults to 1.")
     predict.add_argument("-eb", "--exclude-border",
-                            action="store_true", required=False,
-                            help="Exclude spots within this distance from the border. Defaults to 0.")
+                            type=int, required=False, default=1,
+                            help="Exclude spots within this distance from the border. Defaults to 1.")
     predict.add_argument("-s", "--scale",
-                            type=int, required=False, default=None,
+                            type=float, required=False, default=None,
                             help=" Scale factor to apply to the image. Defaults to None.")
     predict.add_argument("-sp", "--subpix",
-                            action="store_true", required=False,
-                            help="Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.")
+                            type=str2bool, default=True,
+                            help="Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to True.")
     predict.add_argument("-p", "--peak-mode",
                             type=str, required=False, default="fast", choices=["fast", "skimage"],
                             help="Peak detection mode (can be either 'skimage' or 'fast', which is a faster custom C++ implementation). Defaults to 'fast'.")
@@ -83,6 +83,11 @@ def _imread_wrapped(fname):
     except Exception as e:
         log.error(f"Could not read image {fname}. Execution will halt.")
         raise e
+
+def _check_valid_input_shape(shape, config):
+    ndim = 3 if config.is_3d else 2
+    return len(shape)==ndim or len(shape)==ndim+1 and shape[-1]==config.in_channels
+    
 
 def main():
     # Get arguments from command line
@@ -131,7 +136,15 @@ def main():
     out_dir.mkdir(exist_ok=True, parents=True)
 
     # Predict spots in images and write to CSV
-    images = [_imread_wrapped(img) for img in image_files]
+    
+    images = []
+    
+    for f in image_files: 
+        img = _imread_wrapped(f)
+        if not _check_valid_input_shape(img.shape, model.config):
+            raise ValueError(f"image {f} has invalid shape {img.shape} for model with is_3d={model.config.is_3d} and {model.config.in_channels} input channels")
+        images.append(img) 
+                
     for img, fname in tqdm(zip(images, image_files), desc="Predicting", total=len(images)):
         spots, _ = model.predict(img,
                                  prob_thresh=args.probability_threshold,
