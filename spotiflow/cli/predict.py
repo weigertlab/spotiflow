@@ -96,6 +96,10 @@ def _check_valid_input_shape(shape, config):
 def main():
     # Get arguments from command line
     args = get_args()
+    
+    if args.verbose: 
+        logging.basicConfig(level=logging.INFO)
+        
     log.info(f"Spotiflow - version {__version__}")
 
     # Choose prediction method from_folder or from_pretrained
