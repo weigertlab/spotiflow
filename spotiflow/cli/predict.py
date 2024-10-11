@@ -2,6 +2,7 @@ import argparse
 import logging
 from pathlib import Path
 from itertools import chain
+import numpy as np
 from tqdm.auto import tqdm
 
 from skimage.io import imread
@@ -43,8 +44,11 @@ def get_args():
                             type=float, required=False, default=None,
                             help="Probability threshold for peak detection. If None, will load the optimal one. Defaults to None.")
     predict.add_argument("-n", "--n-tiles",
-                            type=int, required=False, default=(1, 1), nargs=2,
-                            help="Number of tiles to split the image into. Defaults to (1, 1). This parameter can be used to calculate spots on larger images.")
+                            type=int, required=False, default=None, nargs=2,
+                            help="Number of tiles to split the image into. When None will be automatically calculated based on `--max-tile-size`. This parameter can be used to calculate spots on larger images.")
+    predict.add_argument("--max-tile-size",
+                            type=int, required=False, default=2048, 
+                            help="Maximal tile width and height for splitting the image into tiles. Defaults to 2048. Decrease if running out of memory.")
     predict.add_argument("-min", "--min-distance",
                             type=int, required=False, default=1,
                             help="Minimum distance between spots for NMS. Defaults to 1.")
@@ -146,9 +150,17 @@ def main():
         images.append(img) 
                 
     for img, fname in tqdm(zip(images, image_files), desc="Predicting", total=len(images)):
+        if args.n_tiles is None:
+            n_tiles = tuple(int(np.ceil(s/args.max_tile_size)) for s in img.shape[:2])
+        else:
+            n_tiles = tuple(args.n_tiles)
+        
+        if args.verbose: 
+            log.info(f"Predicting spots in {fname} with {n_tiles=}")
+            
         spots, _ = model.predict(img,
                                  prob_thresh=args.probability_threshold,
-                                 n_tiles=tuple(args.n_tiles),
+                                 n_tiles=n_tiles,
                                  min_distance=args.min_distance,
                                  exclude_border=args.exclude_border,
                                  scale=args.scale,
