@@ -120,7 +120,7 @@ def read_coords_csv3d(fname: str) -> np.ndarray:
     Args:
         fname (str): Path to the csv file
     Returns:
-        np.ndarray: A 2D array of spot coordinates
+        np.ndarray: A 3D array of spot coordinates
     """
     try:
         df = pd.read_csv(fname)

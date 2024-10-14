@@ -178,6 +178,7 @@ class Spotiflow(nn.Module):
         Returns:
             Self: loaded model
         """
+        assert Path(pretrained_path).exists(), f"Given path {pretrained_path} does not exist."
         if verbose:
             log.info(f"Loading model from folder: {pretrained_path}")
         model_config = SpotiflowModelConfig.from_config_file(
@@ -1113,7 +1114,7 @@ class Spotiflow(nn.Module):
                     else trilinear_interp_points(img, pts)
                 )
             except Exception as _:
-                log.warn(
+                log.warning(
                     "Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead."
                 )
                 intens = img[tuple(pts.round().astype(int).T)]
