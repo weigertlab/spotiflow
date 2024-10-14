@@ -145,7 +145,7 @@ static PyObject *c_point_nms_2d(PyObject *self, PyObject *args)
             const long k = ret_matches[j].first;
             const float dist = ret_matches[j].second;
             if ((k != i)  && (dist < min_distance_squared)) {
-                // std::cout << "suppressed: " << k << " "<< *(float *)PyArray_GETPTR2(points, k, 0) << " (y,x) = " << *(float *)PyArray_GETPTR2(points, k, 0) << " distance " << dist << std::endl;
+                // std::cout << "suppressed: " << k << " "<< *(float *)PyArray_GETPTR2(points, k, 0) << "  " << *(float *)PyArray_GETPTR2(points, k, 1) << " distance " << dist << std::endl;
                 suppressed[k] = true;
             }
         }
