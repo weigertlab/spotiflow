@@ -6,8 +6,20 @@ Data format
 
 See :ref:`train:Data format`.
 
-Fine-tuning
-^^^^^^^^^^^
+Fine-tuning (CLI)
+^^^^^^^^^^^^^^^^^
+
+You can fine-tune from an existing model by simply adding an argument to the CLI call. See :ref:`train:Basic training (CLI)` for more information.
+
+.. code-block:: console
+
+    spotiflow-train /path/to/spots_data --save-dir /my/trained/model --pretrained-model general
+
+where `/path/to/pretrained/model` is the path to the directory containing the model you want to fine-tune. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
+
+
+Fine-tuning (API)
+^^^^^^^^^^^^^^^^^
 
 Finetuning a pre-trained model on a custom dataset is very easy. You can load the model very similarly to what you would normally do to predict on new images (you only need to add one extra parameter!):
 

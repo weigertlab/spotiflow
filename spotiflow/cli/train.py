@@ -60,7 +60,7 @@ def get_args() -> argparse.Namespace:
     )
     required.add_argument(
         "-s",
-        "--save_dir",
+        "--save-dir",
         type=Path,
         required=True,
         help="Output directory where the model will be stored.",

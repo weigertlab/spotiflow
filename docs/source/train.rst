@@ -43,8 +43,29 @@ The column names can also be `axis-0` (instead of `y`) and `axis-1` instead of `
 In this case, you can also use `axis-0`, `axis-1`, and `axis-2` instead of `z`, `y`, and `x`, respectively.
 
 
-Basic training
-^^^^^^^^^^^^^^
+Basic training (CLI)
+^^^^^^^^^^^^^^^^^^^^
+
+You can train a model using the CLI as follows:
+
+.. code-block:: console
+
+    spotiflow-train /path/to/spots_data --save-dir /my/trained/model
+
+where `/path/to/spots_data` is the path to the directory containing the data in the format described above and `/my/trained/model` is the directory where the trained model will be saved. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
+
+.. code-block:: console
+
+    spotiflow-train --help
+
+To illustrate with an example, to train a Spotiflow model on 2-channel 3D data for 100 epochs, you can run:
+
+.. code-block:: console
+
+    spotiflow-train /path/to/spots_data --save-dir /my/trained/model --is-3d True --num-epochs 100 --in-channels 2
+
+Basic training (API)
+^^^^^^^^^^^^^^^^^^^^
 
 You can easily train a model using the default settings as follows and save it to the directory `/my/trained/model`:
 
