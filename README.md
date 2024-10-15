@@ -55,10 +55,24 @@ The conda package is, for now, not CUDA-compatible. We recommend using `pip` to 
 ## Usage
 
 ### Training (2D images)
-See the [example training script](scripts/train.py) or the [example notebook](examples/1_train.ipynb) for an example of training. For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
+The CLI is the easiest way to train (or fine-tune) a model. To train a model, you can use the following command:
+
+```console
+spotiflow-train INPUT_DIR -o OUTPUT_DIR
+```
+
+where `INPUT_DIR` is the path to the directory containing the data in the format described [here](https://weigertlab.github.io/spotiflow/train.html) and `OUTPUT_DIR` is the directory where the trained model will be saved. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information, including examples, please refer to the [training documentation](https://weigertlab.github.io/spotiflow/train.html) or run the command `spotiflow-train --help`.
+
+For training with the API, please check the [training example notebook](examples/1_train.ipynb). For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
 
 ### Training (3D volumes)
-See the [example 3D training script](scripts/train_simple_3d.py). For more information, please refer to the [3D training example notebook](examples/4_train_3d.ipynb). Fine-tuning a 3D model can be done by following the same workflow as to the 2D case.
+3D models can also be trained with the CLI by adding the `--is-3d True` flag, as shown below:
+
+```console
+spotiflow-train INPUT_DIR -o OUTPUT_DIR --3d True
+```
+
+See the [example 3D training script](scripts/train_simple_3d.py) for an API example. For more information, please refer to the [3D training example notebook](examples/4_train_3d.ipynb). Fine-tuning a 3D model can be done by following the same workflow as to the 2D case.
 
 ### Inference (CLI)
 
@@ -116,6 +130,9 @@ points, details = model.predict(img) # points contains the coordinates of the de
 
 ### Napari plugin
 Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
+
+### Available pre-trained models
+We provide several pre-trained models that may be used out-of-the-box. The available models are: `general`, `hybiss`, `synth_complex`, `synth_3d` and `smfish_3d`. For more information on these pre-trained models, please refer to the article and the [documentation](https://weigertlab.github.io/spotiflow/pretrained.html).
 
 ### Changing the cache directory
 The default cache directory root folder (where pre-trained models and datasets are stored) is, by default, `~/.spotiflow`. If you want to change it for your use case, you can either set the environment variable `SPOTIFLOW_CACHE_DIR` to the path you want or directly pass the desired folder as an argument (`cache_dir`) to the `Spotiflow.from_pretrained()` method (note that if the latter is chosen, the path stored in the environment variable will be ignored). 
