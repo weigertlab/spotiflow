@@ -18,9 +18,42 @@ on:
       branches: [ "main" ]
 
 jobs:
+  test:
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.py }}
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'push' && contains(github.ref, 'main')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+        py: [3.11, 3.12]
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout repository
+
+      - uses: actions/setup-python@v4
+        name: Install Python
+        with:
+          python-version: '3.x'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
+      - name: Build wheels for CPython (Linux)
+        run: |
+          python -m cibuildwheel --output-dir dist
+        env:
+          # only build for specific platforms 
+          CIBW_BUILD: "${{ matrix.py }}-*{x86_64,win_amd64}"
+          CIBW_SKIP: "*musllinux*"
+
+          CIBW_BUILD_VERBOSITY: 1
+          CIBW_TEST_REQUIRES: pytest pytest-cov
+          CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
+
   build_wheels:
     name: Build ${{ matrix.py }} wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels')) || github.event_name == 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +122,7 @@ jobs:
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
+    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels'))
     steps:
       - uses: actions/checkout@v4
         name: Checkout repository
@@ -107,7 +141,7 @@ jobs:
     name: Upload to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published' # upload to pypi only on release
+    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels'))
     steps:
       - uses: actions/download-artifact@v3
         name: Download wheels and sdist
