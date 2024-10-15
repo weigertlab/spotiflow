@@ -9,10 +9,13 @@ name: tests
 on:
   push:
     branches:
+      - main
       - wheels
   release:
     types:
       - published
+  pull_request:
+      branches: [ "main" ]
 
 jobs:
   build_wheels:
