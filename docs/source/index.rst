@@ -96,6 +96,7 @@ Contents
 
    napari
    cli
+   pretrained
    train
    finetune
    api

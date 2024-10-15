@@ -5,8 +5,6 @@
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-from pathlib import Path
-import sys
 from spotiflow import __version__ as __spotiflow_version__
 
 project = 'Spotiflow'
