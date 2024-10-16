@@ -61,8 +61,8 @@ def get_args():
         "--out-dir",
         type=Path,
         required=False,
-        default=None,
-        help="Output directory. If not provided, will create a 'spotiflow_results' subfolder in the input folder and write the CSV(s) there.",
+        default='spotiflow_results',
+        help="Output directory to write the CSV(s). If not provided, will create a 'spotiflow_results' subfolder in the current folder.",
     )
 
     predict = parser.add_argument_group(

@@ -64,8 +64,9 @@ def get_args() -> argparse.Namespace:
         "-o",
         "--outdir",
         type=Path,
-        required=True,
-        help="Output directory where the model will be stored.",
+        required=False,
+        default="spotiflow_model",
+        help="Output directory where the model will be stored (defaults to 'spotiflow_model' in current directory).",
     )
 
     model_args = parser.add_argument_group(
