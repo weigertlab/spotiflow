@@ -821,7 +821,7 @@ class Spotiflow(nn.Module):
             if verbose:
                 log.info("Normalizing...")
             x = normalizer(x)
-
+        
         pad_shape = tuple(int(d * np.ceil(s / d)) for s, d in zip(x.shape, div_by))
         if verbose:
             log.info(f"Padding to shape {pad_shape}")
