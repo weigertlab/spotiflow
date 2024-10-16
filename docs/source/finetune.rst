@@ -13,7 +13,7 @@ You can fine-tune from an existing model by simply adding an argument to the CLI
 
 .. code-block:: console
 
-    spotiflow-train /path/to/spots_data --save-dir /my/trained/model --pretrained-model general
+    spotiflow-train /path/to/spots_data -o /my/trained/model --finetune-from general
 
 where `/path/to/pretrained/model` is the path to the directory containing the model you want to fine-tune. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
 
