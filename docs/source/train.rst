@@ -50,7 +50,7 @@ You can train a model using the CLI as follows:
 
 .. code-block:: console
 
-    spotiflow-train /path/to/spots_data --save-dir /my/trained/model
+    spotiflow-train /path/to/spots_data -o /my/trained/model
 
 where `/path/to/spots_data` is the path to the directory containing the data in the format described above and `/my/trained/model` is the directory where the trained model will be saved. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
 
@@ -62,7 +62,7 @@ To illustrate with an example, to train a Spotiflow model on 2-channel 3D data f
 
 .. code-block:: console
 
-    spotiflow-train /path/to/spots_data --save-dir /my/trained/model --is-3d True --num-epochs 100 --in-channels 2
+    spotiflow-train /path/to/spots_data -o /my/trained/model --is-3d True --num-epochs 100 --in-channels 2
 
 Basic training (API)
 ^^^^^^^^^^^^^^^^^^^^
