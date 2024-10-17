@@ -140,6 +140,9 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
     """Wrapper function for different cpp calls. Points should be in (y,x) or (z,y,x) order"""
 
     ndim=len(shape) 
+    
+    points = np.asarray(points)
+    
     if not points.shape[1] == ndim:
         raise ValueError("Wrong dimension of points!")
 
@@ -153,6 +156,8 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
 
     if len(grid) != ndim:
         raise ValueError("grid must have the same dimension as shape")
+    
+    
     
     if ndim == 2:
         return points_to_prob2d(points, shape=shape, sigma=sigma, val=val, mode=mode)

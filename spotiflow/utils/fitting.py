@@ -6,6 +6,8 @@ from functools import partial
 import numpy as np
 from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
+from types import SimpleNamespace
+from dataclasses import dataclass
 
 FWHM_CONSTANT = 2 * np.sqrt(2 * np.log(2))
 
@@ -24,7 +26,16 @@ def _gaussian_2d(yx, y0, x0, sigma, A, B):
     return A * np.exp(-((y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
 
 
-def _estimate_sigma_single(center: np.ndarray, image: np.ndarray, window: int = 5):
+
+@dataclass
+class SpotParams:
+    fwhm: float | np.ndarray
+    offset_y: float | np.ndarray
+    offset_x: float | np.ndarray
+    intens_A: float | np.ndarray
+    intens_B: float | np.ndarray
+    
+def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int = 5):
     x_range = np.arange(-window, window + 1)
     y_range = np.arange(-window, window + 1)
     y, x = np.meshgrid(y_range, x_range, indexing="ij")
@@ -55,14 +66,12 @@ def _estimate_sigma_single(center: np.ndarray, image: np.ndarray, window: int = 
     except Exception as _:
         log.warning("Gaussian fit failed. Returning NaN")
 
-    return popt[2]
+    return SpotParams(fwhm=FWHM_CONSTANT*popt[2], offset_y=popt[0], offset_x=popt[1], 
+                      intens_A=popt[3]*(ma-mi), intens_B=popt[4]*(ma-mi)+mi)
 
 
-def fwhm(sigma):
-    return FWHM_CONSTANT * sigma
 
-
-def estimate_fwhm(
+def estimate_params(
     img: np.ndarray, centers: np.ndarray, window: int = 5, max_workers: int = 1
 ) -> np.ndarray:
     """Estimates FWHM of all spots in an image (given by centers) of the image by fitting a 2D Gaussian
@@ -75,26 +84,37 @@ def estimate_fwhm(
         max_workers (int, optional): number of workers for parallelization. Defaults to 1.
 
     Returns:
-        np.ndarray: estimated FWHM of the spots
+        params: SpotParams with the following attributes:
+            fwhm (np.ndarray): FWHM of the spots
+            offset (np.ndarray): offset of the spots
+            peak_range (np.ndarray): peak range of the spots
     """
 
     img = np.pad(img, window, mode="reflect")
     centers = np.asarray(centers).astype(int) + window
     if max_workers == 1:
-        sigmas = tuple(
-            _estimate_sigma_single(p, image=img, window=window)
+        params = tuple(
+            _estimate_params_single(p, image=img, window=window)
             for p in tqdm(centers, desc="Estimating FWHM of spots")
         )
     else:
         _partial_estimate_single_sigma = partial(
-            _estimate_sigma_single, image=img, window=window
+            _estimate_params_single, image=img, window=window
         )
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            sigmas = tuple(
+            params = tuple(
                 tqdm(
                     executor.map(_partial_estimate_single_sigma, centers),
                     total=len(centers),
                     desc="Estimating FWHM of spots",
                 )
             )
-    return fwhm(np.array(sigmas))
+            
+    keys = SpotParams.__dataclass_fields__.keys()
+    
+    params = SpotParams(**dict(
+        (k, np.array([getattr(p, k) for p in params]))
+        for k in keys))
+    return params
+    
+    

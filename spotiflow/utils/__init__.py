@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function
 
-from .fitting import estimate_fwhm
+from .fitting import estimate_params
 from .matching import *
 from .parallel import tile_iterator
 from .peaks import *
