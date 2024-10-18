@@ -99,13 +99,13 @@ def estimate_params(
             for p in tqdm(centers, desc="Estimating FWHM of spots")
         )
     else:
-        _partial_estimate_single_sigma = partial(
+        _partial_estimate_params_single = partial(
             _estimate_params_single, image=img, window=window
         )
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             params = tuple(
                 tqdm(
-                    executor.map(_partial_estimate_single_sigma, centers),
+                    executor.map(_partial_estimate_params_single, centers),
                     total=len(centers),
                     desc="Estimating FWHM of spots",
                 )
