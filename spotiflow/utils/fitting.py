@@ -52,7 +52,13 @@ def signal_to_background(params: SpotParams) -> np.ndarray:
     return snb
 
 
-def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int = 5):
+def _estimate_params_single(
+    center: np.ndarray,
+    image: np.ndarray,
+    window: int,
+    refine_centers: bool,
+    verbose: bool,
+) -> SpotParams:
     x_range = np.arange(-window, window + 1)
     y_range = np.arange(-window, window + 1)
     y, x = np.meshgrid(y_range, x_range, indexing="ij")
@@ -64,14 +70,17 @@ def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int =
     ]
 
     try:
-        mi, ma = np.percentile(region, (0.1, 99.99))
-
+        mi, ma = np.min(region), np.max(region)
         region = (region - mi) / (ma - mi)
 
-        initial_guess = (0, 0, 1.5, 1, 0)  # y0, x0, sigma, A, B
+        initial_guess = (0, 0, 1.5, 0.9, 0.1)  # y0, x0, sigma, A, B
 
-        lower_bounds = (-2, -2, 0.1, -1, -1)  # y0, x0, sigma, A, B
-        upper_bounds = (2, 2, 10, 10, 1)  # y0, x0, sigma, A, B
+        if refine_centers:
+            lower_bounds = (-.5, -.5, 0.1, 0, 0)  # y0, x0, sigma, A, B
+            upper_bounds = (.5, .5, 10, 1, 1)  # y0, x0, sigma, A, B
+        else:
+            lower_bounds = (-1e-6, -1e-6, 0.1, 0, 0)
+            upper_bounds = (1e-6, 1e-6, 10, 1, 1)
 
         popt, _ = curve_fit(
             _gaussian_2d,
@@ -81,7 +90,9 @@ def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int =
             bounds=(lower_bounds, upper_bounds),
         )
     except Exception as _:
-        log.warning("Gaussian fit failed. Returning NaN")
+        if verbose:
+            log.warning("Gaussian fit failed. Returning NaN")
+        mi, ma = 0, 1
         popt = np.full(5, np.nan)
 
     return SpotParams(
@@ -94,7 +105,12 @@ def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int =
 
 
 def estimate_params(
-    img: np.ndarray, centers: np.ndarray, window: int = 5, max_workers: int = 1
+    img: np.ndarray,
+    centers: np.ndarray,
+    window: int = 5,
+    max_workers: int = 1,
+    refine_centers: bool = False,
+    verbose: bool = True,
 ) -> np.ndarray:
     """Estimates FWHM of all spots in an image (given by centers) of the image by fitting a 2D Gaussian
        centered at each spot.
@@ -111,17 +127,26 @@ def estimate_params(
             offset (np.ndarray): offset of the spots
             peak_range (np.ndarray): peak range of the spots
     """
-
     img = np.pad(img, window, mode="reflect")
     centers = np.asarray(centers).astype(int) + window
     if max_workers == 1:
         params = tuple(
-            _estimate_params_single(p, image=img, window=window)
-            for p in tqdm(centers, desc="Estimating FWHM of spots")
+            _estimate_params_single(
+                p,
+                image=img,
+                window=window,
+                refine_centers=refine_centers,
+                verbose=verbose,
+            )
+            for p in tqdm(centers, desc="Estimating FWHM of spots", disable=not verbose)
         )
     else:
         _partial_estimate_params_single = partial(
-            _estimate_params_single, image=img, window=window
+            _estimate_params_single,
+            image=img,
+            window=window,
+            refine_centers=refine_centers,
+            verbose=verbose,
         )
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             params = tuple(
@@ -129,6 +154,7 @@ def estimate_params(
                     executor.map(_partial_estimate_params_single, centers),
                     total=len(centers),
                     desc="Estimating FWHM of spots",
+                    disable=not verbose,
                 )
             )
 
