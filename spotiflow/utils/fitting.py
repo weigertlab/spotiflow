@@ -2,11 +2,11 @@ import logging
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+from typing import Union
 
 import numpy as np
 from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
-from types import SimpleNamespace
 from dataclasses import dataclass
 
 FWHM_CONSTANT = 2 * np.sqrt(2 * np.log(2))
@@ -26,15 +26,32 @@ def _gaussian_2d(yx, y0, x0, sigma, A, B):
     return A * np.exp(-((y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
 
 
-
 @dataclass
 class SpotParams:
-    fwhm: float | np.ndarray
-    offset_y: float | np.ndarray
-    offset_x: float | np.ndarray
-    intens_A: float | np.ndarray
-    intens_B: float | np.ndarray
-    
+    fwhm: Union[float, np.ndarray]
+    offset_y: Union[float, np.ndarray]
+    offset_x: Union[float, np.ndarray]
+    intens_A: Union[float, np.ndarray]
+    intens_B: Union[float, np.ndarray]
+
+
+def signal_to_background(params: SpotParams) -> np.ndarray:
+    """Calculates the signal to background ratio of the spots. Given a Gaussian fit
+         of the form A*exp(...) + B, the signal to background
+         ratio is computed as A/B.
+
+    Args:
+        params (SpotParams): SpotParams object containing the parameters of the Gaussian fit.
+
+    Returns:
+        np.ndarray: signal to background ratio of the spots
+    """
+    nonzero_mask = params.intens_B > 1e-12
+    snb = np.full(params.intens_A.shape, np.inf)
+    snb[nonzero_mask] = params.intens_A[nonzero_mask] / params.intens_B[nonzero_mask]
+    return snb
+
+
 def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int = 5):
     x_range = np.arange(-window, window + 1)
     y_range = np.arange(-window, window + 1)
@@ -66,10 +83,14 @@ def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int =
     except Exception as _:
         log.warning("Gaussian fit failed. Returning NaN")
         popt = np.full(5, np.nan)
-        
-    return SpotParams(fwhm=FWHM_CONSTANT*popt[2], offset_y=popt[0], offset_x=popt[1], 
-                      intens_A=popt[3]*(ma-mi), intens_B=popt[4]*(ma-mi)+mi)
 
+    return SpotParams(
+        fwhm=FWHM_CONSTANT * popt[2],
+        offset_y=popt[0],
+        offset_x=popt[1],
+        intens_A=popt[3] * (ma - mi),
+        intens_B=popt[4] * (ma - mi) + mi,
+    )
 
 
 def estimate_params(
@@ -110,12 +131,10 @@ def estimate_params(
                     desc="Estimating FWHM of spots",
                 )
             )
-            
+
     keys = SpotParams.__dataclass_fields__.keys()
-    
-    params = SpotParams(**dict(
-        (k, np.array([getattr(p, k) for p in params]))
-        for k in keys))
+
+    params = SpotParams(
+        **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
+    )
     return params
-    
-    

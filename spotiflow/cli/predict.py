@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 from .. import __version__
 from ..model import Spotiflow
 from ..utils import estimate_params, infer_n_tiles, str2bool
+from ..utils.fitting import signal_to_background
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -312,7 +313,8 @@ def main():
                 df['fwhm'] = np.round(params.fwhm, 3)
                 df['intens_A'] = np.round(params.intens_A, 3)
                 df['intens_B'] = np.round(params.intens_B, 3)
-                
+                df['snb'] = np.round(signal_to_background(params), 3)
+
         df.to_csv(out_dir / f"{fname.stem}.csv", index=False)
     return 0
 
