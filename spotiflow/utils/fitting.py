@@ -65,7 +65,8 @@ def _estimate_params_single(center: np.ndarray, image: np.ndarray, window: int =
         )
     except Exception as _:
         log.warning("Gaussian fit failed. Returning NaN")
-
+        popt = np.full(5, np.nan)
+        
     return SpotParams(fwhm=FWHM_CONSTANT*popt[2], offset_y=popt[0], offset_x=popt[1], 
                       intens_A=popt[3]*(ma-mi), intens_B=popt[4]*(ma-mi)+mi)
 
