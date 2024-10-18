@@ -73,14 +73,14 @@ def _estimate_params_single(
         mi, ma = np.min(region), np.max(region)
         region = (region - mi) / (ma - mi)
 
-        initial_guess = (0, 0, 1.5, 0.9, 0.1)  # y0, x0, sigma, A, B
+        initial_guess = (0, 0, 1.5, 1, 0)  # y0, x0, sigma, A, B
 
         if refine_centers:
-            lower_bounds = (-.5, -.5, 0.1, 0, 0)  # y0, x0, sigma, A, B
-            upper_bounds = (.5, .5, 10, 1, 1)  # y0, x0, sigma, A, B
+            lower_bounds = (-.5, -.5, 0.1, 0.5, -0.5)  # y0, x0, sigma, A, B
+            upper_bounds = (.5, .5, 10, 1.5, 0.5)  # y0, x0, sigma, A, B
         else:
-            lower_bounds = (-1e-6, -1e-6, 0.1, 0, 0)
-            upper_bounds = (1e-6, 1e-6, 10, 1, 1)
+            lower_bounds = (-1e-6, -1e-6, 0.1, 0.5, -0.5)
+            upper_bounds = (1e-6, 1e-6, 10, 1.5, 0.5)
 
         popt, _ = curve_fit(
             _gaussian_2d,
@@ -92,14 +92,14 @@ def _estimate_params_single(
     except Exception as _:
         if verbose:
             log.warning("Gaussian fit failed. Returning NaN")
-        mi, ma = 0, 1
+        mi, ma = np.nan, np.nan
         popt = np.full(5, np.nan)
 
     return SpotParams(
         fwhm=FWHM_CONSTANT * popt[2],
         offset_y=popt[0],
         offset_x=popt[1],
-        intens_A=popt[3] * (ma - mi),
+        intens_A=(popt[3]+popt[4])*(ma - mi),
         intens_B=popt[4] * (ma - mi) + mi,
     )
 
