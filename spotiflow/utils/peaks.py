@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Tuple, Union
+from typing import Literal, Tuple, Union
 
 import numpy as np
 import numpy as np
@@ -166,7 +166,10 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
     else:
         raise ValueError("Wrong dimension of points!")
 
-def points_to_prob2d(points, shape, sigma: Union[np.ndarray, float]=1.5, val: Union[np.ndarray, float]=1., mode:str="max") -> np.ndarray:
+def points_to_prob2d(points, shape, 
+                     sigma: Union[np.ndarray, float]=1.5,
+                     val: Union[np.ndarray, float]=1., 
+                     mode:Literal["max","sum"]="max") -> np.ndarray:
     """ 
     Create a 2D probability map from a set of points
     
@@ -213,12 +216,21 @@ def points_to_prob2d(points, shape, sigma: Union[np.ndarray, float]=1.5, val: Un
             np.int32(shape[0]),
             np.int32(shape[1]),
         )
+    elif mode == "sum":
+        x = np.zeros(shape, np.float32)
+        Y, X = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), indexing="ij")
+        for p, s, v in zip(points, sigma, val):
+            x += v * np.exp(-((Y - p[0]) ** 2 + (X - p[1]) ** 2) / (2 * s ** 2))        
     else:
         raise ValueError(mode)
 
     return x
 
-def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tuple[int,int,int]]=None):
+def points_to_prob3d(points, shape, 
+                     sigma: Union[np.ndarray, float]=1.5,
+                     val: Union[np.ndarray, float]=1., 
+                     mode:Literal["max","sum"]="max",
+                     grid: Union[int, Tuple[int,int,int]]=None):
     """points are in (z,y,x) order"""
 
     ndim=len(shape)
@@ -233,18 +245,36 @@ def points_to_prob3d(points, shape, sigma=1.5, mode="max", grid: Union[int, Tupl
 
     if len(points) == 0:
         return x
+    
+    if isinstance(sigma, Number):
+        sigma = np.ones(len(points), np.float32) * sigma
+    else: 
+        sigma = np.asarray(sigma, np.float32)
+    
+    if isinstance(val, Number):
+        val = np.ones(len(points), np.float32) * val
+    else: 
+        val = np.asarray(val, np.float32)
+    
 
     if mode == "max":
         x = c_gaussian3d(
             points.astype(np.float32, copy=False),
+            val.astype(np.float32, copy=False),
+            sigma.astype(np.float32, copy=False),            
             np.int32(shape[0]),
             np.int32(shape[1]),
             np.int32(shape[2]),
             np.int32(grid[0]),
             np.int32(grid[1]),
             np.int32(grid[2]),
-            np.float32(sigma),
         )
+    elif mode == "sum":
+        x = np.zeros(shape, np.float32)
+        Xs = np.stack(np.meshgrid(*(np.arange(s) for s in shape), indexing="ij"))
+        for p, s, v in zip(points, sigma, val):
+            x += v * np.exp(- np.sum((Xs - p[:,None,None,None]) ** 2,axis=0) / (2 * s ** 2))        
+        
     else:
         raise ValueError(mode)
 

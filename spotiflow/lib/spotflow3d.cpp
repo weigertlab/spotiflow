@@ -160,11 +160,12 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
 
     PyArrayObject *points = NULL;
     PyArrayObject *dst = NULL;
+    PyArrayObject *sigmas = NULL;
+    PyArrayObject *probs = NULL;
     int shape_z, shape_y, shape_x;
     int grid_z, grid_y, grid_x;
-    float sigma;
 
-    if (!PyArg_ParseTuple(args, "O!iiiiiif", &PyArray_Type, &points, &shape_z, &shape_y, &shape_x, &grid_z, &grid_y, &grid_x, &sigma))
+    if (!PyArg_ParseTuple(args, "O!O!O!iiiiii", &PyArray_Type, &points, &PyArray_Type, &probs, &PyArray_Type, &sigmas, &shape_z, &shape_y, &shape_x, &grid_z, &grid_y, &grid_x))
         return NULL;
 
     npy_intp *dims = PyArray_DIMS(points);
@@ -204,8 +205,6 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
     index.buildIndex();
 
 
-    const float sigma_denom = 2 * sigma * sigma / cbrt(grid_z * grid_y * grid_x);
-
     #ifdef __APPLE__
     #pragma omp parallel for
     #else
@@ -237,8 +236,12 @@ static PyObject *c_gaussian3d(PyObject *self, PyObject *args)
 
                 const float r2 = x * x + y * y + z * z;
 
+                const float prob = *(float *)PyArray_GETPTR1(probs, ret_index);
+                const float sigma = *(float *)PyArray_GETPTR1(sigmas, ret_index);
+                const float sigma_denom = 2 * sigma * sigma / cbrt(grid_z * grid_y * grid_x);
+
                 // the gaussian value
-                const float val = exp(-r2 / sigma_denom);
+                const float val = prob * exp(-r2 / sigma_denom);
 
                 *(float *)PyArray_GETPTR3(dst, i, j, k) = val;
             }

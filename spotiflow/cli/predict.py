@@ -12,7 +12,7 @@ from tqdm.auto import tqdm
 
 from .. import __version__
 from ..model import Spotiflow
-from ..utils import estimate_params, infer_n_tiles, str2bool
+from ..utils import infer_n_tiles, str2bool
 from ..utils.fitting import signal_to_background
 
 log = logging.getLogger(__name__)
@@ -138,10 +138,10 @@ def get_args():
         help="Peak detection mode (can be either 'skimage' or 'fast', which is a faster custom C++ implementation). Defaults to 'fast'.",
     )
     predict.add_argument(
-        "--estimate-fwhm",
+        "--estimate-params",
         type=str2bool,
         default=False,
-        help="Estimate FWHM of detected spots by Gaussian fitting. Defaults to False.",
+        help="Estimate fit parameters of detected spots by Gaussian fitting (eg FWHM, intensity). Defaults to False.",
     )
     predict.add_argument(
         "-norm",
@@ -296,6 +296,7 @@ def main():
             normalizer=args.normalizer,
             verbose=args.verbose,
             device=args.device,
+            fit_params=args.estimate_params,
         )
         csv_columns = ("y", "x")
         if spots.shape[1] == 3:
@@ -303,17 +304,11 @@ def main():
         df = pd.DataFrame(np.round(spots, 4), columns=csv_columns)
         df["intensity"] = np.round(details.intens, 2)
         df["probability"] = np.round(details.prob, 3)
-        if args.estimate_fwhm:
-            if spots.shape[1] == 3:
-                log.warning(
-                    "Estimating FWHM is not supported for 3D images yet. Skipping."
-                )
-            else:
-                params = estimate_params(img, spots)
-                df['fwhm'] = np.round(params.fwhm, 3)
-                df['intens_A'] = np.round(params.intens_A, 3)
-                df['intens_B'] = np.round(params.intens_B, 3)
-                df['snb'] = np.round(signal_to_background(params), 3)
+        if args.estimate_params:
+            df['fwhm'] = np.round(details.fit_params.fwhm, 3)
+            df['intens_A'] = np.round(details.fit_params.intens_A, 3)
+            df['intens_B'] = np.round(details.fit_params.intens_B, 3)
+            df['snb'] = np.round(signal_to_background(details.fit_params), 3)
 
         df.to_csv(out_dir / f"{fname.stem}.csv", index=False)
     return 0

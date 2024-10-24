@@ -35,6 +35,7 @@ from ..utils import (
     prob_to_points,
     subpixel_offset,
     trilinear_interp_points,
+    estimate_params
 )
 from ..utils import (
     tile_iterator as parallel_tile_iterator,
@@ -714,6 +715,7 @@ class Spotiflow(nn.Module):
             Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]
         ] = None,
         distributed_params: Optional[dict] = None,
+        fit_params: bool = False,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -730,7 +732,7 @@ class Spotiflow(nn.Module):
             verbose (bool, optional): Whether to print logs and progress. Defaults to True.
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
-
+            fit_params (bool, optional): Whether to fit the model parameters to the input image. Defaults to False.
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities (`prob`), the heatmap (`heatmap`), the stereographic flow (`flow`), the 2D local offset vector field (`subpix`) and the spot intensities (`intens`).
         """
@@ -1098,6 +1100,11 @@ class Spotiflow(nn.Module):
             _subpix = None
             flow = None
 
+        if not skip_details and fit_params:
+            fit_params = estimate_params(img[...,0], pts)
+        else:
+            fit_params = None
+            
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
@@ -1119,8 +1126,9 @@ class Spotiflow(nn.Module):
                 )
                 intens = img[tuple(pts.round().astype(int).T)]
         details = SimpleNamespace(
-            prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens
-        )
+            prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens,
+            fit_params=fit_params
+            )
         return pts, details
 
     def predict_dataset(
