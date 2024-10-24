@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from tqdm.auto import tqdm
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 FWHM_CONSTANT = 2 * np.sqrt(2 * np.log(2))
 
@@ -257,12 +257,12 @@ def estimate_params(
             )
 
     if img.ndim == 2:
-        keys = FitParams2D.__dataclass_fields__.keys()
+        keys = tuple(f.name for f in fields(FitParams2D))
         params = FitParams2D(
             **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
         )
     elif img.ndim == 3:
-        keys = FitParams3D.__dataclass_fields__.keys()
+        keys = tuple(f.name for f in fields(FitParams3D))
         params = FitParams3D(
             **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
         )
