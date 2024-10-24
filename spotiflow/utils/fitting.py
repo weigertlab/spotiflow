@@ -6,6 +6,7 @@ from typing import Union
 
 import numpy as np
 from scipy.optimize import curve_fit
+
 from tqdm.auto import tqdm
 from dataclasses import dataclass
 
@@ -25,17 +26,31 @@ def _gaussian_2d(yx, y0, x0, sigma, A, B):
     y, x = yx
     return A * np.exp(-((y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
 
+def _gaussian_3d(zyx, z0, y0, x0, sigma, A, B):
+    z, y, x = zyx
+    return A * np.exp(-((z - z0) ** 2 + (y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
 
 @dataclass
-class SpotParams:
+class FitParams2D:
     fwhm: Union[float, np.ndarray]
     offset_y: Union[float, np.ndarray]
     offset_x: Union[float, np.ndarray]
     intens_A: Union[float, np.ndarray]
     intens_B: Union[float, np.ndarray]
+    r_squared: Union[float, np.ndarray]
+    
+@dataclass
+class FitParams3D:
+    fwhm: Union[float, np.ndarray]
+    offset_z: Union[float, np.ndarray]
+    offset_y: Union[float, np.ndarray]
+    offset_x: Union[float, np.ndarray]
+    intens_A: Union[float, np.ndarray]
+    intens_B: Union[float, np.ndarray]
+    r_squared: Union[float, np.ndarray]
 
 
-def signal_to_background(params: SpotParams) -> np.ndarray:
+def signal_to_background(params: FitParams2D) -> np.ndarray:
     """Calculates the signal to background ratio of the spots. Given a Gaussian fit
          of the form A*exp(...) + B, the signal to background
          ratio is computed as A/B.
@@ -52,13 +67,35 @@ def signal_to_background(params: SpotParams) -> np.ndarray:
     return snb
 
 
+def _r_squared(y_true, y_pred):
+    y_true, y_pred = np.array(y_true).ravel(), np.array(y_pred).ravel()
+    ss_res = np.sum((y_true - y_pred)**2)  
+    ss_tot = np.sum((y_true - np.mean(y_true))**2)  
+    r2 = 1 - (ss_res / ss_tot)
+    return r2 
+
 def _estimate_params_single(
     center: np.ndarray,
     image: np.ndarray,
     window: int,
     refine_centers: bool,
     verbose: bool,
-) -> SpotParams:
+) -> Union[FitParams2D, FitParams3D]:
+    
+    if image.ndim == 2:
+        return _estimate_params_single2(center, image, window, refine_centers, verbose)
+    elif image.ndim == 3:
+        return _estimate_params_single3(center, image, window, refine_centers, verbose)
+    else:
+        raise ValueError("Image must have 2 or 3 dimensions")
+
+def _estimate_params_single2(
+    center: np.ndarray,
+    image: np.ndarray,
+    window: int,
+    refine_centers: bool,
+    verbose: bool,
+) -> FitParams2D:
     x_range = np.arange(-window, window + 1)
     y_range = np.arange(-window, window + 1)
     y, x = np.meshgrid(y_range, x_range, indexing="ij")
@@ -89,20 +126,81 @@ def _estimate_params_single(
             p0=initial_guess,
             bounds=(lower_bounds, upper_bounds),
         )
+        
+        pred = _gaussian_2d((y.ravel(), x.ravel()), *popt)  
+        r_squared = _r_squared(region.ravel(), pred)
+
     except Exception as _:
         if verbose:
             log.warning("Gaussian fit failed. Returning NaN")
         mi, ma = np.nan, np.nan
         popt = np.full(5, np.nan)
+        r_squared = 0
 
-    return SpotParams(
+    return FitParams2D(
         fwhm=FWHM_CONSTANT * popt[2],
         offset_y=popt[0],
         offset_x=popt[1],
         intens_A=(popt[3]+popt[4])*(ma - mi),
         intens_B=popt[4] * (ma - mi) + mi,
+        r_squared=r_squared
     )
 
+def _estimate_params_single3(
+    center: np.ndarray,
+    image: np.ndarray,
+    window: int,
+    refine_centers: bool,
+    verbose: bool,
+) -> FitParams3D:
+    z,y,x = np.meshgrid(*((np.arange(-window, window + 1),)*3), indexing="ij")
+    
+    # Crop around the spot
+    region = image[
+        center[0] - window : center[0] + window + 1,
+        center[1] - window : center[1] + window + 1,
+        center[2] - window : center[2] + window + 1,
+    ]
+
+    try:
+        mi, ma = np.min(region), np.max(region)
+        region = (region - mi) / (ma - mi)
+        initial_guess = (0, 0, 0, 1.5, 1, 0)  # z0, y0, x0, sigma, A, B
+
+        if refine_centers:
+            lower_bounds = (-.5, -.5, -.5, 0.1, 0.5, -0.5)  # y0, x0, sigma, A, B
+            upper_bounds = (.5, .5, .5, 10, 1.5, 0.5)  # y0, x0, sigma, A, B
+        else:
+            lower_bounds = (-1e-6, -1e-6, -1e-6, 0.1, 0.5, -0.5)
+            upper_bounds = ( 1e-6, 1e-6, 1e-6, 10, 1.5, 0.5)
+
+        popt, _ = curve_fit(
+            _gaussian_3d,
+            (z.ravel(), y.ravel(), x.ravel()),
+            region.ravel(),
+            p0=initial_guess,
+            bounds=(lower_bounds, upper_bounds),
+        )
+        
+        pred = _gaussian_3d((z.ravel(), y.ravel(), x.ravel()), *popt)  
+        r_squared = _r_squared(region.ravel(), pred)
+
+    except Exception as _:
+        if verbose:
+            log.warning("Gaussian fit failed. Returning NaN")
+        mi, ma = np.nan, np.nan
+        popt = np.full(6, np.nan)
+        r_squared = 0
+
+    return FitParams3D(
+        fwhm=FWHM_CONSTANT * popt[3],
+        offset_z=popt[0],
+        offset_y=popt[1],
+        offset_x=popt[2],
+        intens_A=(popt[4]+popt[5])*(ma - mi),
+        intens_B=popt[5] * (ma - mi) + mi,
+        r_squared=r_squared
+    )
 
 def estimate_params(
     img: np.ndarray,
@@ -158,9 +256,17 @@ def estimate_params(
                 )
             )
 
-    keys = SpotParams.__dataclass_fields__.keys()
-
-    params = SpotParams(
-        **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
-    )
+    if img.ndim == 2:
+        keys = FitParams2D.__dataclass_fields__.keys()
+        params = FitParams2D(
+            **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
+        )
+    elif img.ndim == 3:
+        keys = FitParams3D.__dataclass_fields__.keys()
+        params = FitParams3D(
+            **dict((k, np.array([getattr(p, k) for p in params])) for k in keys)
+        )
+    else:
+        raise ValueError("Image must have 2 or 3 dimensions")
+    
     return params
