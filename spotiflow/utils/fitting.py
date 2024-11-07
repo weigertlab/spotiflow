@@ -113,8 +113,8 @@ def _estimate_params_single2(
         initial_guess = (0, 0, 1.5, 1, 0)  # y0, x0, sigma, A, B
 
         if refine_centers:
-            lower_bounds = (-.5, -.5, 0.1, 0.5, -0.5)  # y0, x0, sigma, A, B
-            upper_bounds = (.5, .5, 10, 1.5, 0.5)  # y0, x0, sigma, A, B
+            lower_bounds = (-1, -1, 0.1, 0.5, -0.5)  # y0, x0, sigma, A, B
+            upper_bounds = (1, 1, 10, 1.5, 0.5)  # y0, x0, sigma, A, B
         else:
             lower_bounds = (-1e-6, -1e-6, 0.1, 0.5, -0.5)
             upper_bounds = (1e-6, 1e-6, 10, 1.5, 0.5)
@@ -210,12 +210,12 @@ def estimate_params(
     refine_centers: bool = False,
     verbose: bool = True,
 ) -> np.ndarray:
-    """Estimates FWHM of all spots in an image (given by centers) of the image by fitting a 2D Gaussian
+    """Estimates Gaussian parameters of all spots in an image (given by centers) of the image by fitting a 2D Gaussian
        centered at each spot.
 
     Args:
         img (np.ndarray): input image
-        centers (np.ndarray): centers of the spots to estimate FWHM of
+        centers (np.ndarray): centers of the spots to fit Gaussians on
         window (int, optional): window size around the spot to consider during the fitting. Defaults to 5.
         max_workers (int, optional): number of workers for parallelization. Defaults to 1.
 
@@ -236,7 +236,7 @@ def estimate_params(
                 refine_centers=refine_centers,
                 verbose=verbose,
             )
-            for p in tqdm(centers, desc="Estimating FWHM of spots", disable=not verbose)
+            for p in tqdm(centers, desc="Spots fitting", disable=not verbose)
         )
     else:
         _partial_estimate_params_single = partial(

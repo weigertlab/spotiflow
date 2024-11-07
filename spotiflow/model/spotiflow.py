@@ -950,7 +950,7 @@ class Spotiflow(nn.Module):
             n_block_overlaps = (4, 4, 0)
             if self.config.is_3d:
                 n_block_overlaps = (4,) + n_block_overlaps
-
+            _n_tiles_progress = sum(1 for _ in tile_iterator(x, n_tiles=actual_n_tiles, block_sizes=div_by, n_block_overlaps=n_block_overlaps))
             if distributed_params is not None:
                 gpu_id = distributed_params.get("gpu_id", 0)
                 iter_tiles = parallel_tile_iterator(
@@ -973,19 +973,19 @@ class Spotiflow(nn.Module):
                 )
 
             if verbose and callable(progress_bar_wrapper):
-                iter_tiles = progress_bar_wrapper(iter_tiles)
+                iter_tiles = progress_bar_wrapper(iter_tiles, total=_n_tiles_progress)
             elif verbose:
                 if distributed_params is None:
                     iter_tiles = tqdm(
                         iter_tiles,
                         desc="Predicting tiles",
-                        total=np.prod(actual_n_tiles),
+                        total=_n_tiles_progress,
                     )
                 else:
                     iter_tiles = tqdm(
                         iter_tiles,
                         desc=f"Predicting tiles (GPU {gpu_id})",
-                        total=np.prod(actual_n_tiles)
+                        total=_n_tiles_progress
                         // distributed_params.get(
                             "num_replicas", torch.cuda.device_count()
                         ),
