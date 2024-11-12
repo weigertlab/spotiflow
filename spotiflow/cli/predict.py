@@ -41,7 +41,7 @@ def get_args():
     required.add_argument(
         "data_path",
         type=Path,
-        help=f"Path to image file or directory of image files. If a directory, will process all images in the directory.",
+        help="Path to image file or directory of image files. If a directory, will process all images in the directory.",
     )
     required.add_argument(
         "-pm",
@@ -127,6 +127,13 @@ def get_args():
         type=str2bool,
         default=True,
         help="Whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to True.",
+    )
+    parser.add_argument(
+        "-spr",
+        "--subpix-radius",
+        type=int,
+        default=0,
+        help="Radius of the flow region to consider around the heatmap peak. Defaults to 0 (no aggregation).",
     )
     predict.add_argument(
         "-p",
@@ -284,6 +291,8 @@ def main():
         if args.verbose:
             log.info(f"Predicting spots in {fname} with {n_tiles=}")
 
+        _subpix_arg = False if not args.subpix else args.subpix_radius
+
         spots, details = model.predict(
             img,
             prob_thresh=args.probability_threshold,
@@ -291,7 +300,7 @@ def main():
             min_distance=args.min_distance,
             exclude_border=args.exclude_border,
             scale=args.scale,
-            subpix=args.subpix,
+            subpix=_subpix_arg,
             peak_mode=args.peak_mode,
             normalizer=args.normalizer,
             verbose=args.verbose,

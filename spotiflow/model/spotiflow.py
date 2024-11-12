@@ -1360,8 +1360,8 @@ class Spotiflow(nn.Module):
             ]
             if subpix:
                 val_pred_pts = [
-                    pts + _subpix[class_label][tuple(pts.astype(int).T)]
-                    for pts, _subpix in zip(val_pred_pts, val_flow_preds)
+                    pts + subpixel_offset(pts, np.squeeze(_subpix), np.squeeze(hmap), radius=0)
+                    for hmap, pts, _subpix in zip(val_hm_preds, val_pred_pts, val_flow_preds)
                 ]
 
             if self.config.is_3d and any(s > 1 for s in self.config.grid):
