@@ -257,7 +257,7 @@ class Spotiflow(nn.Module):
         x = self._backbone(x)
         heatmaps = tuple(self._post(x))
         if self.config.compute_flow:
-            flow = self._flow(x[0])
+            flow = F.normalize(self._flow(x[0]), dim=1)
             return dict(heatmaps=heatmaps, flow=flow)
         else:
             return dict(heatmaps=heatmaps)
@@ -853,7 +853,7 @@ class Spotiflow(nn.Module):
                 if subpix_radius >= 0:
                     if not self.config.is_3d:
                         flow = (
-                            F.normalize(out["flow"], dim=1)[0]
+                            out["flow"][0]
                             .permute(1, 2, 0)
                             .detach()
                             .cpu()
@@ -861,7 +861,7 @@ class Spotiflow(nn.Module):
                         )  # HW(3*C')
                     else:
                         flow = (
-                            F.normalize(out["flow"], dim=1)[0]
+                            out["flow"][0]
                             .permute(1, 2, 3, 0)
                             .detach()
                             .cpu()
@@ -1049,7 +1049,7 @@ class Spotiflow(nn.Module):
                             (1, 2, 0) if not self.config.is_3d else (1, 2, 3, 0)
                         )
                         flow_tile = (
-                            F.normalize(out["flow"], dim=1)[0]
+                            out["flow"][0]
                             .permute(*permute_dims)
                             .detach()
                             .cpu()
@@ -1306,7 +1306,7 @@ class Spotiflow(nn.Module):
                     for flow in out["flow"]:
                         if not self.config.is_3d:
                             curr_flow_preds += [
-                                F.normalize(flow, dim=1)
+                                flow
                                 .permute(1, 2, 0)
                                 .detach()
                                 .cpu()
@@ -1314,7 +1314,7 @@ class Spotiflow(nn.Module):
                             ]
                         else:
                             curr_flow_preds += [
-                                F.normalize(flow, dim=1)
+                                flow
                                 .permute(1, 2, 3, 0)
                                 .detach()
                                 .cpu()
