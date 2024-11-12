@@ -24,7 +24,6 @@ from ..augmentations import transforms, transforms3d
 from ..augmentations.pipeline import Pipeline as AugmentationPipeline
 from ..data import Spots3DDataset, SpotsDataset
 from ..utils import (
-    bilinear_interp_points,
     center_crop,
     center_pad,
     filter_shape,
@@ -34,8 +33,9 @@ from ..utils import (
     normalize_dask,
     points_matching_dataset,
     prob_to_points,
+    spline_interp_points_2d,
+    spline_interp_points_3d,
     subpixel_offset,
-    trilinear_interp_points,
     estimate_params
 )
 from ..utils import (
@@ -1037,7 +1037,7 @@ class Spotiflow(nn.Module):
 
                     y_tile_sub = y_tile[s_src_corr[:actual_n_dims]]
                     probs += y_tile_sub[tuple(p.astype(int).T)].tolist()
-
+                    p_flow = p + np.array([s.start for s in s_src_corr[:actual_n_dims]])[None]
                     # add global offset
                     p += np.array([s.start for s in s_dst_corr[:actual_n_dims]])[None]
                     if not skip_details:
@@ -1058,7 +1058,7 @@ class Spotiflow(nn.Module):
                         # Cartesian coordinates
                         subpix_tile = flow_to_vector(flow_tile, sigma=self.config.sigma)
                         _offset = subpixel_offset(
-                            p, subpix_tile, y_tile, radius=subpix_radius
+                            p_flow, subpix_tile, y_tile, radius=subpix_radius
                         )
 
                         p = p + _offset
@@ -1119,14 +1119,11 @@ class Spotiflow(nn.Module):
             intens = img[tuple(pts.astype(int).T)]
         else:
             try:
-                intens = (
-                    bilinear_interp_points(img, pts)
-                    if not self.config.is_3d
-                    else trilinear_interp_points(img, pts)
-                )
+                _interp_fun = spline_interp_points_2d if not self.config.is_3d else spline_interp_points_3d
+                intens = _interp_fun(img, pts)
             except Exception as _:
                 log.warning(
-                    "Bilinear interpolation failed to retrive spot intensities. Will use nearest neighbour interpolation instead."
+                    "Spline interpolation failed to retrieve spot intensities. Will use nearest neighbour interpolation instead."
                 )
                 intens = img[tuple(pts.round().astype(int).T)]
         details = SimpleNamespace(
