@@ -362,7 +362,7 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                 self.logger.log_image(
                     key="flow",
                     images=[
-                        0.5 * (1 + np.squeeze(v, axis=0).transpose(1, 2, 0))
+                        0.5 * (1 + v.transpose(1, 2, 0))
                         for v in self._valid_flows[:n_images_to_log]
                     ],
                     step=self.global_step,

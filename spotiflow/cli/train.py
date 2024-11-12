@@ -219,6 +219,13 @@ def get_args() -> argparse.Namespace:
         default="tensorboard",
         help="Logger to use for monitoring training. Defaults to 'tensorboard'.",
     )
+    train_args.add_argument(
+        "--smart-crop",
+        type=str2bool,
+        required=False,
+        default=False,
+        help="Use smart cropping for training. Defaults to False.",
+    )
     args = parser.parse_args()
     return args
 
@@ -306,6 +313,7 @@ def main():
             "pos_weight": args.pos_weight,
             "num_train_samples":args.train_samples,
             "finetuned_from": args.finetune_from,
+            "smart_crop": args.smart_crop,
         },
     )
     log.info("Done!")

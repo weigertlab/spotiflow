@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 
+import datetime
 import dask.array as da
 import lightning.pytorch as pl
 import numpy as np
@@ -467,9 +468,10 @@ class Spotiflow(nn.Module):
             ]
 
         if logger == "tensorboard":
-            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir)
+            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir, name=f"spotiflow-{datetime.datetime.now().strftime('%Y%m%d_%H%M')}")
         elif logger == "wandb":
-            logger = pl.loggers.WandbLogger(save_dir=save_dir)
+            Path(save_dir/"wandb").mkdir(parents=True, exist_ok=True)
+            logger = pl.loggers.WandbLogger(save_dir=save_dir, project="spotiflow", name=f"{datetime.datetime.now().strftime('%Y%m%d_%H%M')}")
         else:
             if logger != "none":
                 log.warning(f"Logger {logger} not implemented. Using no logger.")
@@ -1067,6 +1069,8 @@ class Spotiflow(nn.Module):
                                 s_src_corr[:actual_n_dims]
                             ]
                     points.append(p)
+                    del out, img_t, tile, y_tile, p
+                    torch.cuda.empty_cache()
 
             if scale is not None and scale != 1:
                 y = zoom(y, (1.0 / scale, 1.0 / scale), order=1)

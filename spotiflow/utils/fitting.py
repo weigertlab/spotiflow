@@ -9,6 +9,7 @@ from scipy.optimize import curve_fit
 
 from tqdm.auto import tqdm
 from dataclasses import dataclass, fields
+from scipy.ndimage import map_coordinates
 
 FWHM_CONSTANT = 2 * np.sqrt(2 * np.log(2))
 
@@ -100,11 +101,12 @@ def _estimate_params_single2(
     y_range = np.arange(-window, window + 1)
     y, x = np.meshgrid(y_range, x_range, indexing="ij")
 
-    # Crop around the spot
-    region = image[
+    # Crop around the spot with interpolation
+    y_indices, x_indices = np.mgrid[
         center[0] - window : center[0] + window + 1,
-        center[1] - window : center[1] + window + 1,
+        center[1] - window : center[1] + window + 1
     ]
+    region = map_coordinates(image, [y_indices, x_indices], order=3, mode='reflect')
 
     try:
         mi, ma = np.min(region), np.max(region)
@@ -226,7 +228,7 @@ def estimate_params(
             peak_range (np.ndarray): peak range of the spots
     """
     img = np.pad(img, window, mode="reflect")
-    centers = np.asarray(centers).astype(int) + window
+    centers = np.asarray(centers) + window
     if max_workers == 1:
         params = tuple(
             _estimate_params_single(
