@@ -1,0 +1,86 @@
+cff-version: 1.2.0
+message: If you use this software, please cite both the article from preferred-citation and the software itself.
+authors:
+  - family-names: Dominguez Mantes
+    given-names: Albert
+  - family-names: Herrera
+    given-names: Antonio
+  - family-names: Khven
+    given-names: Irina
+  - family-names: Schlaeppi
+    given-names: Anjalie
+  - family-names: Kyriacou
+    given-names: Eftychia
+  - family-names: Tsissios
+    given-names: Georgios
+  - family-names: Skoufa
+    given-names: Evangelia
+  - family-names: Santangeli
+    given-names: Luca
+  - family-names: Buglakova
+    given-names: Elena
+  - family-names: Durmus
+    given-names: Emine Berna
+  - family-names: Manley
+    given-names: Suliana
+  - family-names: Kreshuk
+    given-names: Anna
+  - family-names: Arendt
+    given-names: Detlev
+  - family-names: Aztekin
+    given-names: Can
+  - family-names: Lingner
+    given-names: Joachim
+  - family-names: La Manno
+    given-names: Gioele
+  - family-names: Weigert
+    given-names: Martin
+title: 'Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression'
+version: 1.0.0
+url: https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426
+doi: 10.1101/2024.02.01.578426
+date-released: '2024-02-02'
+preferred-citation:
+  authors:
+    - family-names: Dominguez Mantes
+      given-names: Albert
+    - family-names: Herrera
+      given-names: Antonio
+    - family-names: Khven
+      given-names: Irina
+    - family-names: Schlaeppi
+      given-names: Anjalie
+    - family-names: Kyriacou
+      given-names: Eftychia
+    - family-names: Tsissios
+      given-names: Georgios
+    - family-names: Skoufa
+      given-names: Evangelia
+    - family-names: Santangeli
+      given-names: Luca
+    - family-names: Buglakova
+      given-names: Elena
+    - family-names: Durmus
+      given-names: Emine Berna
+    - family-names: Manley
+      given-names: Suliana
+    - family-names: Kreshuk
+      given-names: Anna
+    - family-names: Arendt
+      given-names: Detlev
+    - family-names: Aztekin
+      given-names: Can
+    - family-names: Lingner
+      given-names: Joachim
+    - family-names: La Manno
+      given-names: Gioele
+    - family-names: Weigert
+      given-names: Martin
+  title: 'Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression'
+  doi: 10.1101/2024.02.01.578426
+  url: https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426
+  type: article-journal
+  year: '2024'
+  conference: {}
+  publisher:
+    name: Cold Spring Harbor Laboratory
