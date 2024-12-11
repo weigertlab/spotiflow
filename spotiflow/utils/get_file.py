@@ -14,6 +14,7 @@ import warnings
 from six.moves.urllib.parse import urlsplit
 import numpy as np
 import zipfile
+from pathlib import Path
 from urllib.request import urlretrieve
 
 
@@ -594,9 +595,7 @@ def get_file(
         return untar_fpath
 
     if extract:
-        _extract_archive(fpath, datadir, archive_format)
-
+        out_dir = Path(fpath).with_suffix("")
+        if not out_dir.exists() or download:
+            _extract_archive(fpath, datadir, archive_format)
     return fpath
-
-
-# ----------
