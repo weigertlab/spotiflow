@@ -137,6 +137,11 @@ We provide several pre-trained models that may be used out-of-the-box. The avail
 ### Changing the cache directory
 The default cache directory root folder (where pre-trained models and datasets are stored) is, by default, `~/.spotiflow`. If you want to change it for your use case, you can either set the environment variable `SPOTIFLOW_CACHE_DIR` to the path you want or directly pass the desired folder as an argument (`cache_dir`) to the `Spotiflow.from_pretrained()` method (note that if the latter is chosen, the path stored in the environment variable will be ignored). 
 
+
+## Starfish integration
+
+Spotiflow can be seamlessly integrated in existing Starfish pipelines using our ```spotiflow.starfish.SpotiflowDetector``` as a spot detection method instead of the BlobDetection classes shipped with Starfish, requiring minimal code changes apart from the addition of Spotiflow to the existing environment where Starfish is installed. For an example, please refer to [the provided script](extra/run_starfish_spotiflow.py).
+
 ## For developers
 
 We are open to contributions, and we indeed very much encourage them! Make sure that existing tests pass before submitting a PR, as well as adding new tests/updating the documentation accordingly for new features.
