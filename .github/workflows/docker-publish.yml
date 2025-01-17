@@ -6,11 +6,10 @@ name: Docker
 # documentation.
 
 on:
+  workflow_dispatch:
   release:
     types:
       - published
-  # pull_request:
-  #   branches: [ "main" ]
 
 env:
   # Use docker.io for Docker Hub if empty

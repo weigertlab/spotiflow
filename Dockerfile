@@ -1,4 +1,4 @@
-FROM mambaorg/micromamba:lunar
+FROM mambaorg/micromamba:noble
 LABEL authors="Albert Dominguez, Miguel Ibarra"
 
 # Set the base layer for micromamba
@@ -17,7 +17,7 @@ RUN apt-get update -qq && apt-get install -y \
 ARG MAMBA_ROOT_PREFIX=/opt/conda
 
 # Add /opt/conda/bin to the PATH
-ENV PATH $MAMBA_ROOT_PREFIX/bin:$PATH
+ENV PATH=$MAMBA_ROOT_PREFIX/bin:$PATH
 
 # Install stuff with micromamba
 RUN micromamba env create -f docker-env-config.yml --yes && \
