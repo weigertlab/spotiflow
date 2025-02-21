@@ -21,6 +21,14 @@ def test_image_terra_2d():
     img = imread(__abspath("images/img_terra_2d.tif"))
     return img
 
+def test_timelapse_telomeres_2d():
+    # TODO: proper docstring after paper is published :)
+    """Timelapse of telomeres from the Spotiflow paper (doi.org/10.1101/2024.02.01.578426)
+    """
+    from tifffile import imread
+    img = imread(__abspath("images/timelapse_telomeres_2d.tif"))
+    return img
+
 def test_image_synth_3d():
     # TODO: proper docstring after paper is published :)
     """ Single synthetic volumetric stack from the Spotiflow paper (doi.org/10.1101/2024.02.01.578426)

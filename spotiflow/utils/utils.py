@@ -87,6 +87,7 @@ def read_coords_csv(fname: str, add_class_column: bool = False) -> np.ndarray:
         return np.zeros((0, 2 if not add_class_column else 3), dtype=np.float32)
 
     df = df.rename(columns=str.lower)
+    df = df.rename(columns=str.strip)
     cols = set(df.columns)
 
     col_candidates = (("axis-0", "axis-1"), ("y", "x"), ("Y", "X"))
@@ -128,6 +129,7 @@ def read_coords_csv3d(fname: str) -> np.ndarray:
         return np.zeros((0, 3), dtype=np.float32)
 
     df = df.rename(columns=str.lower)
+    df = df.rename(columns=str.strip)
     cols = set(df.columns)
 
     col_candidates = (("axis-0", "axis-1", "axis-2"), ("z", "y", "x"), ("Z", "Y", "X"))
