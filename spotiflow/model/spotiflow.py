@@ -393,22 +393,25 @@ class Spotiflow(nn.Module):
         val_dataset_kwargs = deepcopy(pydash.omit(dataset_kwargs, ["augmenter"]))
 
         if not self.config.is_3d:
-            min_img_size = min(min(img.shape[:2]) for img in train_images)
+            _min_img_size = min(min(img.shape[:2]) for img in train_images)
         else:
-            min_img_size = min(min(img.shape[1:3]) for img in train_images)
-        min_crop_size = int(2 ** np.floor(np.log2(min_img_size)))
+            _min_img_size = min(min(img.shape[1:3]) for img in train_images)
+        _min_crop_size = int(2 ** np.floor(np.log2(_min_img_size)))
 
-        crop_size = tuple(2 * [min(train_config.crop_size, min_crop_size)])
+        # Backbone min size
+        _grid_exp = int(max(np.floor(np.log2(np.array(self.config.grid)))))
+        _min_netw_size = int(2 ** (self.config.levels+_grid_exp))
+
+        crop_size = (max(min(train_config.crop_size, _min_crop_size), _min_netw_size),) * 2
 
         if self.config.is_3d:
-            min_depth_size = min(img.shape[-3] for img in train_images)
-            min_crop_size_depth = int(2 ** np.floor(np.log2(min_depth_size)))
+            _min_depth_size = min(img.shape[-3] for img in train_images)
+            _min_crop_size_depth = int(2 ** np.floor(np.log2(_min_depth_size)))
             crop_size = (
-                min(train_config.crop_size_depth, min_crop_size_depth),
+                max(min(train_config.crop_size_depth, _min_crop_size_depth), _min_netw_size),
             ) + crop_size
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
-
         # Build augmenters
         if isinstance(augment_train, AugmentationPipeline):
             _crop_cls = (

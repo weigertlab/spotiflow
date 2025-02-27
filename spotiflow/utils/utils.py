@@ -211,7 +211,7 @@ def multiscale_decimate(
 
 
 def center_pad(
-    x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str = "reflect"
+    x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str = "reflect", allow_larger: bool = False,
 ) -> Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]:
     """Pads x to shape. This function is the inverse of center_crop.
        This function accepts both NumPy arrays and Dask arrays. For the latter, the padding is done lazily.
@@ -224,9 +224,9 @@ def center_pad(
     Returns:
         Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]: A tuple of the padded image and the padding sequence
     """
-    if x.shape == shape:
+    if x.shape == shape or (allow_larger and all([s1 > s2 for s1, s2 in zip(x.shape, shape)])):
         return x, tuple((0, 0) for _ in x.shape)
-    if not all([s1 <= s2 for s1, s2 in zip(x.shape, shape)]):
+    if not allow_larger and not all([s1 <= s2 for s1, s2 in zip(x.shape, shape)]):
         raise ValueError(f"shape of x {x.shape} is larger than final shape {shape}")
     diff = np.array(shape) - np.array(x.shape)
     pads = tuple(

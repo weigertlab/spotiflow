@@ -14,6 +14,7 @@ from itertools import chain
 import pandas as pd
 
 from .. import utils
+from ..augmentations import Pipeline as AugmentationPipeline, transforms, transforms3d
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -68,11 +69,12 @@ class SpotsDataset(Dataset):
         if isinstance(normalizer, str) and normalizer == "auto":
             normalizer = utils.normalize
 
-        if callable(normalizer):
-            self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
-
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")
+
+
+        if callable(normalizer):
+            self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
 
         self._compute_flow = compute_flow
         self._sigma = sigma
@@ -80,6 +82,23 @@ class SpotsDataset(Dataset):
         self._augmenter = (
             augmenter if augmenter is not None else lambda img, pts: (img, pts)
         )
+        if augmenter is not None and isinstance(augmenter, AugmentationPipeline):
+            _crop_cls = transforms.Crop if type(self) is SpotsDataset else transforms3d.Crop3D
+            assert any(
+                isinstance(p, _crop_cls) for p in augmenter.augmentations
+            ), "Custom augmenter must contain a cropping transform!"
+            _cropper = tuple(
+                p for p in augmenter.augmentations if isinstance(p, _crop_cls)
+            )[0]
+            crop_size = _cropper.size
+            if any(np.any(np.asarray(img.shape) < np.asarray(crop_size)) for img in self._images):
+                log.warning(f"Some images are smaller than the crop size ({crop_size}). Will center pad with zeros.")
+                for i in range(len(self._images)):
+                    if np.any(np.asarray(self._images[i].shape) < np.asarray(crop_size)):
+                        _padded_img, _padding = utils.center_pad(self._images[i], crop_size, mode="constant", allow_larger=True)
+                        self._images[i] = _padded_img
+                        self._centers[i][:, :len(_padding)] += np.array([p[0] for p in _padding])
+
         self._image_files = image_files
         self._n_classes = 1
         if add_class_label:
