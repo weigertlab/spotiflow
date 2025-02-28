@@ -227,7 +227,7 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
     def __init__(
         self,
         crop_size: Union[int, Tuple[int, int], Tuple[int, int, int]] = 512,
-        smart_crop: bool = False,
+        smart_crop: bool = True,
         heatmap_loss_f: str = "bce",
         flow_loss_f: str = "l1",
         loss_levels: Optional[int] = None,
