@@ -111,7 +111,7 @@ class SpotsDataset(Dataset):
         if grid is None:
             grid = (1,)*centers[0].shape[1]
         self._grid = grid
-        assert len(self._grid) == centers[0].shape[1], "Grid size should have the same dimensionality as the input!"
+        assert len(self._grid) == self._centers[0].shape[1]-bool(add_class_label), "Grid size should have the same dimensionality as the input!"
         assert all(g > 0 for g in self._grid), "Grid size should be positive!"
         assert all(g == 1 or g%2 == 0 for g in self._grid), "Grid elements should be either 1 or an odd integer > 1!"
 

@@ -458,16 +458,16 @@ def get_data(
 
     test_ds = None
     if normalize:
-        tr_ds = SpotsDatasetClass.from_folder(train_path)
-        val_ds = SpotsDatasetClass.from_folder(val_path)
+        tr_ds = SpotsDatasetClass.from_folder(train_path, add_class_label=False)
+        val_ds = SpotsDatasetClass.from_folder(val_path, add_class_label=False)
         if include_test:
-            test_ds = SpotsDatasetClass.from_folder(test_path)
+            test_ds = SpotsDatasetClass.from_folder(test_path, add_class_label=False)
     else:
-        tr_ds = SpotsDatasetClass.from_folder(train_path, normalizer=None)
-        val_ds = SpotsDatasetClass.from_folder(val_path, normalizer=None)
+        tr_ds = SpotsDatasetClass.from_folder(train_path, normalizer=None, add_class_label=False)
+        val_ds = SpotsDatasetClass.from_folder(val_path, normalizer=None, add_class_label=False)
 
         if include_test:
-            test_ds = SpotsDatasetClass.from_folder(test_path, normalizer=None)
+            test_ds = SpotsDatasetClass.from_folder(test_path, normalizer=None, add_class_label=False)
 
     tr_imgs = tr_ds.images
     val_imgs = val_ds.images
