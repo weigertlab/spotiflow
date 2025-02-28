@@ -113,10 +113,10 @@ jobs:
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
 
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         name: Upload wheels
         with:
-          name: dist
+          name: dist-${{matrix.os}}-${{matrix.py}}
           path: ./dist/*.whl
 
   build_sdist:
@@ -130,10 +130,10 @@ jobs:
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         name: Upload sdist
         with:
-          name: dist
+          name: dist-${{matrix.os}}-${{matrix.py}}
           path: dist/*.tar.gz
 
 
@@ -143,11 +143,12 @@ jobs:
     runs-on: ubuntu-latest
     if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels'))
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         name: Download wheels and sdist
         with:
-          name: dist
           path: dist
+          pattern: dist-*
+          merge-multiple: true
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         name: Publish to PyPI
