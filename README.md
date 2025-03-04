@@ -26,16 +26,17 @@ conda create -n spotiflow python=3.12
 conda activate spotiflow
 ```
 
+Then install PyTorch using `pip`:
 
-**Note (for MacOS users):** if using MacOS, there is a known bug causing the installation of PyTorch with `conda` to sometimes break OpenMP. You can avoid installing PyTorch with `conda` and let spotiflow install it automatically via `pip` instead.
-
-For Linux/Windows with a CUDA device, install PyTorch using conda/mamba (one might need to change the cuda version accordingly):
 ```console
-conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia # Might need to change the cuda version accordingly
+pip install torch
 ```
 
-**Note (for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
+**Note (for Linux/Windows users with a CUDA-capable GPU):** one might need to change the `torch` installation command depending on the CUDA version. Please refer to the [PyTorch website](https://pytorch.org/get-started/locally/) for more information.
 
+
+
+**Note (for Windows users):** if using Windows, please install the latest [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
 
 Finally, install `spotiflow`:
 
@@ -43,7 +44,7 @@ Finally, install `spotiflow`:
 pip install spotiflow
 ```
 
-## Installation (conda)
+## Installation (conda, CPU only)
 For Linux/MacOS users, you can also install Spotiflow using conda through the `conda-forge` channel:
 
 ```console
