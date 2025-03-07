@@ -220,11 +220,18 @@ def get_args() -> argparse.Namespace:
         help="Logger to use for monitoring training. Defaults to 'tensorboard'.",
     )
     train_args.add_argument(
+        "--logging-name",
+        type=str,
+        required=False,
+        default=None,
+        help="Name of the run for logging purposes. If not provided, a random name will be generated.",
+    )
+    train_args.add_argument(
         "--smart-crop",
         type=str2bool,
         required=False,
-        default=False,
-        help="Use smart cropping for training. Defaults to False.",
+        default=True,
+        help="Use smart cropping for training (at least ~80%% of sampled patches will contain one or more spot). Defaults to True.",
     )
     args = parser.parse_args()
     return args
@@ -303,6 +310,7 @@ def main():
         save_dir=args.outdir,
         device=args.device,
         logger=args.logger,
+        logging_name=args.logging_name,
         augment_train=args.augment,
         train_config={
             "batch_size": args.batch_size,

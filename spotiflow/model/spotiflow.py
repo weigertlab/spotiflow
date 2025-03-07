@@ -332,6 +332,7 @@ class Spotiflow(nn.Module):
         train_config: Optional[Union[dict, SpotiflowTrainingConfig]] = None,
         device: Literal["auto", "cpu", "cuda", "mps"] = "auto",
         logger: Literal["none", "tensorboard", "wandb"] = "tensorboard",
+        logging_name: Optional[str] = None,
         number_of_devices: Optional[int] = 1,
         num_workers: Optional[int] = 0,
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = None,
@@ -351,6 +352,7 @@ class Spotiflow(nn.Module):
             train_config (Optional[SpotiflowTrainingConfig], optional): training config. If not given, will use the default config. Defaults to None.
             device (Literal["cpu", "cuda", "mps"], optional): computing device to use. Can be "cpu", "cuda", "mps". Defaults to "cpu".
             logger (Optional[pl.loggers.Logger], optional): logger to use. Defaults to "tensorboard".
+            logging_name (Optional[str], optional): name of the expriment name for the logger if applicable. If None or 'none', a random one will be generated. Defaults to None.
             number_of_devices (Optional[int], optional): number of accelerating devices to use. Only applicable to "cuda" acceleration. Defaults to 1.
             num_workers (Optional[int], optional): number of workers to use for data loading. Defaults to 0 (main process only).
             callbacks (Optional[Sequence[pl.callbacks.Callback]], optional): callbacks to use during training. Defaults to no callbacks.
@@ -469,10 +471,10 @@ class Spotiflow(nn.Module):
             ]
 
         if logger == "tensorboard":
-            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir, name=f"spotiflow-{datetime.datetime.now().strftime('%Y%m%d_%H%M')}")
+            logger = pl.loggers.TensorBoardLogger(save_dir=save_dir, name=f"spotiflow-{datetime.datetime.now().strftime('%Y%m%d_%H%M') if logging_name is None or logging_name == 'none' else logging_name}")
         elif logger == "wandb":
             Path(save_dir/"wandb").mkdir(parents=True, exist_ok=True)
-            logger = pl.loggers.WandbLogger(save_dir=save_dir, project="spotiflow", name=f"{datetime.datetime.now().strftime('%Y%m%d_%H%M')}")
+            logger = pl.loggers.WandbLogger(save_dir=save_dir, project="spotiflow", name=f"{datetime.datetime.now().strftime('%Y%m%d_%H%M') if logging_name is None or logging_name == 'none' else logging_name}")
         else:
             if logger != "none":
                 log.warning(f"Logger {logger} not implemented. Using no logger.")
