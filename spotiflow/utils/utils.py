@@ -422,70 +422,37 @@ def remove_device_id_from_device_str(device_str: str) -> str:
 def get_data(
     path: Union[Path, str],
     normalize: bool = True,
-    include_test: bool = False,
+    subfolder:tuple[str]=('train','val', 'test'),
     is_3d: bool = False,
+    **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Get data from a given path. The path should contain a 'train' and 'val' folder.
+    """Get data from a given root path and subfolders.
 
     Args:
         path (Union[Path, str]): Path to the data.
         normalize (bool, optional): Whether to normalize the data. Defaults to True.
-
+        subfolder (tuple[str], optional): Subfolders to be used. Defaults to ('train','val', 'test').
     Returns:
-        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: A 4-length tuple of arrays corresponding to the training images, training spots, validation images and validation spots.
+        Tuple[np.ndarray]: A tuple of arrays with length 2*len(subfolder) corresponding to the images, centers per subfolder  
     """
     from ..data import Spots3DDataset, SpotsDataset
 
     SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
-    if isinstance(path, str):
-        path = Path(path)
+    
+    path = Path(path)
 
-    assert path.exists(), f"Given data path {path} does not exist!"
-
-    train_path = path / "train"
-    val_path = path / "val"
-    test_path = path / "test"
-    assert (
-        train_path
-    ).exists(), f"Given data path {path} does not contain a 'train' folder!"
-    assert (
-        val_path
-    ).exists(), f"Given data path {path} does not contain a 'val' folder!"
-    if include_test:
-        assert (
-            test_path
-        ).exists(), f"Given data path {path} does not contain a 'test' folder!"
-
-    test_ds = None
-    if normalize:
-        tr_ds = SpotsDatasetClass.from_folder(train_path, add_class_label=False)
-        val_ds = SpotsDatasetClass.from_folder(val_path, add_class_label=False)
-        if include_test:
-            test_ds = SpotsDatasetClass.from_folder(test_path, add_class_label=False)
-    else:
-        tr_ds = SpotsDatasetClass.from_folder(train_path, normalizer=None, add_class_label=False)
-        val_ds = SpotsDatasetClass.from_folder(val_path, normalizer=None, add_class_label=False)
-
-        if include_test:
-            test_ds = SpotsDatasetClass.from_folder(test_path, normalizer=None, add_class_label=False)
-
-    tr_imgs = tr_ds.images
-    val_imgs = val_ds.images
-    if include_test:
-        test_imgs = test_ds.images
-
-    tr_pts = tr_ds.centers
-    val_pts = val_ds.centers
-    if include_test:
-        test_pts = test_ds.centers
-
-    del tr_ds, val_ds
-
-    if include_test:
-        del test_ds
-        return tr_imgs, tr_pts, val_imgs, val_pts, test_imgs, test_pts
-
-    return tr_imgs, tr_pts, val_imgs, val_pts
+    if not path.exists():
+        raise FileNotFoundError(f"Given data path {path} does not exist!")
+    for sub in subfolder:
+        if not (path/sub).exists():
+            raise FileNotFoundError(f"Given data path {path} does not contain a '{sub}' folder!")
+    
+    if not normalize and not 'normalizer' in kwargs:
+        kwargs['normalizer'] = None
+     
+    datasets = tuple(SpotsDatasetClass.from_folder(path/sub, add_class_label=False, **kwargs) for sub in subfolder)
+    results = tuple(x for d in datasets for x in (d.images, d.centers))
+    return results
 
 
 def subpixel_offset_2d(

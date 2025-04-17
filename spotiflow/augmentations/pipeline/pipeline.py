@@ -49,3 +49,10 @@ class Pipeline(object):
     def __repr__(self) -> str:
         aug_list = '\n- '.join(str(aug) for aug in self.augmentations)
         return f"Pipeline\n- {aug_list}"
+    
+    
+    def __add__(self, other):
+        if isinstance(other, Pipeline):
+            return Pipeline(*self.augmentations, *other.augmentations)
+        else:
+            raise TypeError("Can only add Pipeline")
