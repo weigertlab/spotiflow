@@ -273,6 +273,7 @@ class Spotiflow(nn.Module):
         num_workers: Optional[int] = 0,
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = [],
         deterministic: Optional[bool] = True,
+        default_root_dir: Optional[str] = None,
         benchmark: Optional[bool] = False,
     ):
         """Train the model using torch Datasets as input.
@@ -300,6 +301,11 @@ class Spotiflow(nn.Module):
                 "Different sigma values given for training/validation data and model!"
             )
 
+
+        if default_root_dir is None and hasattr(logger, 'save_dir'):
+            default_root_dir = logger.save_dir
+
+        
         trainer = pl.Trainer(
             accelerator=accelerator,
             devices=devices,
@@ -307,6 +313,8 @@ class Spotiflow(nn.Module):
             callbacks=callbacks,
             deterministic=deterministic,
             benchmark=benchmark,
+            enable_checkpointing=False,
+            default_root_dir=default_root_dir,
             max_epochs=train_config.num_epochs,
             log_every_n_steps=min(50, len(train_ds) // train_config.batch_size),
         )
@@ -338,6 +346,7 @@ class Spotiflow(nn.Module):
         callbacks: Optional[Sequence[pl.callbacks.Callback]] = None,
         deterministic: Optional[bool] = True,
         benchmark: Optional[bool] = False,
+        default_root_dir: Optional[str] = None,
         **dataset_kwargs,
     ):
         """Train a Spotiflow model.
@@ -414,23 +423,24 @@ class Spotiflow(nn.Module):
             ) + crop_size
 
         point_priority = 0.8 if train_config.smart_crop else 0.0
+        
+        
+        tr_augmenter = self.build_image_cropper(
+            crop_size, point_priority=point_priority
+        )
+        
         # Build augmenters
         if isinstance(augment_train, AugmentationPipeline):
-            _crop_cls = (
-                transforms.Crop if not self.config.is_3d else transforms3d.Crop3D
-            )
-            assert any(
-                isinstance(p, _crop_cls) for p in augment_train.augmentations
-            ), "Custom augmenter must contain a cropping transform!"
-            tr_augmenter = augment_train
-        elif augment_train:
-            tr_augmenter = self.build_image_augmenter(
-                crop_size, point_priority=point_priority
-            )
+            tr_augmenter = tr_augmenter + augment_train
+        elif augment_train is True:
+            tr_augmenter = tr_augmenter + self.build_default_image_augmenter(
+                point_priority=point_priority)
+        elif augment_train is False:
+            pass
         else:
-            tr_augmenter = self.build_image_cropper(
-                crop_size, point_priority=point_priority
-            )
+            raise ValueError(f"Invalid augment_train value: {augment_train}")
+            
+        
         val_augmenter = self.build_image_cropper(
             crop_size, point_priority=point_priority
         )
@@ -475,10 +485,8 @@ class Spotiflow(nn.Module):
         elif logger == "wandb":
             Path(save_dir/"wandb").mkdir(parents=True, exist_ok=True)
             logger = pl.loggers.WandbLogger(save_dir=save_dir, project="spotiflow", name=f"{datetime.datetime.now().strftime('%Y%m%d_%H%M') if logging_name is None or logging_name == 'none' else logging_name}")
-        else:
-            if logger != "none":
-                log.warning(f"Logger {logger} not implemented. Using no logger.")
-            logger = None
+        else: 
+            print(f'Using non standard logger {logger}')
 
         self.fit_dataset(
             train_ds,
@@ -491,6 +499,7 @@ class Spotiflow(nn.Module):
             callbacks=callbacks,
             deterministic=deterministic,
             benchmark=benchmark,
+            default_root_dir=default_root_dir,
         )
         return
 
@@ -563,22 +572,17 @@ class Spotiflow(nn.Module):
 
         return cropper
 
-    def build_image_augmenter(
+    def build_default_image_augmenter(
         self,
-        crop_size: Optional[Tuple[int, int]] = None,
         point_priority: float = 0.0,
     ) -> AugmentationPipeline:
         """Build default augmenter for training data.
 
         Args:
-            crop_size (Optional[Tuple[int, int]]): if given as a tuple of (height, width), will add random cropping at the beginning of the pipeline. If None, will not crop. Defaults to None.
             point_priority (float, optional): priority to sample regions containing spots when cropping. Defaults to 0.
         """
-        augmenter = (
-            self.build_image_cropper(crop_size, point_priority)
-            if crop_size is not None
-            else AugmentationPipeline()
-        )
+        augmenter = AugmentationPipeline()
+        
         if not self.config.is_3d:
             augmenter.add(transforms.FlipRot90(probability=0.5))
             augmenter.add(transforms.Rotation(probability=0.5, order=1))
@@ -589,14 +593,14 @@ class Spotiflow(nn.Module):
                 )
             )
         else:
-            augmenter.add(transforms3d.FlipRot903D(probability=0.5))
+            augmenter.add(transforms3d.FlipRot903D(probability=1))
             augmenter.add(transforms3d.RotationYX3D(probability=0.5, order=1))
             augmenter.add(
                 transforms3d.GaussianNoise3D(probability=0.5, sigma=(0, 0.05))
             )
             augmenter.add(
                 transforms3d.IntensityScaleShift3D(
-                    probability=0.5, scale=(0.5, 2.0), shift=(-0.2, 0.2)
+                    probability=0.85, scale=(0.5, 2.0), shift=(-0.2, 0.2)
                 )
             )
         return augmenter
@@ -1256,8 +1260,8 @@ class Spotiflow(nn.Module):
     def optimize_threshold(
         self,
         val_ds: torch.utils.data.Dataset,
-        cutoff_distance: int = 3,
-        min_distance: int = 1,
+        cutoff_distance: int = None,
+        min_distance: int = None,
         exclude_border: bool = False,
         threshold_range: Tuple[float, float] = (0.3, 0.7),
         niter: int = 11,
@@ -1281,6 +1285,11 @@ class Spotiflow(nn.Module):
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
             subpix (Optional[bool], optional): whether to use the stereographic flow to compute subpixel localization. If None, will deduce from the model configuration. Defaults to None.
         """
+        if cutoff_distance is None:
+            cutoff_distance = 2*self.config.sigma+1
+        if min_distance is None:
+            min_distance = self.config.sigma 
+            
         val_hm_preds = []
         val_flow_preds = []
         val_gt_pts = []
