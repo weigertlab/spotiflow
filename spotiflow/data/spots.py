@@ -72,7 +72,6 @@ class SpotsDataset(Dataset):
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")
 
-
         if callable(normalizer):
             self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
 
