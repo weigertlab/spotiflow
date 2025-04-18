@@ -227,7 +227,7 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
     def __init__(
         self,
         crop_size: Union[int, Tuple[int, int], Tuple[int, int, int]] = 512,
-        smart_crop: bool = True,
+        smart_crop: Union[bool, float] = True,
         heatmap_loss_f: str = "bce",
         flow_loss_f: str = "l1",
         loss_levels: Optional[int] = None,
@@ -241,10 +241,11 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         finetuned_from: Optional[str] = None,
         early_stopping_patience: int = 0,
         crop_size_depth: int = 32,
+        optimize_threshold: bool = False,
         **kwargs,
     ):
         self.crop_size = crop_size
-        self.smart_crop = bool(smart_crop)
+        self.smart_crop = smart_crop
         self.heatmap_loss_f = heatmap_loss_f
 
         # FIXME DEPRECATED. Remove in future versions
@@ -263,6 +264,7 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         self.finetuned_from = finetuned_from
         self.early_stopping_patience = early_stopping_patience
         self.crop_size_depth = crop_size_depth # FIXME: should be done w crop_size argument
+        self.optimize_threshold = optimize_threshold
         super().__init__()
 
     def is_valid(self):

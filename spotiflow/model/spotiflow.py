@@ -422,7 +422,12 @@ class Spotiflow(nn.Module):
                 max(min(train_config.crop_size_depth, _min_crop_size_depth), _min_netw_size),
             ) + crop_size
 
-        point_priority = 0.8 if train_config.smart_crop else 0.0
+        if train_config.smart_crop is True:
+            point_priority = 0.8
+        elif train_config.smart_crop is False:
+            point_priority = 0.0
+        else: 
+            point_priority = train_config.smart_crop
         
         
         tr_augmenter = self.build_image_cropper(
@@ -444,10 +449,10 @@ class Spotiflow(nn.Module):
         val_augmenter = self.build_image_cropper(
             crop_size, point_priority=point_priority
         )
-
+        
         ActualSpotsDataset = SpotsDataset if not self.config.is_3d else Spots3DDataset
         # Generate datasets
-        train_ds = ActualSpotsDataset(
+        self.train_ds = ActualSpotsDataset(
             train_images,
             train_spots,
             augmenter=tr_augmenter,
@@ -455,7 +460,7 @@ class Spotiflow(nn.Module):
             add_class_label=not self.config.is_3d,
             **train_dataset_kwargs,
         )
-        val_ds = ActualSpotsDataset(
+        self.val_ds = ActualSpotsDataset(
             val_images,
             val_spots,
             augmenter=val_augmenter,
@@ -489,8 +494,8 @@ class Spotiflow(nn.Module):
             print(f'Using non standard logger {logger}')
 
         self.fit_dataset(
-            train_ds,
-            val_ds,
+            self.train_ds,
+            self.val_ds,
             train_config,
             accelerator=device,
             logger=logger,
@@ -958,7 +963,10 @@ class Spotiflow(nn.Module):
                 actual_n_tiles = actual_n_tiles + (1,)
             n_block_overlaps = (4, 4, 0)
             if self.config.is_3d:
-                n_block_overlaps = (4,) + n_block_overlaps
+                n_block_overlaps = (2, 2, 2, 0)
+                # n_block_overlaps = (2, 2, 2, 0)
+                
+                
             _n_tiles_progress = sum(1 for _ in tile_iterator(x, n_tiles=actual_n_tiles, block_sizes=div_by, n_block_overlaps=n_block_overlaps))
             if distributed_params is not None:
                 gpu_id = distributed_params.get("gpu_id", 0)
@@ -980,7 +988,7 @@ class Spotiflow(nn.Module):
                     block_sizes=div_by,
                     n_block_overlaps=n_block_overlaps,
                 )
-
+            
             if verbose and callable(progress_bar_wrapper):
                 iter_tiles = progress_bar_wrapper(iter_tiles, total=_n_tiles_progress)
             elif verbose:

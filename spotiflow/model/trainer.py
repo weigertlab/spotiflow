@@ -537,12 +537,13 @@ class SpotiflowModelCheckpoint(pl.callbacks.Callback):
         """
         if trainer.is_global_zero:
             # save last
-            pl_module.model.optimize_threshold(
-                val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=2 * trainer.model.model.config.sigma + 1,
-                min_distance=1,
-                exclude_border=False,
-                batch_size=1,
+            if self._train_config.optimize_threshold:
+                pl_module.model.optimize_threshold(
+                    val_ds=trainer.val_dataloaders.dataset,
+                    cutoff_distance=2 * trainer.model.model.config.sigma + 1,
+                    min_distance=1,
+                    exclude_border=False,
+                    batch_size=1,
                 subpix=trainer.model.model.config.compute_flow,
                 device=pl_module.device,
             )
@@ -551,9 +552,10 @@ class SpotiflowModelCheckpoint(pl.callbacks.Callback):
             # load best and optimize thresholds...
             device_str = remove_device_id_from_device_str(str(pl_module.device))
             pl_module.model.load(self._logdir, which="best", map_location=device_str)
-            pl_module.model.optimize_threshold(
-                val_ds=trainer.val_dataloaders.dataset,
-                cutoff_distance=2 * trainer.model.model.config.sigma + 1,
+            if self._train_config.optimize_threshold:
+                pl_module.model.optimize_threshold(
+                    val_ds=trainer.val_dataloaders.dataset,
+                    cutoff_distance=2 * trainer.model.model.config.sigma + 1,
                 min_distance=1,
                 exclude_border=False,
                 batch_size=1,
