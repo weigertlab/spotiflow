@@ -26,10 +26,23 @@ log.addHandler(console_handler)
 
 
 class Spots3DDataset(SpotsDataset):
-    """Base spot dataset class instantiated with loaded images and centers."""
+    """Base spot dataset class instantiated with loaded images and centers.
+    
+    Example:
+    
+    from spotiflow.data import Spots3DDataset
+    from spotiflow.augmentations import Pipeline, transforms3d
+
+    augmenter = transforms3d.Crop3D(probability=1, size=(128, 128, 128))
+    data = Spots3DDataset(imgs, centers, augmenter=augmenter)
+    
+    """
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
-
+        
+        if self._defer_normalization:
+            img = self._normalizer(img)
+        
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 

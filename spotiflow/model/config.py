@@ -248,6 +248,10 @@ class SpotiflowTrainingConfig(SpotiflowConfig):
         self.smart_crop = smart_crop
         self.heatmap_loss_f = heatmap_loss_f
 
+        allowed_kargs = ('loss_f',) 
+        if not all(k in allowed_kargs for k in kwargs.keys()):
+            raise ValueError(f"Invalid training config parameters: {kwargs}")
+        
         # FIXME DEPRECATED. Remove in future versions
         if (loss_f := kwargs.get("loss_f", None)) is not None:
             self.heatmap_loss_f = loss_f

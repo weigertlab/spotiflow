@@ -40,6 +40,7 @@ class SpotsDataset(Dataset):
         compute_flow: bool = False,
         image_files: Optional[Sequence[str]] = None,
         normalizer: Union[Literal["auto"], Callable, None] = "auto",
+        defer_normalization: bool = False,
         add_class_label: bool = True,
         grid: Optional[Sequence[int]] = None,
     ) -> Self:
@@ -55,6 +56,7 @@ class SpotsDataset(Dataset):
             compute_flow (bool, optional): Whether to compute flow from centers. Defaults to False.
             image_files (Optional[Sequence[str]], optional): Sequence of image filenames. If the dataset was not constructed from a folder, this will be None. Defaults to None.
             normalizer (Union[Literal["auto"], Callable, None], optional): Normalizer function. Defaults to "auto" (percentile-based normalization with p_min=1 and p_max=99.8).
+            defer_normalization (bool, optional): Whether to defer normalization to data[i] (if normalizer is not None) to save memory Defaults to False.
         """
         super().__init__()
 
@@ -65,15 +67,22 @@ class SpotsDataset(Dataset):
 
         self._centers = centers
         self._images = images
+        self._defer_normalization = defer_normalization
 
         if isinstance(normalizer, str) and normalizer == "auto":
-            normalizer = utils.normalize
+            self._normalizer = utils.normalize
+        elif normalizer is None:
+            self._normalizer = lambda x: x
+        elif callable(normalizer):
+            self._normalizer = normalizer
+        else:
+            raise ValueError("Normalizer should be callable, None or 'auto'!")
 
         if not len(centers) == len(images):
             raise ValueError("Different number of images and centers given!")
 
-        if callable(normalizer):
-            self._images = [normalizer(img) for img in tqdm(self.images, desc="Normalizing images")]
+        if not self._defer_normalization:
+            self._images = [self._normalizer(img) for img in tqdm(self._images, desc="Normalizing images")]
 
         self._compute_flow = compute_flow
         self._sigma = sigma
@@ -199,6 +208,9 @@ class SpotsDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
 
+        if self._defer_normalization:
+            img = self._normalizer(img)
+            
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 

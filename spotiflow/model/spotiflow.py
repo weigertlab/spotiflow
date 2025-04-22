@@ -378,6 +378,9 @@ class Spotiflow(nn.Module):
             train_config = SpotiflowTrainingConfig()
         elif isinstance(train_config, dict):
             train_config = SpotiflowTrainingConfig(**train_config)
+        else:
+            raise ValueError(f"Invalid training config: {train_config}")
+        
         log.info(f"Training config is: {train_config}")
 
         # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
@@ -795,7 +798,9 @@ class Spotiflow(nn.Module):
             n_tiles = infer_n_tiles(
                 img.shape[:-1], max_tile_size, device=next(self.parameters()).device
             )
-
+        else: 
+            n_tiles = tuple(n_tiles)
+            
         if verbose:
             log.info(f"Predicting with {n_tiles} tiles")
 

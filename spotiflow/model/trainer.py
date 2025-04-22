@@ -521,6 +521,9 @@ class SpotiflowModelCheckpoint(pl.callbacks.Callback):
             pl_module (pl.LightningModule): lightning module object.
         """
         if trainer.is_global_zero and not trainer.sanity_checking:
+            # log learning rate
+            lr = trainer.optimizers[0].param_groups[0]['lr']
+            trainer.logger.log_metrics({'learning_rate': lr}, step=trainer.global_step)
             value = trainer.logged_metrics[self._monitor]
             if value < self._best:
                 self._best = value
