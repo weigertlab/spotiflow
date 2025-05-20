@@ -425,7 +425,6 @@ class SpotiflowTrainingWrapper(pl.LightningModule):
                 threshold=1e-4,
                 min_lr=3e-6,
                 cooldown=5,
-                verbose=True,
             )
             out["lr_scheduler"] = {
                 "scheduler": scheduler,
