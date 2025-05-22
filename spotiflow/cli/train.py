@@ -16,7 +16,6 @@ from ..utils import read_coords_csv, read_coords_csv3d, str2bool
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
-logging.basicConfig(level=logging.INFO)
 
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.INFO)
@@ -309,13 +308,13 @@ def main():
         val_spots,
         save_dir=args.outdir,
         device=args.device,
-        logger=args.logger,
+        logger=args.logger if args.logger != "none" else None,
         logging_name=args.logging_name,
         augment_train=args.augment,
         train_config={
             "batch_size": args.batch_size,
             "crop_size": args.crop_size,
-            "crop_size_z": args.crop_size_z,
+            "crop_size_depth": args.crop_size_z,
             "lr": args.lr,
             "num_epochs": args.num_epochs,
             "pos_weight": args.pos_weight,

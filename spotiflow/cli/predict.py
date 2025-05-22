@@ -210,9 +210,6 @@ def main():
     # Get arguments from command line
     args = get_args()
 
-    if args.verbose:
-        logging.basicConfig(level=logging.INFO)
-
     log.info(f"Spotiflow - version {__version__}")
 
     # Choose prediction method from_folder or from_pretrained
@@ -221,6 +218,18 @@ def main():
         log.info("Given local model loaded.")
     else:
         model = Spotiflow.from_pretrained(args.pretrained_model)
+
+
+    if model.config.in_channels > 1 and args.estimate_params:
+        raise ValueError(
+            "Estimating parameters is only supported for single-channel input models. Please set --estimate-params to False."
+        )
+
+
+    if model.config.in_channels > 1:
+        log.warning(
+            "The loaded model is multi-channel. Spot intensities will not be output."
+        )
 
     # Try to compile model
     try:
@@ -278,7 +287,7 @@ def main():
         images.append(img)
 
     for img, fname in tqdm(
-        zip(images, image_files), desc="Predicting", total=len(images)
+        zip(images, image_files), desc="Predicting", total=len(images), unit="img"
     ):
         if args.n_tiles is None:
             n_tiles = infer_n_tiles(
@@ -311,7 +320,8 @@ def main():
         if spots.shape[1] == 3:
             csv_columns = ("z",) + csv_columns
         df = pd.DataFrame(np.round(spots, 4), columns=csv_columns)
-        df["intensity"] = np.round(details.intens, 2)
+        if model.config.in_channels == 1:
+            df["intensity"] = np.round(details.intens, 2)
         df["probability"] = np.round(details.prob, 3)
         if args.estimate_params:
             df['fwhm'] = np.round(details.fit_params.fwhm, 3)
