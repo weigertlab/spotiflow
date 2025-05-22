@@ -758,6 +758,11 @@ class Spotiflow(nn.Module):
                 "Predicting with multiple channels is not supported yet."
             )
 
+        if self.config.in_channels > 1 and fit_params:
+            raise ValueError(
+                "fit_params is not yet supported for multi-channel inputs. Please disable by setting 'fit_params=False'."
+            )
+
         skip_details = isinstance(
             img, da.Array
         )  # Avoid computing details for non-NumPy inputs, which are assumed to be large

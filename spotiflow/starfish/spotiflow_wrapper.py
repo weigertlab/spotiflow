@@ -74,18 +74,23 @@ import logging
 import sys
 from functools import partial
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import torch
-from tqdm.auto import tqdm
 
 from ..model import Spotiflow
-from ..utils import NotRegisteredError, normalize
+from ..utils import NotRegisteredError
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+console_handler.setFormatter(formatter)
+log.addHandler(console_handler)
+
 
 try:
     from starfish.core.imagestack.imagestack import ImageStack
