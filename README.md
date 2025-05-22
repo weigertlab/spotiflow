@@ -44,14 +44,14 @@ Finally, install `spotiflow`:
 pip install spotiflow
 ```
 
-## Installation (conda, CPU only)
+## Installation (conda)
 For Linux/MacOS users, you can also install Spotiflow using conda through the `conda-forge` channel:
 
 ```console
 conda install -c conda-forge spotiflow
 ```
 
-The conda package is, for now, not CUDA-compatible. We recommend using `pip` to install Spotiflow if available.
+Note that the `conda-forge` Spotiflow version might be outdated w.r.t. the version in `pip`. We recommend using `pip` to install Spotiflow if available.
 
 ## Usage
 
