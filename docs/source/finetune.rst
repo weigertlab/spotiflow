@@ -9,19 +9,19 @@ See :ref:`train:Data format`.
 Fine-tuning (CLI)
 ^^^^^^^^^^^^^^^^^
 
-You can fine-tune from an existing model by simply adding an argument to the CLI call. See :ref:`train:Basic training (CLI)` for more information.
+You can easily fine-tune from an existing model by simply adding an argument to the CLI call. See :ref:`train:Basic training (CLI)` for more information.
 
 .. code-block:: console
 
-    spotiflow-train /path/to/spots_data -o /my/trained/model --finetune-from general
+    spotiflow-train /path/to/spots_data -o /path/to/my_finetuned_model --finetune-from general
 
-where `/path/to/pretrained/model` is the path to the directory containing the model you want to fine-tune. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
+where `/path/to/my_finetuned_model` is the path to the directory containing the model you want to fine-tune. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, please refer to the help message of the CLI (simply run ``spotiflow-train -h`` in your command line).
 
 
 Fine-tuning (API)
 ^^^^^^^^^^^^^^^^^
 
-Finetuning a pre-trained model on a custom dataset is very easy. You can load the model very similarly to what you would normally do to predict on new images (you only need to add one extra parameter!):
+In order to fine-tune a pre-trained model on a custom dataset using the API, you can simply load the model very similarly to what you would normally do to predict on new images (you only need to add one extra parameter!):
 
 .. code-block:: python
 
@@ -43,7 +43,7 @@ Finetuning a pre-trained model on a custom dataset is very easy. You can load th
         train_spots,
         val_imgs,
         val_spots,
-        save_dir="/my/trained/model",
+        save_dir="/path/to/my_finetuned_model",
     )
 
 Of course, you can also fine-tune from a model you have trained before. In that case, use the ``from_folder()`` method instead of ``from_pretrained()`` (see :ref:`index:Predicting spots in an image`).

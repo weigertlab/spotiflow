@@ -50,9 +50,9 @@ You can train a model using the CLI as follows:
 
 .. code-block:: console
 
-    spotiflow-train /path/to/spots_data -o /my/trained/model
+    spotiflow-train /path/to/spots_data -o /path/to/my_trained_model
 
-where `/path/to/spots_data` is the path to the directory containing the data in the format described above and `/my/trained/model` is the directory where the trained model will be saved. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
+where `/path/to/spots_data` is the path to the directory containing the data in the format described above and `/path/to/my_trained_model` is the directory where the trained model will be saved. You can also pass other parameters to the training, such as the number of epochs, the learning rate, etc. For more information on the arguments allowed, see the documentation of the CLI command:
 
 .. code-block:: console
 
@@ -67,7 +67,7 @@ To illustrate with an example, to train a Spotiflow model on 2-channel 3D data f
 Basic training (API)
 ^^^^^^^^^^^^^^^^^^^^
 
-You can easily train a model using the default settings as follows and save it to the directory `/my/trained/model`:
+You can easily train a model using the default settings as follows and save it to the directory `/path/to/my_trained_model`:
 
 .. code-block:: python
 
@@ -86,7 +86,7 @@ You can easily train a model using the default settings as follows and save it t
         train_spots,
         val_imgs,
         val_spots,
-        save_dir="/my/trained/model",
+        save_dir="/path/to/my_trained_model",
     )
 
 You can then load it by simply calling:
@@ -95,8 +95,13 @@ You can then load it by simply calling:
 
     model = Spotiflow.from_folder("/my/trained/model")
 
+Or using the CLI command:
+.. code-block:: console
 
-In the 3D case, you should initialize a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and pass it to the `Spotiflow` constructor with the appropriate parameter set (see other options for the configuration at the end of the section):
+    spotiflow-predict PATH --model-dir /path/to/my_trained_model ...
+
+
+Note that in order to train a 3D model using the API, you should initialize a :py:mod:`spotiflow.model.config.SpotiflowModelConfig` object and pass it to the `Spotiflow` constructor with the appropriate parameter set (see other options for the configuration at the end of the section):
 
 .. code-block:: python
 
@@ -133,7 +138,7 @@ You can also pass other parameters relevant for training to the `fit` method. Fo
         train_spots,
         val_imgs,
         val_spots,
-        save_dir="/my/trained/model",
+        save_dir="/path/to/my_trained_model",
         train_config=train_config,
         # other parameters
     )

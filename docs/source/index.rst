@@ -9,25 +9,24 @@ Spotiflow is a learning-based subpixel-accurate spot detection method for 2D and
 Getting Started
 ---------------
 
-Installation
-~~~~~~~~~~~~
+Installation (pip)
+~~~~~~~~~~~~~~~~~~
 
 
-First, create and activate a fresh ``conda`` environment (we currently support Python 3.9 to 3.12). If you don't have ``conda`` installed, we recommend using `miniforge <https://github.com/conda-forge/miniforge>`__.
+First, create and activate a fresh ``conda`` environment (we currently support Python 3.9 to 3.13). If you don't have ``conda`` installed, we recommend using `miniforge <https://github.com/conda-forge/miniforge>`__.
 
 .. code-block:: console
 
    $ conda create -n spotiflow python=3.12
    $ conda activate spotiflow
 
-**Note (for MacOS users):** if using MacOS, there is a known bug causing the installation of PyTorch with conda to sometimes break OpenMP. You can avoid installing PyTorch with ``conda`` and let install it automatically via pip instead.
-Then, install Pytorch using ``conda``/ ``mamba``. Please follow the `official instructions for your system <https://pytorch.org/get-started/locally>`__.
-
-As an example, for a Linux system with CUDA (note that you should change the CUDA version to match the one installed on your system):
+Then, install PyTorch using ``pip``:
 
 .. code-block:: console
 
-   $ conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia
+   $ pip install torch
+
+**Note (for Linux/Windows users with a CUDA-capable GPU)**: one might need to change the torch installation command depending on the CUDA version. Please refer to the `PyTorch website <https://pytorch.org/get-started/locally/>` for more information.
 
 **Note (for Windows users):** if using Windows, if using Windows, please install the latest `Build Tools for Visual Studio <https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022>`__ (make sure to select the C++ build tools during installation) before proceeding to install Spotiflow.
 
@@ -36,6 +35,16 @@ Finally, install ``spotiflow`` using ``pip``:
 .. code-block:: console
 
    $ pip install spotiflow
+
+
+Installation (conda)
+~~~~~~~~~~~~~~~~~~~~
+
+For Linux/MacOS users, you can also install Spotiflow using ``conda`` through the ``conda-forge``. For directly creating a fresh environment with Spotiflow named ``spotiflow``, you can use the following command:
+
+.. code-block:: console
+
+   $ conda create -n spotiflow -c conda-forge spotiflow python=3.12
 
 Predicting spots in an image
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,7 +76,7 @@ The snippet below shows how to retrieve the spots from an image using one of the
    # Save the results to a CSV file
    write_coords_csv(spots, "/path/to/save/spots.csv")
 
-If a custom model is used, simply change the model loadings step to:
+If a custom model needs to be used, simply change the model loading step to:
 
 .. code-block:: python
 
@@ -80,9 +89,9 @@ You can use the CLI to run inference on an image or folder containing several im
 
 .. code-block:: console
 
-   $ spotiflow predict --input PATH
+   $ spotiflow-predict PATH
 
-where ``PATH`` can be either an image or a folder. By default, the command will use the ``general`` pretrained model. You can specify a different model by using the ``--pretrained-model`` flag. Moreover, spots are saved to a subfolder ``spotiflow_results`` created inside the input folder (this can be changed with the ``--out-dir`` flag). For more information, please refer to the help message of the CLI (``spotiflow-predict -h``).
+where ``PATH`` can be either point to an image file or to a folder containing different files. By default, the command will use the ``general`` pretrained model. You can specify a different model by using the ``--pretrained-model`` flag for the pre-trained models we offer or ``--model-dir`` if you want to use a custom model. After running, the detected spots are by default saved to a subfolder ``spotiflow_results`` created inside the input folder (this can be changed with the ``--out-dir`` flag). For more information, please refer to the help message of the CLI (simply run ``spotiflow-predict -h`` on your command line).
 
 Napari plugin
 ^^^^^^^^^^^^^
@@ -94,6 +103,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   installation
    napari
    cli
    pretrained
