@@ -99,10 +99,11 @@ class SpotsDataset(Dataset):
                 p for p in augmenter.augmentations if isinstance(p, _crop_cls)
             )[0]
             crop_size = _cropper.size
-            if any(np.any(np.asarray(img.shape) < np.asarray(crop_size)) for img in self._images):
+            _n_dims = 2 if type(self) is SpotsDataset else 3
+            if any(np.any(np.asarray(img.shape)[:_n_dims] < np.asarray(crop_size)) for img in self._images):
                 log.warning(f"Some images are smaller than the crop size ({crop_size}). Will center pad with zeros.")
                 for i in range(len(self._images)):
-                    if np.any(np.asarray(self._images[i].shape) < np.asarray(crop_size)):
+                    if np.any(np.asarray(self._images[i].shape)[:_n_dims] < np.asarray(crop_size)):
                         _padded_img, _padding = utils.center_pad(self._images[i], crop_size, mode="constant", allow_larger=True)
                         self._images[i] = _padded_img
                         self._centers[i][:, :len(_padding)] += np.array([p[0] for p in _padding])

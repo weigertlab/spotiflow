@@ -378,9 +378,11 @@ class Spotiflow(nn.Module):
             train_config = SpotiflowTrainingConfig()
         elif isinstance(train_config, dict):
             train_config = SpotiflowTrainingConfig(**train_config)
+        elif isinstance(train_config, SpotiflowTrainingConfig):
+            train_config = deepcopy(train_config)
         else:
             raise ValueError(f"Invalid training config: {train_config}")
-        
+
         log.info(f"Training config is: {train_config}")
 
         # Avoid non consistent compute_flow/downsample_factors arguments (use the model instance values instead)
@@ -1137,20 +1139,24 @@ class Spotiflow(nn.Module):
         if verbose:
             log.info(f"Found {len(pts)} spots")
 
-        # Retrieve intensity of the spots
-        if (
-            subpix_radius < 0
-        ):  # no need to interpolate if subpixel precision is not used
-            intens = img[tuple(pts.astype(int).T)]
+
+        if not skip_details:
+            # Retrieve intensity of the spots
+            if (
+                subpix_radius < 0
+            ):  # no need to interpolate if subpixel precision is not used
+                intens = img[tuple(pts.astype(int).T)]
+            else:
+                try:
+                    _interp_fun = spline_interp_points_2d if not self.config.is_3d else spline_interp_points_3d
+                    intens = _interp_fun(img, pts)
+                except Exception as _:
+                    log.warning(
+                        "Spline interpolation failed to retrieve spot intensities. Will use nearest neighbour interpolation instead."
+                    )
+                    intens = img[tuple(pts.round().astype(int).T)]
         else:
-            try:
-                _interp_fun = spline_interp_points_2d if not self.config.is_3d else spline_interp_points_3d
-                intens = _interp_fun(img, pts)
-            except Exception as _:
-                log.warning(
-                    "Spline interpolation failed to retrieve spot intensities. Will use nearest neighbour interpolation instead."
-                )
-                intens = img[tuple(pts.round().astype(int).T)]
+            intens = None
         details = SimpleNamespace(
             prob=probs, heatmap=y, subpix=_subpix, flow=flow, intens=intens,
             fit_params=fit_params
