@@ -37,9 +37,9 @@ authors:
     given-names: Martin
 title: 'Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression'
 version: 1.0.0
-url: https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426
-doi: 10.1101/2024.02.01.578426
-date-released: '2024-02-02'
+url: https://doi.org/10.1038/s41592-025-02662-x
+doi: 10.1038/s41592-025-02662-x
+date-released: 2025-06-06
 preferred-citation:
   authors:
     - family-names: Dominguez Mantes
@@ -77,10 +77,7 @@ preferred-citation:
     - family-names: Weigert
       given-names: Martin
   title: 'Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression'
-  doi: 10.1101/2024.02.01.578426
-  url: https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426
-  type: article-journal
-  year: '2024'
-  conference: {}
-  publisher:
-    name: Cold Spring Harbor Laboratory
+  doi: 10.1038/s41592-025-02662-x
+  url: https://doi.org/10.1038/s41592-025-02662-x
+  journal: Nature Methods
+  year: 2025
