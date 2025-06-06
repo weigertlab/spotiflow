@@ -1,20 +1,20 @@
+import logging
+import sys
+from itertools import chain
 from pathlib import Path
 from typing import Callable, Dict, Literal, Optional, Sequence, Union
-from typing_extensions import Self
-from tqdm.auto import tqdm
 
-from skimage import io
-import logging
 import numpy as np
-import sys
-import torch
-import tifffile
-from itertools import chain
 import pandas as pd
+import tifffile
+import torch
+from skimage import io
+from tqdm.auto import tqdm
+from typing_extensions import Self
 
-from .spots import SpotsDataset
 from .. import utils
 from ..augmentations import transforms3d
+from .spots import SpotsDataset
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -27,7 +27,9 @@ log.addHandler(console_handler)
 
 
 class Spots3DDataset(SpotsDataset):
-    """Base spot dataset class instantiated with loaded images and centers.
+    """3D spot dataset class instantiated with loaded images and centers.
+
+    For multi-channel images, DHWC (ZYXC) format is expected, but they will be converted to CDHW (CZYX) patches.
 
     Example:
 
@@ -37,30 +39,44 @@ class Spots3DDataset(SpotsDataset):
     augmenter = transforms3d.Crop3D(probability=1, size=(128, 128, 128))
     data = Spots3DDataset(imgs, centers, augmenter=augmenter)
     """
+
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
 
         if self._defer_normalization:
             img = self._normalizer(img)
 
-        img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
-        centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
+        # Add B (batch) dimension
+        img = torch.from_numpy(img.copy()).unsqueeze(0)
+        centers = torch.from_numpy(centers.copy()).unsqueeze(0)
 
-        assert img.ndim in (4, 5)  # Images should be in BCDWH or BDHW format
-        if img.ndim == 4:
-            img = img.unsqueeze(1) # Add C dimension
+        if img.ndim == 4:  # i.e. BDHW, then add C (channel) dimension to BDHW format
+            img = img.unsqueeze(1)
+        elif img.ndim == 5:  # i.e. BDHWC, then turn BDWHC format into BCDHW
+            img = torch.moveaxis(img, -1, 1)
+        else:
+            raise ValueError(
+                f"Image tensor must be 4D (BDHW) or 5D (BDHWC) for {self.__class__.__name__}, got {img.ndim}D."
+            )
 
-        img, centers = self.augmenter(img, centers)
-        img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B dimension
+        img, centers = self.augmenter(img, centers)  # augmenter expects BCDHW format
+        img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B (batch) dimension
 
         if self._compute_flow:
             flow = utils.points_to_flow3d(
-                centers.numpy(), img.shape[-3:], sigma=self._sigma, grid=self._grid,
+                centers.numpy(),
+                img.shape[-3:],
+                sigma=self._sigma,
+                grid=self._grid,
             ).transpose((3, 0, 1, 2))
             flow = torch.from_numpy(flow).float()
 
         heatmap_lv0 = utils.points_to_prob3d(
-            centers.numpy(), img.shape[-3:], mode=self._mode, sigma=self._sigma, grid=self._grid,
+            centers.numpy(),
+            img.shape[-3:],
+            mode=self._mode,
+            sigma=self._sigma,
+            grid=self._grid,
         )
 
         # Build target at different resolution levels
@@ -99,7 +115,7 @@ class Spots3DDataset(SpotsDataset):
         """
         return 3
 
-    #FIXME: duplicated code, should be gone when class labels are allowed in 3D
+    # FIXME: duplicated code, should be gone when class labels are allowed in 3D
     @classmethod
     def from_folder(
         cls,
@@ -157,7 +173,6 @@ class Spots3DDataset(SpotsDataset):
                 f"Different number of images and centers found! {len(image_files)} images, {len(center_files)} centers."
             )
 
-
         images = [io.imread(img) for img in tqdm(image_files, desc="Loading images")]
 
         centers = [
@@ -179,7 +194,6 @@ class Spots3DDataset(SpotsDataset):
             grid=grid,
         )
 
-
     def save(self, path, prefix="img_"):
         path = Path(path)
         path.mkdir(exist_ok=True, parents=True)
@@ -187,4 +201,6 @@ class Spots3DDataset(SpotsDataset):
             enumerate(zip(self.images, self._centers)), desc="Saving", total=len(self)
         ):
             tifffile.imwrite(path / f"{prefix}{i:05d}.tif", x)
-            pd.DataFrame(y, columns=("Z", "Y", "X")).to_csv(path / f"{prefix}{i:05d}.csv")
+            pd.DataFrame(y, columns=("Z", "Y", "X")).to_csv(
+                path / f"{prefix}{i:05d}.csv"
+            )
