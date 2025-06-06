@@ -12,7 +12,7 @@
 
 # Spotiflow - accurate and efficient spot detection with stereographic flow
 
-*Spotiflow* is a deep learning-based, threshold-agnostic, subpixel-accurate 2D and 3D spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images and volumes. A more detailed description of the method can be found in [our paper](https://doi.org/10.1101/2024.02.01.578426).
+*Spotiflow* is a deep learning-based, threshold-agnostic, subpixel-accurate 2D and 3D spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images and volumes. A more detailed description of the method can be found in [the publication](https://doi.org/10.1038/s41592-025-02662-x) and [the preprint](https://doi.org/10.1101/2024.02.01.578426).
 
 ![Overview](artwork/overview.png)
 
@@ -141,7 +141,7 @@ The default cache directory root folder (where pre-trained models and datasets a
 
 ## Starfish integration
 
-Spotiflow can be seamlessly integrated in existing Starfish pipelines using our ```spotiflow.starfish.SpotiflowDetector``` as a spot detection method instead of the BlobDetection classes shipped with Starfish, requiring minimal code changes apart from the addition of Spotiflow to the existing environment where Starfish is installed. For an example, please refer to [the provided script](extra/run_starfish_spotiflow.py).
+Spotiflow can be seamlessly integrated in existing Starfish pipelines using our ```spotiflow.starfish.SpotiflowDetector``` as a spot detection method instead of the `BlobDetection` classes shipped with Starfish, requiring minimal code changes apart from the addition of Spotiflow to the existing environment where Starfish is installed. For an example, please refer to [the provided script](extra/run_starfish_spotiflow.py).
 
 ## For developers
 
@@ -182,18 +182,16 @@ sphinx-build -M html source build
 ```
 
 ## How to cite
-If you use this code in your research, please cite [the Spotiflow paper](https://doi.org/10.1101/2024.02.01.578426) (currently preprint):
+If you use this code in your research, please cite [the Spotiflow publication](https://doi.org/10.1038/s41592-025-02662-x):
 
 ```bibtex
-@article {dominguezmantes24,
-	author = {Dominguez Mantes, Albert and Herrera, Antonio and Khven, Irina and Schlaeppi, Anjalie and Kyriacou, Eftychia and Tsissios, Georgios and Skoufa, Evangelia and Santangeli, Luca and Buglakova, Elena and Durmus, Emine Berna and Manley, Suliana and Kreshuk, Anna and Arendt, Detlev and Aztekin, Can and Lingner, Joachim and La Manno, Gioele and Weigert, Martin},
-	title = {Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression},
-	elocation-id = {2024.02.01.578426},
-	year = {2024},
-	doi = {10.1101/2024.02.01.578426},
-	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426},
-	eprint = {https://www.biorxiv.org/content/early/2024/02/05/2024.02.01.578426.full.pdf},
-	journal = {bioRxiv}
+@article{dominguezmantes25,
+    title = {Spotiflow: accurate and efficient spot detection for fluorescence microscopy with deep stereographic flow regression},
+    author = {Dominguez Mantes, Albert and Herrera, Antonio and Khven, Irina and Schlaeppi, Anjalie and Kyriacou, Eftychia and Tsissios, Georgios and Skoufa, Evangelia and Santangeli, Luca and Buglakova, Elena and Durmus, Emine Berna and Manley, Suliana and Kreshuk, Anna and Arendt, Detlev and Aztekin, Can and Lingner, Joachim and La Manno, Gioele and Weigert, Martin},
+    year = {2025},
+    journal = {Nature Methods},
+    isbn = {1548-7105},
+    doi = {10.1038/s41592-025-02662-x},
+    url = {https://doi.org/10.1038/s41592-025-02662-x},
 }
 ```
