@@ -14,6 +14,7 @@ import pandas as pd
 
 from .spots import SpotsDataset
 from .. import utils
+from ..augmentations import transforms3d
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -27,22 +28,21 @@ log.addHandler(console_handler)
 
 class Spots3DDataset(SpotsDataset):
     """Base spot dataset class instantiated with loaded images and centers.
-    
+
     Example:
-    
+
     from spotiflow.data import Spots3DDataset
     from spotiflow.augmentations import Pipeline, transforms3d
 
     augmenter = transforms3d.Crop3D(probability=1, size=(128, 128, 128))
     data = Spots3DDataset(imgs, centers, augmenter=augmenter)
-    
     """
     def __getitem__(self, idx: int) -> Dict:
         img, centers = self.images[idx], self._centers[idx]
-        
+
         if self._defer_normalization:
             img = self._normalizer(img)
-        
+
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
@@ -58,7 +58,6 @@ class Spots3DDataset(SpotsDataset):
                 centers.numpy(), img.shape[-3:], sigma=self._sigma, grid=self._grid,
             ).transpose((3, 0, 1, 2))
             flow = torch.from_numpy(flow).float()
-
 
         heatmap_lv0 = utils.points_to_prob3d(
             centers.numpy(), img.shape[-3:], mode=self._mode, sigma=self._sigma, grid=self._grid,
@@ -83,6 +82,22 @@ class Spots3DDataset(SpotsDataset):
             }
         )
         return ret_obj
+
+    def _get_crop_class(self):
+        """Return the appropriate crop class for this dataset.
+
+        Returns:
+            Type: The crop class for this dataset type (3D).
+        """
+        return transforms3d.Crop3D
+
+    def _get_n_dimensions(self):
+        """Return the number of spatial dimensions for this dataset.
+
+        Returns:
+            int: The number of spatial dimensions (3 for 3D dataset).
+        """
+        return 3
 
     #FIXME: duplicated code, should be gone when class labels are allowed in 3D
     @classmethod

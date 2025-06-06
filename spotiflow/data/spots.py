@@ -14,7 +14,7 @@ from itertools import chain
 import pandas as pd
 
 from .. import utils
-from ..augmentations import Pipeline as AugmentationPipeline, transforms, transforms3d
+from ..augmentations import Pipeline as AugmentationPipeline, transforms
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -91,7 +91,7 @@ class SpotsDataset(Dataset):
             augmenter if augmenter is not None else lambda img, pts: (img, pts)
         )
         if augmenter is not None and isinstance(augmenter, AugmentationPipeline):
-            _crop_cls = transforms.Crop if type(self) is SpotsDataset else transforms3d.Crop3D
+            _crop_cls = self._get_crop_class()
             assert any(
                 isinstance(p, _crop_cls) for p in augmenter.augmentations
             ), "Custom augmenter must contain a cropping transform!"
@@ -99,12 +99,13 @@ class SpotsDataset(Dataset):
                 p for p in augmenter.augmentations if isinstance(p, _crop_cls)
             )[0]
             crop_size = _cropper.size
-            _n_dims = 2 if type(self) is SpotsDataset else 3
+            _n_dims = self._get_n_dimensions()
             if any(np.any(np.asarray(img.shape)[:_n_dims] < np.asarray(crop_size)) for img in self._images):
                 log.warning(f"Some images are smaller than the crop size ({crop_size}). Will center pad with zeros.")
-                for i in range(len(self._images)):
-                    if np.any(np.asarray(self._images[i].shape)[:_n_dims] < np.asarray(crop_size)):
-                        _padded_img, _padding = utils.center_pad(self._images[i], crop_size, mode="constant", allow_larger=True)
+                for i, img in enumerate(self._images):
+                    print(img.shape, _n_dims, crop_size)
+                    if np.any(np.asarray(img.shape)[:_n_dims] < np.asarray(crop_size)):
+                        _padded_img, _padding = utils.center_pad(img, crop_size, mode="constant", allow_larger=True)
                         self._images[i] = _padded_img
                         self._centers[i][:, :len(_padding)] += np.array([p[0] for p in _padding])
 
@@ -153,7 +154,7 @@ class SpotsDataset(Dataset):
             compute_flow (bool, optional): Whether to compute flow from centers. Defaults to False.
             normalizer (Optional[Union[Callable, Literal["auto"]]], optional): Normalizer function. Defaults to "auto" (percentile-based normalization with p_min=1 and p_max=99.8).
             random_state (Optional[int], optional): Random state used when shuffling file names when "max_files" is not None. Defaults to None.
-        
+
         Returns:
             Self: Dataset instance.
         """
@@ -211,7 +212,7 @@ class SpotsDataset(Dataset):
 
         if self._defer_normalization:
             img = self._normalizer(img)
-            
+
         img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
         centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
 
@@ -286,7 +287,7 @@ class SpotsDataset(Dataset):
             Sequence[np.ndarray]: Sequence of center coordinates.
         """
         return self._centers
-    
+
     @property
     def images(self) -> Sequence[np.ndarray]:
         """Return images in dataset.
@@ -295,7 +296,7 @@ class SpotsDataset(Dataset):
             Sequence[np.ndarray]: Sequence of images.
         """
         return self._images
-    
+
     @property
     def n_classes(self) -> int:
         """Return number of classes in the dataset.
@@ -322,6 +323,22 @@ class SpotsDataset(Dataset):
         ):
             tifffile.imwrite(path / f"{prefix}{i:05d}.tif", x)
             pd.DataFrame(y, columns=("Y", "X")).to_csv(path / f"{prefix}{i:05d}.csv")
+
+    def _get_crop_class(self):
+        """Return the appropriate crop class for this dataset.
+
+        Returns:
+            Type: The crop class for this dataset type (2D).
+        """
+        return transforms.Crop
+
+    def _get_n_dimensions(self):
+        """Return the number of spatial dimensions for this dataset.
+
+        Returns:
+            int: The number of spatial dimensions (2 for 2D dataset).
+        """
+        return 2
 
 
 def collate_spots(batch):
