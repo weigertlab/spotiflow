@@ -27,7 +27,9 @@ log.addHandler(console_handler)
 
 
 class Spots3DDataset(SpotsDataset):
-    """Base spot dataset class instantiated with loaded images and centers.
+    """3D spot dataset class instantiated with loaded images and centers.
+
+    For multi-channel images, DHWC (ZYXC) format is expected, but they will be converted to CDHW (CZYX) patches.
 
     Example:
 
@@ -43,15 +45,17 @@ class Spots3DDataset(SpotsDataset):
         if self._defer_normalization:
             img = self._normalizer(img)
 
-        img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B dimension
-        centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B dimension
+        img = torch.from_numpy(img.copy()).unsqueeze(0)  # Add B (batch) dimension
+        centers = torch.from_numpy(centers.copy()).unsqueeze(0)  # Add B (batch) dimension
 
-        assert img.ndim in (4, 5)  # Images should be in BCDWH or BDHW format
-        if img.ndim == 4:
-            img = img.unsqueeze(1) # Add C dimension
+        assert img.ndim in (4, 5), "Image tensor must be 4D (BDHW) or 5D (BDHWC)."
+        if img.ndim == 4:  # i.e. BDHW, then add C (channel) dimension to BDHW format
+            img = img.unsqueeze(1)
+        if img.ndim == 5:  # i.e. BDHWC, then turn BDWHC format into BCDHW
+            img = torch.moveaxis(img, -1, 1)
 
-        img, centers = self.augmenter(img, centers)
-        img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B dimension
+        img, centers = self.augmenter(img, centers)  # augmenter expects BCDHW format
+        img, centers = img.squeeze(0), centers.squeeze(0)  # Remove B (batch) dimension
 
         if self._compute_flow:
             flow = utils.points_to_flow3d(

@@ -49,6 +49,8 @@ class FlipRot903D(BaseAugmentation):
 
     def apply(self, img: torch.Tensor, pts: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Applies FlipRot90 augmentation to the given image and points.
+
+        Assuming the last three dimensions of the image tensor are spatial dimensions (z, y, x).
         """
         # Randomly choose the spatial axis/axes to flip
         combs = tuple(_subgroup_flips(img.ndim, axis=(-3, -2, -1)))
