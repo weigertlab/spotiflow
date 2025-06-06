@@ -3,7 +3,7 @@ import numpy as np
 from spotiflow.utils import points_to_prob, estimate_params
 from spotiflow.model import Spotiflow
 
-def test_fit2d():
+def test_fit2d(return_results: bool=False):
     np.random.seed(42)
     
     n_points=64
@@ -15,10 +15,11 @@ def test_fit2d():
     x += .2+0.05*np.random.normal(0, 1, x.shape)
     
     params = estimate_params(x, points)
-    
-    return x, sigmas, params
+    assert params is not None
+    if return_results:
+        return x, sigmas, params
 
-def test_fit3d():
+def test_fit3d(return_results: bool=False):
 
     np.random.seed(42)
     ndim=3 
@@ -32,12 +33,14 @@ def test_fit3d():
     x += .2+0.05*np.random.normal(0, 1, x.shape)
     
     params = estimate_params(x, points)
-    return x, sigmas, params
+    assert params is not None
+    if return_results:
+        return x, sigmas, params
         
 if __name__ == "__main__":
     
     
-    x, sigmas, params = test_fit3d()
+    x, sigmas, params = test_fit3d(return_results=True)
 
     
     model = Spotiflow.from_pretrained("synth_3d")

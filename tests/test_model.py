@@ -1,15 +1,14 @@
 from spotiflow.model import Spotiflow
 from spotiflow.utils import points_matching, points_to_flow, flow_to_vector
-from spotiflow.sample_data import test_image_hybiss_2d
+from spotiflow.sample_data import test_image_hybiss_2d as _sample_image
 from utils import example_data
 
 
 def test_model():
     model = Spotiflow.from_pretrained("hybiss", map_location="cpu")
-    x = test_image_hybiss_2d()
+    x = _sample_image()
     points, _ = model.predict(x, device="cpu")
-    return x, points
-
+    
 
 def test_flow():
     X, P = example_data(64, sigma=3, noise=0.01)
