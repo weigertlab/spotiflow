@@ -24,7 +24,7 @@ def _affine_rotation_matrix(phi:float, center:tuple[float]) -> torch.Tensor:
     ])
 
     si, co = math.sin(phi), math.cos(phi)
-    
+
     rot_matrix_yx = torch.FloatTensor([
         [1., 0., 0., 0.],
         [0., co, si, 0.],
@@ -38,6 +38,8 @@ def _affine_rotation_matrix(phi:float, center:tuple[float]) -> torch.Tensor:
 class RotationYX3D(BaseAugmentation):
     def __init__(self, order: Literal[0, 1]=1, angle: Optional[Number] = (-180,180), probability: float=1.0) -> None:
         """Augmentation class for random rotations (YX plane).
+
+        Assuming the last three dimensions of the image tensor are spatial dimensions (z, y, x).
 
         Args:
             probability (float): probability of applying the augmentation. Must be in [0, 1].
@@ -72,7 +74,7 @@ class RotationYX3D(BaseAugmentation):
 
         # Rotate image
         assert img.ndim < 5 or img.shape[0] == 1, "Leading axis dimensionality should be 1 for volumetric data"
-        
+
         if should_unsqueeze := (img.ndim == 5):
             img = img.squeeze(0)
         img_r = tvf.rotate(img, phi_deg, interpolation=self._interp_mode)
@@ -83,7 +85,7 @@ class RotationYX3D(BaseAugmentation):
         # Generate affine transformation matrix
         y, x = img.shape[-2:]
         center_z, center_y, center_x = 0, (y-1)/2, (x-1)/2
-        
+
         affine_mat = _affine_rotation_matrix(-phi_rad, (center_z, center_y, center_x)).to(img.device)
         # Rotate points
         affine_coords = torch.cat([pts.float(), torch.ones((*pts.shape[:-1],1), device=img.device)], axis=-1) # Euclidean -> homogeneous coordinates
@@ -93,7 +95,7 @@ class RotationYX3D(BaseAugmentation):
         idxs_in = _filter_points_idx(pts_r, img_r.shape[-3:])
 
         return img_r, pts_r[idxs_in].view(*pts.shape[:-2], -1, pts.shape[-1])
-    
+
     def _sample_angle(self):
         return torch.FloatTensor(1).uniform_(*self._angle).item()
 
