@@ -103,7 +103,6 @@ class SpotsDataset(Dataset):
             if any(np.any(np.asarray(img.shape)[:_n_dims] < np.asarray(crop_size)) for img in self._images):
                 log.warning(f"Some images are smaller than the crop size ({crop_size}). Will center pad with zeros.")
                 for i, img in enumerate(self._images):
-                    print(img.shape, _n_dims, crop_size)
                     if np.any(np.asarray(img.shape)[:_n_dims] < np.asarray(crop_size)):
                         _padded_img, _padding = utils.center_pad(img, crop_size, mode="constant", allow_larger=True)
                         self._images[i] = _padded_img
