@@ -1,22 +1,23 @@
 """
 Wrapper for Spotiflow to use it as a starfish spot detector replacement.
 Several mock classes are created when starfish is not installed or not working properly.
-In that case, a RuntimeError is raised when trying to use the class SpotiflowDetector, but it does not 
+In that case, a RuntimeError is raised when trying to use the class SpotiflowDetector, but it does not
 break at import time to allow the user to use spotiflow without having to install starfish.
 """
+
 import logging
 import sys
+from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-import torch
-from tqdm.auto import tqdm
+from starfish.core.spots.FindSpots import spot_finding_utils
 
 from ..model import Spotiflow
-from ..utils import NotRegisteredError, normalize
+from ..utils import NotRegisteredError
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -31,38 +32,53 @@ try:
     from starfish.core.image.Filter.util import determine_axes_to_group_by
     from starfish.core.imagestack.imagestack import ImageStack
     from starfish.core.spots.FindSpots._base import FindSpotsAlgorithm
-    from starfish.core.types import (Axes, Features, PerImageSliceSpotResults,
-                                     SpotAttributes, SpotFindingResults)
-    from xarray.core.coordinates import DataArrayCoordinates
+    from starfish.core.types import (
+        Axes,
+        Features,
+        PerImageSliceSpotResults,
+        SpotAttributes,
+        SpotFindingResults,
+    )
+
     STARFISH_IE = False
-except ImportError as ie:
+except ImportError as _:
     # Starfish is not installed, but not big deal. We mock several classes so that the code works without starfish
     # but raises an exception if the user tries to use it while maintaining typing coherence.
 
     STARFISH_IE = True
+
     class FindSpotsAlgorithm:
-        """Mock class for starfish.core.spots.FindSpots._base.FindSpotsAlgorithm
-        """
+        """Mock class for starfish.core.spots.FindSpots._base.FindSpotsAlgorithm"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class PerImageSliceSpotResults:
-        """Mock class for starfish.core.types.PerImageSliceSpotResults
-        """
+        """Mock class for starfish.core.types.PerImageSliceSpotResults"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class ImageStack:
-        """Mock class for starfish.core.imagestack.imagestack.ImageStack
-        """
+        """Mock class for starfish.core.imagestack.imagestack.ImageStack"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class SpotFindingResults:
-        """Mock class for starfish.core.types.SpotFindingResults
-        """
+        """Mock class for starfish.core.types.SpotFindingResults"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
 
 """
 Wrapper for Spotiflow to use it as a starfish spot detector replacement.
@@ -95,50 +111,65 @@ log.addHandler(console_handler)
 try:
     from starfish.core.imagestack.imagestack import ImageStack
     from starfish.core.spots.FindSpots._base import FindSpotsAlgorithm
-    from starfish.core.types import (Axes, Features, PerImageSliceSpotResults,
-                                     SpotAttributes, SpotFindingResults)
-    from xarray.core.coordinates import DataArrayCoordinates
+    from starfish.core.types import (
+        Axes,
+        Features,
+        PerImageSliceSpotResults,
+        SpotAttributes,
+        SpotFindingResults,
+    )
+
     STARFISH_IE = False
-except ImportError as ie:
+except ImportError as _:
     # Starfish is not installed, but not big deal. We mock several classes so that the code works without starfish
     # but raises an exception if the user tries to use it while maintaining typing coherence.
 
     STARFISH_IE = True
+
     class FindSpotsAlgorithm:
-        """Mock class for starfish.core.spots.FindSpots._base.FindSpotsAlgorithm
-        """
+        """Mock class for starfish.core.spots.FindSpots._base.FindSpotsAlgorithm"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class PerImageSliceSpotResults:
-        """Mock class for starfish.core.types.PerImageSliceSpotResults
-        """
+        """Mock class for starfish.core.types.PerImageSliceSpotResults"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class ImageStack:
-        """Mock class for starfish.core.imagestack.imagestack.ImageStack
-        """
+        """Mock class for starfish.core.imagestack.imagestack.ImageStack"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
-    
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
     class SpotFindingResults:
-        """Mock class for starfish.core.types.SpotFindingResults
-        """
+        """Mock class for starfish.core.types.SpotFindingResults"""
+
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly.")
+            raise RuntimeError(
+                "starfish is not installed or its installation is not working as expected. Please install starfish to use the class SpotiflowDetector. If starfish is already installed, please check that the installation is working properly."
+            )
+
 
 class SpotiflowDetector(FindSpotsAlgorithm):
     def __init__(
-            self,
-            model: Union[Spotiflow, str, Path],
-            probability_threshold: float = None,
-            n_tiles: Union[Tuple[int], None] = None,
-            min_distance: int = 2,
-            measurement_type='max',
-            subpix: bool = False,
-            is_volume: bool = False,
-            pretrained_model: Optional[str] = None,
+        self,
+        model: Union[Spotiflow, str, Path],
+        probability_threshold: float = None,
+        n_tiles: Union[Tuple[int], None] = None,
+        min_distance: int = 2,
+        measurement_type="max",
+        subpix: bool = False,
+        is_volume: bool = False,
+        pretrained_model: Optional[str] = None,
     ) -> None:
         self.is_volume = is_volume
         self.measurement_function = self._get_measurement_function(measurement_type)
@@ -149,7 +180,9 @@ class SpotiflowDetector(FindSpotsAlgorithm):
         self.min_distance = min_distance
         self.probability_threshold = probability_threshold
         self.model = model
-        assert not subpix, "Subpixel localization is not supported in the Starfish integration yet"
+        assert not subpix, (
+            "Subpixel localization is not supported in the Starfish integration yet"
+        )
 
     def _populate_model(self):
         if isinstance(self.model, str):
@@ -159,14 +192,17 @@ class SpotiflowDetector(FindSpotsAlgorithm):
                 self.model = Spotiflow.from_folder(self.model)
         elif isinstance(self.model, Path):
             self.model = Spotiflow.from_folder(self.model)
-        
+
         if isinstance(self.model, Spotiflow):
             return self.model
         else:
-            raise ValueError(f"model argument for initializing must be a path to a model, a Spotiflow object, or a registered model name")
+            raise ValueError(
+                f"model argument for initializing must be a path to a model, a Spotiflow object, or a registered model name"
+            )
 
     def image_to_spots(
-            self, data_image: np.ndarray,
+        self,
+        data_image: np.ndarray,
     ) -> PerImageSliceSpotResults:
         """
         Find spots using Spotiflow
@@ -194,14 +230,12 @@ class SpotiflowDetector(FindSpotsAlgorithm):
             "peak_mode": "fast",
             "subpix": True if self.model.config.compute_flow else False,
         }
-        detections, details = self.model.predict(
-                data_image,
-                **spotiflow_kwargs
-        )
+        detections, details = self.model.predict(data_image, **spotiflow_kwargs)
 
         if detections.shape[0] == 0:
             empty_spot_attrs = SpotAttributes.empty(
-                extra_fields=[Features.INTENSITY, Features.SPOT_ID])
+                extra_fields=[Features.INTENSITY, Features.SPOT_ID]
+            )
             return PerImageSliceSpotResults(spot_attrs=empty_spot_attrs, extras=None)
 
         # Measure intensities
@@ -214,8 +248,13 @@ class SpotiflowDetector(FindSpotsAlgorithm):
             y_inds = detections[:, 1].astype(int)
             x_inds = detections[:, 2].astype(int)
 
-        # TODO: use estimated fwhm 
-        radius = np.asarray([np.sqrt(2 if not self.is_volume else 3) for _ in range(detections.shape[0])])
+        # TODO: use estimated fwhm
+        radius = np.asarray(
+            [
+                np.sqrt(2 if not self.is_volume else 3)
+                for _ in range(detections.shape[0])
+            ]
+        )
         intensities = details.prob
 
         # construct dataframe
@@ -233,11 +272,11 @@ class SpotiflowDetector(FindSpotsAlgorithm):
         return PerImageSliceSpotResults(spot_attrs=spots, extras=None)
 
     def run(
-            self,
-            image_stack: ImageStack,
-            reference_image: Optional[ImageStack] = None,
-            n_processes: Optional[int] = None,
-            *args,
+        self,
+        image_stack: ImageStack,
+        reference_image: Optional[ImageStack] = None,
+        n_processes: Optional[int] = None,
+        *args,
     ) -> SpotFindingResults:
         """
         Find spots in the given ImageStack using Spotiflow.
@@ -263,35 +302,51 @@ class SpotiflowDetector(FindSpotsAlgorithm):
             results = spot_finding_utils.measure_intensities_at_spot_locations_across_imagestack(
                 data_image=image_stack,
                 reference_spots=reference_spots,
-                measurement_function=self.measurement_function)
+                measurement_function=self.measurement_function,
+            )
         else:
             spot_attributes_list = image_stack.transform(
                 func=spot_finding_method,
                 group_by=determine_axes_to_group_by(self.is_volume),
-                n_processes=n_processes
+                n_processes=n_processes,
             )
 
             # If not a volume, merge spots from the same round/channel but different z slices
             if not self.is_volume:
                 merged_z_tables = defaultdict(pd.DataFrame)  # type: ignore
                 for i in range(len(spot_attributes_list)):
-                    spot_attributes_list[i][0].spot_attrs.data['z'] = spot_attributes_list[i][1]['z']
+                    spot_attributes_list[i][0].spot_attrs.data["z"] = (
+                        spot_attributes_list[i][1]["z"]
+                    )
                     r = spot_attributes_list[i][1][Axes.ROUND]
                     ch = spot_attributes_list[i][1][Axes.CH]
                     merged_z_tables[(r, ch)] = merged_z_tables[(r, ch)].append(
-                        spot_attributes_list[i][0].spot_attrs.data)
+                        spot_attributes_list[i][0].spot_attrs.data
+                    )
                 new = []
                 r_chs = sorted([*merged_z_tables])
                 selectors = list(image_stack._iter_axes({Axes.ROUND, Axes.CH}))
                 for i, (r, ch) in enumerate(r_chs):
-                    merged_z_tables[(r, ch)]['spot_id'] = range(len(merged_z_tables[(r, ch)]))
-                    spot_attrs = SpotAttributes(merged_z_tables[(r, ch)].reset_index(drop=True))
-                    new.append((PerImageSliceSpotResults(spot_attrs=spot_attrs, extras=None),
-                               selectors[i]))
+                    merged_z_tables[(r, ch)]["spot_id"] = range(
+                        len(merged_z_tables[(r, ch)])
+                    )
+                    spot_attrs = SpotAttributes(
+                        merged_z_tables[(r, ch)].reset_index(drop=True)
+                    )
+                    new.append(
+                        (
+                            PerImageSliceSpotResults(
+                                spot_attrs=spot_attrs, extras=None
+                            ),
+                            selectors[i],
+                        )
+                    )
 
                 spot_attributes_list = new
 
-            results = SpotFindingResults(imagestack_coords=image_stack.xarray.coords,
-                                         log=image_stack.log,
-                                         spot_attributes_list=spot_attributes_list)
+            results = SpotFindingResults(
+                imagestack_coords=image_stack.xarray.coords,
+                log=image_stack.log,
+                spot_attributes_list=spot_attributes_list,
+            )
         return results
