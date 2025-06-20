@@ -27,9 +27,11 @@ def _gaussian_2d(yx, y0, x0, sigma, A, B):
     y, x = yx
     return A * np.exp(-((y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
 
-def _gaussian_3d(zyx, z0, y0, x0, sigma, A, B):
+def _gaussian_3d(zyx, z0, y0, x0, sigmaz, sigmayx, A, B):
     z, y, x = zyx
-    return A * np.exp(-((z - z0) ** 2 + (y - y0) ** 2 + (x - x0) ** 2) / (2 * sigma**2)) + B
+    return A * np.exp(
+        -(((z - z0) ** 2) / (2 * sigmaz**2) + ((y - y0) ** 2 + (x - x0) ** 2) / (2 * sigmayx**2))
+    ) + B
 
 @dataclass
 class FitParams2D:
@@ -42,7 +44,8 @@ class FitParams2D:
     
 @dataclass
 class FitParams3D:
-    fwhm: Union[float, np.ndarray]
+    fwhm_z: Union[float, np.ndarray]
+    fwhm_yx: Union[float, np.ndarray]
     offset_z: Union[float, np.ndarray]
     offset_y: Union[float, np.ndarray]
     offset_x: Union[float, np.ndarray]
@@ -155,26 +158,31 @@ def _estimate_params_single3(
     refine_centers: bool,
     verbose: bool,
 ) -> FitParams3D:
-    z,y,x = np.meshgrid(*((np.arange(-window, window + 1),)*3), indexing="ij")
-    
-    # Crop around the spot
-    region = image[
+    z_range = np.arange(-window, window + 1)
+    y_range = np.arange(-window, window + 1)
+    x_range = np.arange(-window, window + 1)
+    z, y, x = np.meshgrid(z_range, y_range, x_range, indexing="ij")
+
+    # Crop around the spot with interpolation
+    z_indices, y_indices, x_indices = np.mgrid[
         center[0] - window : center[0] + window + 1,
         center[1] - window : center[1] + window + 1,
-        center[2] - window : center[2] + window + 1,
+        center[2] - window : center[2] + window + 1
     ]
+    region = map_coordinates(image, [z_indices, y_indices, x_indices], order=3, mode='reflect')
 
     try:
         mi, ma = np.min(region), np.max(region)
         region = (region - mi) / (ma - mi)
-        initial_guess = (0, 0, 0, 1.5, 1, 0)  # z0, y0, x0, sigma, A, B
+
+        initial_guess = (0, 0, 0, 1.5, 2., 1, 0)  # z0, y0, x0, sigmayx, sigmaz, A, B
 
         if refine_centers:
-            lower_bounds = (-.5, -.5, -.5, 0.1, 0.5, -0.5)  # y0, x0, sigma, A, B
-            upper_bounds = (.5, .5, .5, 10, 1.5, 0.5)  # y0, x0, sigma, A, B
+            lower_bounds = (-1, -1, -1, 0.1, 0.1, 0.5, -0.5)
+            upper_bounds = (1, 1, 1, 10, 10, 1.5, 0.5)
         else:
-            lower_bounds = (-1e-6, -1e-6, -1e-6, 0.1, 0.5, -0.5)
-            upper_bounds = ( 1e-6, 1e-6, 1e-6, 10, 1.5, 0.5)
+            lower_bounds = (-1e-6, -1e-6, -1e-6, 0.1, 0.1, 0.5, -0.5)
+            upper_bounds = (1e-6, 1e-6, 1e-6, 10, 10, 1.5, 0.5)
 
         popt, _ = curve_fit(
             _gaussian_3d,
@@ -183,24 +191,25 @@ def _estimate_params_single3(
             p0=initial_guess,
             bounds=(lower_bounds, upper_bounds),
         )
-        
-        pred = _gaussian_3d((z.ravel(), y.ravel(), x.ravel()), *popt)  
+
+        pred = _gaussian_3d((z.ravel(), y.ravel(), x.ravel()), *popt)
         r_squared = _r_squared(region.ravel(), pred)
 
     except Exception as _:
         if verbose:
-            log.warning("Gaussian fit failed. Returning NaN")
+            log.warning("3D Gaussian fit failed. Returning NaN")
         mi, ma = np.nan, np.nan
-        popt = np.full(6, np.nan)
+        popt = np.full(7, np.nan)
         r_squared = 0
 
     return FitParams3D(
-        fwhm=FWHM_CONSTANT * popt[3],
+        fwhm_z=FWHM_CONSTANT * popt[3],
+        fwhm_yx=FWHM_CONSTANT * popt[4],
         offset_z=popt[0],
         offset_y=popt[1],
         offset_x=popt[2],
-        intens_A=(popt[4]+popt[5])*(ma - mi),
-        intens_B=popt[5] * (ma - mi) + mi,
+        intens_A=(popt[5]+popt[6])*(ma - mi),
+        intens_B=popt[6] * (ma - mi) + mi,
         r_squared=r_squared
     )
 
