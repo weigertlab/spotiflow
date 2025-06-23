@@ -219,12 +219,10 @@ def main():
     else:
         model = Spotiflow.from_pretrained(args.pretrained_model)
 
-
     if model.config.in_channels > 1 and args.estimate_params:
         raise ValueError(
             "Estimating parameters is only supported for single-channel input models. Please set --estimate-params to False."
         )
-
 
     if model.config.in_channels > 1:
         log.warning(
@@ -243,9 +241,9 @@ def main():
     # Check if data_path is a file or directory
     # If it's a file , check if it is a valid image file
     if args.data_path.is_file():
-        assert (
-            args.data_path.suffix[1:] in ALLOWED_EXTENSIONS
-        ), f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
+        assert args.data_path.suffix[1:] in ALLOWED_EXTENSIONS, (
+            f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
+        )
         image_files = [args.data_path]
         if out_dir is None:
             out_dir = args.data_path.parent / "spotiflow_results"

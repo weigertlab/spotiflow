@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import sys
 from itertools import product
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
@@ -10,7 +11,6 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
-import sys
 import torch
 import wandb
 from csbdeep.utils import normalize_mi_ma
@@ -47,23 +47,29 @@ def infer_n_tiles(
     should_auto_infer = max_tile_size is None
     if should_auto_infer:
         fallback_tile_size = ((2048, 2048), (128, 256, 256))
-        max_tile_size = fallback_tile_size[0] if len(shape) == 2 else fallback_tile_size[1]
+        max_tile_size = (
+            fallback_tile_size[0] if len(shape) == 2 else fallback_tile_size[1]
+        )
         if device is not None:
             if device.type == "cuda":
-                gpu_mem_gb = torch.cuda.mem_get_info(device=device)[1]/1e9
+                gpu_mem_gb = torch.cuda.mem_get_info(device=device)[1] / 1e9
                 mem_to_size = {
-                    1: ((512, 512),(64,64,64)),
-                    2: ((512, 1024),(64,128,128)),
-                    4: ((1024, 1024),(128,128,128)),
-                    8: ((1024, 2048),(64,256,256)),
-                    16: ((2048, 2048),(128,256,256)),
-                    32: ((2048, 4096),(256,256,256)),
-                    64: ((4096, 4096),(128,512,512)),
+                    1: ((512, 512), (64, 64, 64)),
+                    2: ((512, 1024), (64, 128, 128)),
+                    4: ((1024, 1024), (128, 128, 128)),
+                    8: ((1024, 2048), (64, 256, 256)),
+                    16: ((2048, 2048), (128, 256, 256)),
+                    32: ((2048, 4096), (256, 256, 256)),
+                    64: ((4096, 4096), (128, 512, 512)),
                 }
                 # Get closest power of 2 that is less than or equal to the available GPU memory
-                floored_gpu_mem_gb = 2**int(np.log2(gpu_mem_gb))
-                max_tile_size_both = mem_to_size.get(floored_gpu_mem_gb, fallback_tile_size)
-                max_tile_size = max_tile_size_both[0] if len(shape) == 2 else max_tile_size_both[1]
+                floored_gpu_mem_gb = 2 ** int(np.log2(gpu_mem_gb))
+                max_tile_size_both = mem_to_size.get(
+                    floored_gpu_mem_gb, fallback_tile_size
+                )
+                max_tile_size = (
+                    max_tile_size_both[0] if len(shape) == 2 else max_tile_size_both[1]
+                )
     if not len(shape) == len(max_tile_size):
         raise ValueError(
             f"shape {shape} and max_tile_size {max_tile_size} should have the same length"
@@ -193,9 +199,9 @@ def multiscale_decimate(
     else:
         if len(decimate) == 2 and y.ndim == 3:  # Multichannel image
             decimate = (1, *decimate)
-    assert y.ndim == len(
-        decimate
-    ), f"decimate {decimate} and y.ndim {y.ndim} do not match"
+    assert y.ndim == len(decimate), (
+        f"decimate {decimate} and y.ndim {y.ndim} do not match"
+    )
     if decimate == (1, 1) or decimate == (1, 1, 1):
         return y
 
@@ -211,7 +217,10 @@ def multiscale_decimate(
 
 
 def center_pad(
-    x: Union[np.ndarray, da.Array], shape: Tuple[int, int], mode: str = "reflect", allow_larger: bool = False,
+    x: Union[np.ndarray, da.Array],
+    shape: Tuple[int, int],
+    mode: str = "reflect",
+    allow_larger: bool = False,
 ) -> Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]:
     """Pads x to shape. This function is the inverse of center_crop.
        This function accepts both NumPy arrays and Dask arrays. For the latter, the padding is done lazily.
@@ -224,7 +233,9 @@ def center_pad(
     Returns:
         Tuple[Union[np.ndarray, da.Array], Sequence[Tuple[int, int]]]: A tuple of the padded image and the padding sequence
     """
-    if x.shape == shape or (allow_larger and all([s1 > s2 for s1, s2 in zip(x.shape, shape)])):
+    if x.shape == shape or (
+        allow_larger and all([s1 > s2 for s1, s2 in zip(x.shape, shape)])
+    ):
         return x, tuple((0, 0) for _ in x.shape)
     if not allow_larger and not all([s1 <= s2 for s1, s2 in zip(x.shape, shape)]):
         raise ValueError(f"shape of x {x.shape} is larger than final shape {shape}")
@@ -422,7 +433,7 @@ def remove_device_id_from_device_str(device_str: str) -> str:
 def get_data(
     path: Union[Path, str],
     normalize: bool = True,
-    subfolder:tuple[str]=('train','val', 'test'),
+    subfolder: tuple[str] = ('train', 'val', 'test'),
     is_3d: bool = False,
     **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -433,24 +444,29 @@ def get_data(
         normalize (bool, optional): Whether to normalize the data. Defaults to True.
         subfolder (tuple[str], optional): Subfolders to be used. Defaults to ('train','val', 'test').
     Returns:
-        Tuple[np.ndarray]: A tuple of arrays with length 2*len(subfolder) corresponding to the images, centers per subfolder  
+        Tuple[np.ndarray]: A tuple of arrays with length 2*len(subfolder) corresponding to the images, centers per subfolder
     """
     from ..data import Spots3DDataset, SpotsDataset
 
     SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
-    
+
     path = Path(path)
 
     if not path.exists():
         raise FileNotFoundError(f"Given data path {path} does not exist!")
     for sub in subfolder:
-        if not (path/sub).exists():
-            raise FileNotFoundError(f"Given data path {path} does not contain a '{sub}' folder!")
-    
+        if not (path / sub).exists():
+            raise FileNotFoundError(
+                f"Given data path {path} does not contain a '{sub}' folder!"
+            )
+
     if not normalize and not 'normalizer' in kwargs:
         kwargs['normalizer'] = None
-     
-    datasets = tuple(SpotsDatasetClass.from_folder(path/sub, add_class_label=False, **kwargs) for sub in subfolder)
+
+    datasets = tuple(
+        SpotsDatasetClass.from_folder(path / sub, add_class_label=False, **kwargs)
+        for sub in subfolder
+    )
     results = tuple(x for d in datasets for x in (d.images, d.centers))
     return results
 
@@ -603,9 +619,9 @@ def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
 
     expected_keys = ["x_train", "y_train", "x_valid", "y_valid", "x_test", "y_test"]
     data = np.load(fname, allow_pickle=True)
-    assert set(expected_keys).issubset(
-        data.files
-    ), f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
+    assert set(expected_keys).issubset(data.files), (
+        f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
+    )
     ret_data = [None] * len(expected_keys)
     for i, key in enumerate(expected_keys):
         if key.startswith("x"):
@@ -631,10 +647,10 @@ def spline_interp_points_2d(
     Returns:
         np.ndarray: array of shape (N,C) containing intensities for each spot
     """
-    assert img.ndim in (2,3), "Expected YX or YXC image for interpolating intensities."
-    assert (
-        pts.shape[1] == 2
-    ), "Point coordinates to be interpolated should be an (N,2) array"
+    assert img.ndim in (2, 3), "Expected YX or YXC image for interpolating intensities."
+    assert pts.shape[1] == 2, (
+        "Point coordinates to be interpolated should be an (N,2) array"
+    )
 
     if pts.shape[0] == 0:
         if img.ndim == 2:
@@ -643,15 +659,26 @@ def spline_interp_points_2d(
             out_shape = (0, img.shape[-1])
         return np.zeros(out_shape, dtype=img.dtype)
 
-    y_coords = pts[:,0]
-    x_coords = pts[:,1]
+    y_coords = pts[:, 0]
+    x_coords = pts[:, 1]
     if img.ndim == 3:
-        intensities = np.stack([
-            ndi.map_coordinates(img[..., c], [y_coords, x_coords], order=order, mode='reflect', prefilter=False)
-            for c in range(img.shape[2])
-        ], axis=-1)
+        intensities = np.stack(
+            [
+                ndi.map_coordinates(
+                    img[..., c],
+                    [y_coords, x_coords],
+                    order=order,
+                    mode='reflect',
+                    prefilter=False,
+                )
+                for c in range(img.shape[2])
+            ],
+            axis=-1,
+        )
     else:
-        intensities = ndi.map_coordinates(img, [y_coords, x_coords], order=order, mode='reflect', prefilter=False)
+        intensities = ndi.map_coordinates(
+            img, [y_coords, x_coords], order=order, mode='reflect', prefilter=False
+        )
     return intensities
 
 
@@ -673,9 +700,9 @@ def spline_interp_points_3d(
         3,
         4,
     ), "Expected ZYX or ZYXC image for interpolating intensities."
-    assert (
-        pts.shape[1] == 3
-    ), "Point coordinates to be interpolated should be an (N,3) array"
+    assert pts.shape[1] == 3, (
+        "Point coordinates to be interpolated should be an (N,3) array"
+    )
 
     if pts.shape[0] == 0:
         if img.ndim == 3:
@@ -690,7 +717,11 @@ def spline_interp_points_3d(
         intensities = np.stack(
             [
                 ndi.map_coordinates(
-                    img[..., c], [zs, ys, xs], order=order, mode="reflect", prefilter=False
+                    img[..., c],
+                    [zs, ys, xs],
+                    order=order,
+                    mode="reflect",
+                    prefilter=False,
                 )
                 for c in range(img.shape[3])
             ],

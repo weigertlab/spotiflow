@@ -24,7 +24,9 @@ console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
 ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg")
-PRETRAINED_MODELS = tuple(["general"]+sorted([m for m in list_registered() if m != "general"]))
+PRETRAINED_MODELS = tuple(
+    ["general"] + sorted([m for m in list_registered() if m != "general"])
+)
 
 
 def get_data(
@@ -58,7 +60,6 @@ def get_args() -> argparse.Namespace:
         type=Path,
         help="Path to directory containing images and annotations. Please refer to the documentation (https://weigertlab.github.io/spotiflow/train.html#data-format) to see the required format.",
     )
-        
     required.add_argument(
         "-o",
         "--outdir",
@@ -128,20 +129,19 @@ def get_args() -> argparse.Namespace:
         default=2,
         help="Factor to increase the number of feature maps per level. Lower values will yield smaller models, at the potential cost of performance. Defaults to 2.",
     )
+
     train_args = parser.add_argument_group(
         title="Training arguments",
         description="Arguments to configure the training process.",
     )
-    
     train_args.add_argument(
         "--subfolder",
         type=Path,
         nargs=2,
         required=False,
-        default=['train', 'val'],
+        default=["train", "val"],
         help="Subfolder names for training and validation data. Defaults to ['train', 'val'].",
     )
-
     train_args.add_argument(
         "--train_samples",
         type=int,
@@ -149,7 +149,6 @@ def get_args() -> argparse.Namespace:
         default=None,
         help="Number of training samples per epoch (defaults to None, which means all samples).",
     )
-
     train_args.add_argument(
         "--crop-size",
         type=int,
@@ -188,7 +187,6 @@ def get_args() -> argparse.Namespace:
         default=True,
         help="Apply data augmentation during training. Defaults to True.",
     )
-    
     train_args.add_argument(
         "--pos-weight",
         type=float,
@@ -244,19 +242,27 @@ def main():
     pl.seed_everything(args.seed, workers=True)
 
     log.info("Loading training data...")
-    train_images, train_spots = get_data(args.data_dir / args.subfolder[0], is_3d=args.is_3d)
+    train_images, train_spots = get_data(
+        args.data_dir / args.subfolder[0], is_3d=args.is_3d
+    )
     if len(train_images) != len(train_spots):
-        raise ValueError(f"Number of images and spots in {args.data_dir/'train'} do not match.")
+        raise ValueError(
+            f"Number of images and spots in {args.data_dir / 'train'} do not match."
+        )
     if len(train_images) == 0:
-        raise ValueError(f"No images were found in the {args.data_dir/'train'}.")
+        raise ValueError(f"No images were found in the {args.data_dir / 'train'}.")
     log.info(f"Training data loaded (N={len(train_images)}).")
 
     log.info("Loading validation data...")
-    val_images, val_spots = get_data(args.data_dir / args.subfolder[1], is_3d=args.is_3d)
+    val_images, val_spots = get_data(
+        args.data_dir / args.subfolder[1], is_3d=args.is_3d
+    )
     if len(val_images) != len(val_spots):
-        raise ValueError(f"Number of images and spots in {args.data_dir/'val'} do not match.")
+        raise ValueError(
+            f"Number of images and spots in {args.data_dir / 'val'} do not match."
+        )
     if len(val_images) == 0:
-        raise ValueError(f"No images were found in the {args.data_dir/'val'}.")
+        raise ValueError(f"No images were found in the {args.data_dir / 'val'}.")
     log.info(f"Validation data loaded (N={len(val_images)}).")
 
     if args.finetune_from is None:
@@ -318,7 +324,7 @@ def main():
             "lr": args.lr,
             "num_epochs": args.num_epochs,
             "pos_weight": args.pos_weight,
-            "num_train_samples":args.train_samples,
+            "num_train_samples": args.train_samples,
             "finetuned_from": args.finetune_from,
             "smart_crop": args.smart_crop,
         },
