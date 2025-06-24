@@ -14,6 +14,7 @@ import scipy.ndimage as ndi
 import torch
 import wandb
 from csbdeep.utils import normalize_mi_ma
+from skimage.io import imread
 from torch.utils.data import Dataset
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,21 @@ console_handler.setLevel(logging.INFO)
 formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
+
+
+def imread_wrapped(fname, channels=None):
+    """Note that multi-channel images have to have the channels in the last dimension."""
+    try:
+        img = imread(fname)
+        if channels is not None:
+            if len(channels) == 1:
+                img = img[..., channels[0]]
+            else:
+                img = img[..., channels]
+        return img
+    except Exception as e:
+        log.error(f"Could not read image {fname}. Execution will halt.")
+        raise e
 
 
 def str2bool(value):

@@ -7,12 +7,11 @@ from typing import Tuple
 
 import lightning.pytorch as pl
 import numpy as np
-from skimage.io import imread
 
 from .. import __version__
 from ..model import Spotiflow, SpotiflowModelConfig
 from ..model.pretrained import list_registered
-from ..utils import read_coords_csv, read_coords_csv3d, str2bool
+from ..utils import imread_wrapped, read_coords_csv, read_coords_csv3d, str2bool
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -30,7 +29,7 @@ PRETRAINED_MODELS = tuple(
 
 
 def get_data(
-    data_dir: Path, is_3d: bool = False
+    data_dir: Path, is_3d: bool = False, channels: list[int] | None = None
 ) -> Tuple[Tuple[np.ndarray], Tuple[np.ndarray]]:
     """Load data from given data_dir."""
     img_files = sorted(
@@ -39,7 +38,7 @@ def get_data(
     spots_files = sorted(data_dir.glob("*.csv"))
 
     _read_spots_fun = read_coords_csv3d if is_3d else read_coords_csv
-    images = tuple(imread(str(f)) for f in img_files)
+    images = tuple(imread_wrapped(str(f), channels) for f in img_files)
     spots = tuple(_read_spots_fun(str(f)).astype(np.float32) for f in spots_files)
     return images, spots
 
@@ -230,6 +229,16 @@ def get_args() -> argparse.Namespace:
         default=True,
         help="Use smart cropping for training (at least ~80%% of sampled patches will contain one or more spot). Defaults to True.",
     )
+    train_args.add_argument(
+        "-c",
+        "--channels",
+        nargs="+",
+        type=int,
+        required=False,
+        default=None,
+        help="List of channels to use for training. If None, will use all channels. "
+        "This is only relevant for multi-channel images. Defaults to None.",
+    )
     args = parser.parse_args()
     return args
 
@@ -243,7 +252,7 @@ def main():
 
     log.info("Loading training data...")
     train_images, train_spots = get_data(
-        args.data_dir / args.subfolder[0], is_3d=args.is_3d
+        args.data_dir / args.subfolder[0], is_3d=args.is_3d, channels=args.channels
     )
     if len(train_images) != len(train_spots):
         raise ValueError(
@@ -255,7 +264,7 @@ def main():
 
     log.info("Loading validation data...")
     val_images, val_spots = get_data(
-        args.data_dir / args.subfolder[1], is_3d=args.is_3d
+        args.data_dir / args.subfolder[1], is_3d=args.is_3d, channels=args.channels
     )
     if len(val_images) != len(val_spots):
         raise ValueError(

@@ -7,12 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from skimage.io import imread
 from tqdm.auto import tqdm
 
 from .. import __version__
 from ..model import Spotiflow
-from ..utils import infer_n_tiles, str2bool
+from ..utils import imread_wrapped, infer_n_tiles, str2bool
 from ..utils.fitting import signal_to_background
 
 log = logging.getLogger(__name__)
@@ -174,6 +173,16 @@ def get_args():
         choices=["auto", "cpu", "cuda", "mps"],
         help="Device to run model on. Defaults to 'auto'.",
     )
+    predict.add_argument(
+        "-c",
+        "--channels",
+        nargs="+",
+        type=int,
+        required=False,
+        default=None,
+        help="List of channels to use for prediction. If None, will use all channels. "
+        "This is only relevant for multi-channel images. Defaults to None.",
+    )
 
     utils = parser.add_argument_group(
         title="Utility arguments",
@@ -189,14 +198,6 @@ def get_args():
 
     args = parser.parse_args()
     return args
-
-
-def _imread_wrapped(fname):
-    try:
-        return imread(fname)
-    except Exception as e:
-        log.error(f"Could not read image {fname}. Execution will halt.")
-        raise e
 
 
 def _check_valid_input_shape(shape, config):
@@ -277,7 +278,7 @@ def main():
     images = []
 
     for f in image_files:
-        img = _imread_wrapped(f)
+        img = imread_wrapped(f, args.channels)
         if not _check_valid_input_shape(img.shape, model.config):
             raise ValueError(
                 f"image {f} has invalid shape {img.shape} for model with is_3d={model.config.is_3d} and {model.config.in_channels} input channels. The image shape should be either (Y,X,[C]) for a 2D model or (Z,Y,X,[C]) for a 3D model, where the [C] dimension is optional for single-channel inputs."
