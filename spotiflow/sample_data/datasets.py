@@ -71,7 +71,10 @@ def load_dataset(name: str, include_test: bool=False, cache_dir: Optional[Union[
         cache_dir = Path(cache_dir)
     dataset = _REGISTERED[name]
     path = get_training_datasets_path(name, cache_dir=cache_dir)
-    return get_data(path, include_test=include_test, is_3d=dataset.is_3d)
+    _subfolder = ("train", "val")
+    if include_test:
+        _subfolder += ("test",)
+    return get_data(path, subfolder=_subfolder, is_3d=dataset.is_3d)
 
 
 _REGISTERED = {
