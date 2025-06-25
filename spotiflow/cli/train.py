@@ -236,8 +236,9 @@ def get_args() -> argparse.Namespace:
         type=int,
         required=False,
         default=None,
-        help="List of channels to use for training. If None, will use all channels. "
-        "This is only relevant for multi-channel images. Defaults to None.",
+        help="List of channels to use for training. "
+        "0 will be interpreted as the first channel, 1 as the second, etc. "
+        "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
     )
     args = parser.parse_args()
     return args

@@ -180,8 +180,9 @@ def get_args():
         type=int,
         required=False,
         default=None,
-        help="List of channels to use for prediction. If None, will use all channels. "
-        "This is only relevant for multi-channel images. Defaults to None.",
+        help="List of channels to use for prediction. "
+        "0 will be interpreted as the first channel, 1 as the second, etc. "
+        "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
     )
 
     utils = parser.add_argument_group(
@@ -323,10 +324,10 @@ def main():
             df["intensity"] = np.round(details.intens, 2)
         df["probability"] = np.round(details.prob, 3)
         if args.estimate_params:
-            df['fwhm'] = np.round(details.fit_params.fwhm, 3)
-            df['intens_A'] = np.round(details.fit_params.intens_A, 3)
-            df['intens_B'] = np.round(details.fit_params.intens_B, 3)
-            df['snb'] = np.round(signal_to_background(details.fit_params), 3)
+            df["fwhm"] = np.round(details.fit_params.fwhm, 3)
+            df["intens_A"] = np.round(details.fit_params.intens_A, 3)
+            df["intens_B"] = np.round(details.fit_params.intens_B, 3)
+            df["snb"] = np.round(signal_to_background(details.fit_params), 3)
 
         df.to_csv(out_dir / f"{fname.stem}.csv", index=False)
     return 0

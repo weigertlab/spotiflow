@@ -32,6 +32,10 @@ def imread_wrapped(fname, channels=None):
     try:
         img = imread(fname)
         if channels is not None:
+            if any(c >= img.shape[-1] for c in channels):
+                raise ValueError(
+                    f"Some of the requested channels {channels} are not present in the image {fname} with shape {img.shape}"
+                )
             if len(channels) == 1:
                 img = img[..., channels[0]]
             else:
@@ -449,7 +453,7 @@ def remove_device_id_from_device_str(device_str: str) -> str:
 def get_data(
     path: Union[Path, str],
     normalize: bool = True,
-    subfolder: tuple[str] = ('train', 'val', 'test'),
+    subfolder: tuple[str] = ("train", "val", "test"),
     is_3d: bool = False,
     **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -476,8 +480,8 @@ def get_data(
                 f"Given data path {path} does not contain a '{sub}' folder!"
             )
 
-    if not normalize and not 'normalizer' in kwargs:
-        kwargs['normalizer'] = None
+    if not normalize and not "normalizer" in kwargs:
+        kwargs["normalizer"] = None
 
     datasets = tuple(
         SpotsDatasetClass.from_folder(path / sub, add_class_label=False, **kwargs)
@@ -684,7 +688,7 @@ def spline_interp_points_2d(
                     img[..., c],
                     [y_coords, x_coords],
                     order=order,
-                    mode='reflect',
+                    mode="reflect",
                     prefilter=False,
                 )
                 for c in range(img.shape[2])
@@ -693,7 +697,7 @@ def spline_interp_points_2d(
         )
     else:
         intensities = ndi.map_coordinates(
-            img, [y_coords, x_coords], order=order, mode='reflect', prefilter=False
+            img, [y_coords, x_coords], order=order, mode="reflect", prefilter=False
         )
     return intensities
 
