@@ -7,12 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from skimage.io import imread
 from tqdm.auto import tqdm
 
 from .. import __version__
 from ..model import Spotiflow
-from ..utils import infer_n_tiles, str2bool
+from ..utils import imread_wrapped, infer_n_tiles, str2bool
 from ..utils.fitting import signal_to_background
 
 log = logging.getLogger(__name__)
@@ -174,6 +173,17 @@ def get_args():
         choices=["auto", "cpu", "cuda", "mps"],
         help="Device to run model on. Defaults to 'auto'.",
     )
+    predict.add_argument(
+        "-c",
+        "--channels",
+        nargs="+",
+        type=int,
+        required=False,
+        default=None,
+        help="List of channels to use for prediction. "
+        "0 will be interpreted as the first channel, 1 as the second, etc. "
+        "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
+    )
 
     utils = parser.add_argument_group(
         title="Utility arguments",
@@ -189,14 +199,6 @@ def get_args():
 
     args = parser.parse_args()
     return args
-
-
-def _imread_wrapped(fname):
-    try:
-        return imread(fname)
-    except Exception as e:
-        log.error(f"Could not read image {fname}. Execution will halt.")
-        raise e
 
 
 def _check_valid_input_shape(shape, config):
@@ -219,12 +221,10 @@ def main():
     else:
         model = Spotiflow.from_pretrained(args.pretrained_model)
 
-
     if model.config.in_channels > 1 and args.estimate_params:
         raise ValueError(
             "Estimating parameters is only supported for single-channel input models. Please set --estimate-params to False."
         )
-
 
     if model.config.in_channels > 1:
         log.warning(
@@ -243,9 +243,9 @@ def main():
     # Check if data_path is a file or directory
     # If it's a file , check if it is a valid image file
     if args.data_path.is_file():
-        assert (
-            args.data_path.suffix[1:] in ALLOWED_EXTENSIONS
-        ), f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
+        assert args.data_path.suffix[1:] in ALLOWED_EXTENSIONS, (
+            f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
+        )
         image_files = [args.data_path]
         if out_dir is None:
             out_dir = args.data_path.parent / "spotiflow_results"
@@ -279,7 +279,7 @@ def main():
     images = []
 
     for f in image_files:
-        img = _imread_wrapped(f)
+        img = imread_wrapped(f, args.channels)
         if not _check_valid_input_shape(img.shape, model.config):
             raise ValueError(
                 f"image {f} has invalid shape {img.shape} for model with is_3d={model.config.is_3d} and {model.config.in_channels} input channels. The image shape should be either (Y,X,[C]) for a 2D model or (Z,Y,X,[C]) for a 3D model, where the [C] dimension is optional for single-channel inputs."
@@ -324,10 +324,10 @@ def main():
             df["intensity"] = np.round(details.intens, 2)
         df["probability"] = np.round(details.prob, 3)
         if args.estimate_params:
-            df['fwhm'] = np.round(details.fit_params.fwhm, 3)
-            df['intens_A'] = np.round(details.fit_params.intens_A, 3)
-            df['intens_B'] = np.round(details.fit_params.intens_B, 3)
-            df['snb'] = np.round(signal_to_background(details.fit_params), 3)
+            df["fwhm"] = np.round(details.fit_params.fwhm, 3)
+            df["intens_A"] = np.round(details.fit_params.intens_A, 3)
+            df["intens_B"] = np.round(details.fit_params.intens_B, 3)
+            df["snb"] = np.round(signal_to_background(details.fit_params), 3)
 
         df.to_csv(out_dir / f"{fname.stem}.csv", index=False)
     return 0

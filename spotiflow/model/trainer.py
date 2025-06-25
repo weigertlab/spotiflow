@@ -33,7 +33,7 @@ def _img_to_rgb_or_gray(x: torch.Tensor):
     if n_channels in (1, 3):
         return x
     elif n_channels == 2:
-        return torch.cat((x[:1], x[1:], x[:1]), dim=0)
+        return np.concatenate((x[:1], x[1:], x[:1]), axis=0)
     else:
         _cs = np.linspace(0, n_channels - 1, 3).astype(int)
         return x[_cs]

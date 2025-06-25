@@ -7,12 +7,11 @@ from typing import Tuple
 
 import lightning.pytorch as pl
 import numpy as np
-from skimage.io import imread
 
 from .. import __version__
 from ..model import Spotiflow, SpotiflowModelConfig
 from ..model.pretrained import list_registered
-from ..utils import read_coords_csv, read_coords_csv3d, str2bool
+from ..utils import imread_wrapped, read_coords_csv, read_coords_csv3d, str2bool
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -24,11 +23,13 @@ console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
 ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg")
-PRETRAINED_MODELS = tuple(["general"]+sorted([m for m in list_registered() if m != "general"]))
+PRETRAINED_MODELS = tuple(
+    ["general"] + sorted([m for m in list_registered() if m != "general"])
+)
 
 
 def get_data(
-    data_dir: Path, is_3d: bool = False
+    data_dir: Path, is_3d: bool = False, channels: list[int] | None = None
 ) -> Tuple[Tuple[np.ndarray], Tuple[np.ndarray]]:
     """Load data from given data_dir."""
     img_files = sorted(
@@ -37,7 +38,7 @@ def get_data(
     spots_files = sorted(data_dir.glob("*.csv"))
 
     _read_spots_fun = read_coords_csv3d if is_3d else read_coords_csv
-    images = tuple(imread(str(f)) for f in img_files)
+    images = tuple(imread_wrapped(str(f), channels) for f in img_files)
     spots = tuple(_read_spots_fun(str(f)).astype(np.float32) for f in spots_files)
     return images, spots
 
@@ -58,7 +59,6 @@ def get_args() -> argparse.Namespace:
         type=Path,
         help="Path to directory containing images and annotations. Please refer to the documentation (https://weigertlab.github.io/spotiflow/train.html#data-format) to see the required format.",
     )
-        
     required.add_argument(
         "-o",
         "--outdir",
@@ -128,20 +128,19 @@ def get_args() -> argparse.Namespace:
         default=2,
         help="Factor to increase the number of feature maps per level. Lower values will yield smaller models, at the potential cost of performance. Defaults to 2.",
     )
+
     train_args = parser.add_argument_group(
         title="Training arguments",
         description="Arguments to configure the training process.",
     )
-    
     train_args.add_argument(
         "--subfolder",
         type=Path,
         nargs=2,
         required=False,
-        default=['train', 'val'],
+        default=["train", "val"],
         help="Subfolder names for training and validation data. Defaults to ['train', 'val'].",
     )
-
     train_args.add_argument(
         "--train_samples",
         type=int,
@@ -149,7 +148,6 @@ def get_args() -> argparse.Namespace:
         default=None,
         help="Number of training samples per epoch (defaults to None, which means all samples).",
     )
-
     train_args.add_argument(
         "--crop-size",
         type=int,
@@ -188,7 +186,6 @@ def get_args() -> argparse.Namespace:
         default=True,
         help="Apply data augmentation during training. Defaults to True.",
     )
-    
     train_args.add_argument(
         "--pos-weight",
         type=float,
@@ -232,6 +229,17 @@ def get_args() -> argparse.Namespace:
         default=True,
         help="Use smart cropping for training (at least ~80%% of sampled patches will contain one or more spot). Defaults to True.",
     )
+    train_args.add_argument(
+        "-c",
+        "--channels",
+        nargs="+",
+        type=int,
+        required=False,
+        default=None,
+        help="List of channels to use for training. "
+        "0 will be interpreted as the first channel, 1 as the second, etc. "
+        "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
+    )
     args = parser.parse_args()
     return args
 
@@ -244,19 +252,27 @@ def main():
     pl.seed_everything(args.seed, workers=True)
 
     log.info("Loading training data...")
-    train_images, train_spots = get_data(args.data_dir / args.subfolder[0], is_3d=args.is_3d)
+    train_images, train_spots = get_data(
+        args.data_dir / args.subfolder[0], is_3d=args.is_3d, channels=args.channels
+    )
     if len(train_images) != len(train_spots):
-        raise ValueError(f"Number of images and spots in {args.data_dir/'train'} do not match.")
+        raise ValueError(
+            f"Number of images and spots in {args.data_dir / 'train'} do not match."
+        )
     if len(train_images) == 0:
-        raise ValueError(f"No images were found in the {args.data_dir/'train'}.")
+        raise ValueError(f"No images were found in the {args.data_dir / 'train'}.")
     log.info(f"Training data loaded (N={len(train_images)}).")
 
     log.info("Loading validation data...")
-    val_images, val_spots = get_data(args.data_dir / args.subfolder[1], is_3d=args.is_3d)
+    val_images, val_spots = get_data(
+        args.data_dir / args.subfolder[1], is_3d=args.is_3d, channels=args.channels
+    )
     if len(val_images) != len(val_spots):
-        raise ValueError(f"Number of images and spots in {args.data_dir/'val'} do not match.")
+        raise ValueError(
+            f"Number of images and spots in {args.data_dir / 'val'} do not match."
+        )
     if len(val_images) == 0:
-        raise ValueError(f"No images were found in the {args.data_dir/'val'}.")
+        raise ValueError(f"No images were found in the {args.data_dir / 'val'}.")
     log.info(f"Validation data loaded (N={len(val_images)}).")
 
     if args.finetune_from is None:
@@ -318,7 +334,7 @@ def main():
             "lr": args.lr,
             "num_epochs": args.num_epochs,
             "pos_weight": args.pos_weight,
-            "num_train_samples":args.train_samples,
+            "num_train_samples": args.train_samples,
             "finetuned_from": args.finetune_from,
             "smart_crop": args.smart_crop,
         },
