@@ -26,11 +26,13 @@ formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
-
-def imread_wrapped(fname, channels=None):
+def imread_wrapped(fname, channels=None, zarr_component=None):
     """Note that multi-channel images have to have the channels in the last dimension."""
     try:
-        img = imread(fname)
+        if fname.suffix == ".zarr":
+            img = da.from_zarr(fname, component=zarr_component)
+        else:
+            img = imread(fname)
         if channels is not None:
             if any(c >= img.shape[-1] for c in channels):
                 raise ValueError(

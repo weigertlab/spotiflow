@@ -4,9 +4,11 @@ import sys
 from itertools import chain
 from pathlib import Path
 
+import dask.array as da
 import numpy as np
 import pandas as pd
 import torch
+from dask.diagnostics import ProgressBar as DaskProgressBar
 from tqdm.auto import tqdm
 
 from .. import __version__
@@ -24,7 +26,7 @@ console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
 
-ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg")
+ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg", "zarr")
 
 
 # Argument parser
@@ -184,6 +186,13 @@ def get_args():
         "0 will be interpreted as the first channel, 1 as the second, etc. "
         "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
     )
+    predict.add_argument(
+        "-zc",
+        "--zarr-component",
+        type=str,
+        default=None,
+        help="Zarr component to predict on, if necessary. Defaults to None."
+    )
 
     utils = parser.add_argument_group(
         title="Utility arguments",
@@ -242,7 +251,7 @@ def main():
 
     # Check if data_path is a file or directory
     # If it's a file , check if it is a valid image file
-    if args.data_path.is_file():
+    if args.data_path.is_file() or args.data_path.suffix == ".zarr":
         assert args.data_path.suffix[1:] in ALLOWED_EXTENSIONS, (
             f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
         )
@@ -279,7 +288,7 @@ def main():
     images = []
 
     for f in image_files:
-        img = imread_wrapped(f, args.channels)
+        img = imread_wrapped(f, args.channels, args.zarr_component)
         if not _check_valid_input_shape(img.shape, model.config):
             raise ValueError(
                 f"image {f} has invalid shape {img.shape} for model with is_3d={model.config.is_3d} and {model.config.in_channels} input channels. The image shape should be either (Y,X,[C]) for a 2D model or (Z,Y,X,[C]) for a 3D model, where the [C] dimension is optional for single-channel inputs."
@@ -301,6 +310,11 @@ def main():
             log.info(f"Predicting spots in {fname} with {n_tiles=}")
 
         _subpix_arg = False if not args.subpix else args.subpix_radius
+
+        if isinstance(img, da.Array):
+            log.info(f"Bringing Zarr in-memory (~{img.nbytes/1e9:.2f} GB)...")
+            with DaskProgressBar(minimum=1.):
+                img = img.compute()
 
         spots, details = model.predict(
             img,
@@ -329,7 +343,7 @@ def main():
             df["intens_B"] = np.round(details.fit_params.intens_B, 3)
             df["snb"] = np.round(signal_to_background(details.fit_params), 3)
 
-        df.to_csv(out_dir / f"{fname.stem}.csv", index=False)
+        df.to_csv(out_dir / f"{fname.stem.replace('.ome', '')}.csv", index=False)
     return 0
 
 
