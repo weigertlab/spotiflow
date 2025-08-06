@@ -7,7 +7,9 @@ from pathlib import Path
 import dask.array as da
 import numpy as np
 import pandas as pd
+import psutil
 import torch
+from csbdeep.utils import normalize_mi_ma
 from dask.diagnostics import ProgressBar as DaskProgressBar
 from tqdm.auto import tqdm
 
@@ -193,6 +195,13 @@ def get_args():
         default=None,
         help="Zarr component to predict on, if necessary. Defaults to None."
     )
+    predict.add_argument(
+        "-zcl",
+        "--zarr-component-lowres",
+        type=str,
+        default=None,
+        help="Zarr component to use for computing the normalization percentiles, if necessary. Pass a lower resolution component to massively speed up the computation. Defaults to None.",
+    )
 
     utils = parser.add_argument_group(
         title="Utility arguments",
@@ -289,6 +298,11 @@ def main():
 
     for f in image_files:
         img = imread_wrapped(f, args.channels, args.zarr_component)
+        if model.config.in_channels == 1:
+            if isinstance(img, da.Array):
+                img = da.squeeze(img)
+            else:
+                img = np.squeeze(img)
         if not _check_valid_input_shape(img.shape, model.config):
             raise ValueError(
                 f"image {f} has invalid shape {img.shape} for model with is_3d={model.config.is_3d} and {model.config.in_channels} input channels. The image shape should be either (Y,X,[C]) for a 2D model or (Z,Y,X,[C]) for a 3D model, where the [C] dimension is optional for single-channel inputs."
@@ -312,9 +326,41 @@ def main():
         _subpix_arg = False if not args.subpix else args.subpix_radius
 
         if isinstance(img, da.Array):
-            log.info(f"Bringing Zarr in-memory (~{img.nbytes/1e9:.2f} GB)...")
-            with DaskProgressBar(minimum=1.):
-                img = img.compute()
+            _available_mem = psutil.virtual_memory().available
+
+            if img.nbytes < _available_mem / 2:
+                log.info(f"Bringing Zarr in-memory (~{img.nbytes/1e9:.2f} GB)...")
+                with DaskProgressBar(minimum=1.):
+                    img = img.compute()
+            else:
+                log.warning(
+                    f"Zarr is too large to bring in-memory (~{img.nbytes/1e9:.2f} GB). Will process it as a Dask array."
+                )
+                if args.normalizer == "auto" and args.zarr_component_lowres is not None:
+                    log.info(
+                        "Trying to compute normalization percentiles on lower resolution image."
+                    )
+                    img_lowres = imread_wrapped(
+                        fname, args.channels, args.zarr_component_lowres
+                    )
+                    if img_lowres.nbytes < _available_mem / 2:
+                        with DaskProgressBar(minimum=1.):
+                            img_lowres = img_lowres.compute()
+                        p1, p998 = np.percentile(
+                            img_lowres, (1, 99.8)
+                        )
+                        args.normalizer = lambda x: normalize_mi_ma(x, p1, p998)
+                        del img_lowres
+                    else:
+                        log.warning(
+                            "Given low-resolution Zarr component is too large to bring in-memory. Will compute normalization percentiles on the full resolution image. This will be slower."
+                        )
+                else:
+                    log.warning(
+                        "Normalization percentiles will be computed on the full resolution image. This will be slower."
+                    )
+
+        _is_spotiflow_input_dask = isinstance(img, da.Array)
 
         spots, details = model.predict(
             img,
@@ -334,14 +380,16 @@ def main():
         if spots.shape[1] == 3:
             csv_columns = ("z",) + csv_columns
         df = pd.DataFrame(np.round(spots, 4), columns=csv_columns)
-        if model.config.in_channels == 1:
-            df["intensity"] = np.round(details.intens, 2)
-        df["probability"] = np.round(details.prob, 3)
-        if args.estimate_params:
-            df["fwhm"] = np.round(details.fit_params.fwhm, 3)
-            df["intens_A"] = np.round(details.fit_params.intens_A, 3)
-            df["intens_B"] = np.round(details.fit_params.intens_B, 3)
-            df["snb"] = np.round(signal_to_background(details.fit_params), 3)
+
+        if _is_spotiflow_input_dask: # Details are not computed for Dask arrays
+            if model.config.in_channels == 1:
+                df["intensity"] = np.round(details.intens, 2)
+            df["probability"] = np.round(details.prob, 3)
+            if args.estimate_params:
+                df["fwhm"] = np.round(details.fit_params.fwhm, 3)
+                df["intens_A"] = np.round(details.fit_params.intens_A, 3)
+                df["intens_B"] = np.round(details.fit_params.intens_B, 3)
+                df["snb"] = np.round(signal_to_background(details.fit_params), 3)
 
         df.to_csv(out_dir / f"{fname.stem.replace('.ome', '')}.csv", index=False)
     return 0
