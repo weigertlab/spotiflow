@@ -381,7 +381,7 @@ def main():
             csv_columns = ("z",) + csv_columns
         df = pd.DataFrame(np.round(spots, 4), columns=csv_columns)
 
-        if _is_spotiflow_input_dask: # Details are not computed for Dask arrays
+        if not _is_spotiflow_input_dask: # Details are not computed for Dask arrays
             if model.config.in_channels == 1:
                 df["intensity"] = np.round(details.intens, 2)
             df["probability"] = np.round(details.prob, 3)
