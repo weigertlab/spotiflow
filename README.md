@@ -132,6 +132,9 @@ points, details = model.predict(img) # points contains the coordinates of the de
 ### Napari plugin
 Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
 
+### QuPath extension
+[Rémy Dornier](https://github.com/rdornier) and colleagues at the [BIOP](https://github.com/BIOP) built an extension to run Spotiflow (prediction only) in QuPath. Please [check their repository](https://github.com/BIOP/qupath-extension-spotiflow) for documentation and installation instructions.
+
 ### Available pre-trained models
 We provide several pre-trained models that may be used out-of-the-box. The available models are: `general`, `hybiss`, `synth_complex`, `synth_3d` and `smfish_3d`. For more information on these pre-trained models, please refer to the article and the [documentation](https://weigertlab.github.io/spotiflow/pretrained.html).
 
