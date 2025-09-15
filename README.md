@@ -1,8 +1,8 @@
 [![License: BSD-3](https://img.shields.io/badge/License-BSD3-blue.svg)](https://opensource.org/license/bsd-3-clause)
 [![PyPI](https://img.shields.io/pypi/v/spotiflow.svg?color=green)](https://pypi.org/project/spotiflow)
 [![Python Version](https://img.shields.io/pypi/pyversions/spotiflow.svg?color=green)](https://python.org)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/spotiflow?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=LIGHTGREY&left_text=downloads)](https://pepy.tech/projects/spotiflow)
 [![tests](https://github.com/weigertlab/spotiflow/workflows/tests/badge.svg)](https://github.com/weigertlab/spotiflow/actions)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/spotiflow)](https://pypistats.org/packages/spotiflow)
 
 ![Logo](artwork/spotiflow_logo.png)
 ---
