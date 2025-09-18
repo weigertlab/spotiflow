@@ -315,6 +315,7 @@ def main():
                 inference_mode=False,
                 verbose=True,
             )
+        model.config.sigma = args.sigma
 
     log.info("Launching training...")
     model.fit(
