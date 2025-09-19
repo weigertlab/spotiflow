@@ -83,5 +83,10 @@ _REGISTERED = {
         url=f"{_default_url_root()}/smfish_3d.zip",
         md5_hash="c5ab30ba3b9ccb07b4c34442d1b5b615",
         is_3d=True,
-    )
+    ),
+    "fluo_live": RegisteredModel(
+        url=f"{_default_url_root()}/fluo_live.zip",
+        md5_hash="7dc7e633704e3fc0d9a1469bafea9442",
+        is_3d=False,
+    ),
 }
