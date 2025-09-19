@@ -189,7 +189,7 @@ class Spotiflow(nn.Module):
         assert (
             map_location is not None
         ), "map_location must be one of ('auto', 'cpu', 'cuda', 'mps')"
-        device = cls._retrieve_device_str(None, map_location)
+        device = cls._retrieve_device_str(None, map_location, model_config)
         model = cls(model_config)
         model.load(
             pretrained_path,
@@ -1440,7 +1440,7 @@ class Spotiflow(nn.Module):
         return
 
     def _retrieve_device_str(
-        self, device_str: Union[None, Literal["auto", "cpu", "cuda", "mps"]]
+        self, device_str: Union[None, Literal["auto", "cpu", "cuda", "mps"]], model_config: Optional[SpotiflowModelConfig] = None
     ) -> str:
         """Retrieve the device string to use for the model.
 
@@ -1451,11 +1451,12 @@ class Spotiflow(nn.Module):
         Returns:
             str: device string to use
         """
+        _config = model_config if model_config is not None else self.config
         if device_str is not None and device_str not in ("auto", "cpu", "cuda", "mps"):
             raise ValueError(
                 f"device must be one of 'auto', 'cpu', 'cuda', 'mps', got {device_str}"
             )
-        if device_str == "mps" and self.config.is_3d:
+        if device_str == "mps" and _config.is_3d:
             log.warning(
                 "3D models are not supported by MPS as of now. Falling back to CPU."
             )
@@ -1467,7 +1468,7 @@ class Spotiflow(nn.Module):
                 "cuda"
                 if torch.cuda.is_available()
                 else "mps"
-                if torch.backends.mps.is_available() and not self.config.is_3d
+                if torch.backends.mps.is_available() and not _config.is_3d
                 else "cpu"
             )
         return device_str
