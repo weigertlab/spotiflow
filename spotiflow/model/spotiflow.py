@@ -1455,6 +1455,11 @@ class Spotiflow(nn.Module):
             raise ValueError(
                 f"device must be one of 'auto', 'cpu', 'cuda', 'mps', got {device_str}"
             )
+        if device_str == "mps" and self.config.is_3d:
+            log.warning(
+                "3D models are not supported by MPS as of now. Falling back to CPU."
+            )
+            return "cpu"
         if device_str is None:
             return str(next(self.parameters()).device)
         elif device_str == "auto":
@@ -1462,7 +1467,7 @@ class Spotiflow(nn.Module):
                 "cuda"
                 if torch.cuda.is_available()
                 else "mps"
-                if torch.backends.mps.is_available()
+                if torch.backends.mps.is_available() and not self.config.is_3d
                 else "cpu"
             )
         return device_str
