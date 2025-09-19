@@ -6,6 +6,7 @@ The following pre-trained models are available (for a more detailed description,
 - ``general``: trained on a diverse dataset of spots of different modalities acquired in different microscopes with different settings. This model is the default one used in the CLI (pixel sizes: 0.04 µm, 0.1 µm, 0.11 µm, 0.15 µm, 0.32 µm, 0.34 µm).
 - ``hybiss``: trained on HybISS data acquired in 3 different microscopes (pixel sizes: 0.15 µm, 0.32 µm, 0.34 µm).
 - ``synth_complex``: trained on synthetic data, which includes simulations of aberrated spots and fluorescence background (pixel size: 0.1 µm).
+- ``fluo_live``: trained on live-cell fluorescence imaging data corresponding to the ``Telomeres`` and ``Terra`` datasets in the manuscript (pixel size: 0.11 µm).
 - ``synth_3d``: trained on synthetic 3D data, which includes simulations of aberrated spots and Z-related artifacts (voxel size: 0.2 µm).
 - ``smfish_3d``: fine-tuned from the ``synth_3d`` model on smFISH 3D data of *Platynereis dumerilii* (voxel size: 0.13 µm (YX), 0.48 µm (Z)).
 
