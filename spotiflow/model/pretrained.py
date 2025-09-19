@@ -24,7 +24,7 @@ def list_registered():
     return list(_REGISTERED.keys())
 
 def _default_url_root():
-    return "https://github.com/weigertlab/spotiflow-models/releases/download/0.9.0"
+    return "https://github.com/weigertlab/spotiflow-models/releases/download/0.6.0"
 
 
 def _default_cache_dir():
