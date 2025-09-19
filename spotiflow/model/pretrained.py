@@ -23,6 +23,9 @@ class RegisteredModel:
 def list_registered():
     return list(_REGISTERED.keys())
 
+def _default_url_root():
+    return "https://github.com/weigertlab/spotiflow-models/releases/download/0.9.0"
+
 
 def _default_cache_dir():
     default_cache_dir = os.getenv("SPOTIFLOW_CACHE_DIR", None)
@@ -57,27 +60,27 @@ def get_pretrained_model_path(name: str, cache_dir: Optional[Path] = None) -> Pa
 
 _REGISTERED = {
     "hybiss": RegisteredModel(
-        url="https://drive.switch.ch/index.php/s/O4hqFSSGX6veLwa/download",
+        url=f"{_default_url_root()}/hybiss.zip",
         md5_hash="254afa97c137d0bd74fd9c1827f0e323",
         is_3d=False,
     ),
     "general": RegisteredModel(
-        url="https://drive.switch.ch/index.php/s/6AoTEgpIAeQMRvX/download",
+        url=f"{_default_url_root()}/general.zip",
         md5_hash="9dd31a36b737204e91b040515e3d899e",
         is_3d=False,
     ),
     "synth_complex": RegisteredModel(
-        url="https://drive.switch.ch/index.php/s/CiCjNJaJzpVVD2M/download",
+        url=f"{_default_url_root()}/synth_complex.zip",
         md5_hash="d692fa21da47e4a50b4c52f49442508b",
         is_3d=False,
     ),
     "synth_3d": RegisteredModel(
-        url="https://drive.switch.ch/index.php/s/VhDqgDoHc11yP6v/download",
+        url=f"{_default_url_root()}/synth_3d.zip",
         md5_hash="a031f1284590886fbae37dc583c0270d",
         is_3d=True,
     ),
     "smfish_3d": RegisteredModel(
-        url="https://drive.switch.ch/index.php/s/Vym7tqiORZOP5Zt/download",
+        url=f"{_default_url_root()}/smfish_3d.zip",
         md5_hash="c5ab30ba3b9ccb07b4c34442d1b5b615",
         is_3d=True,
     )
