@@ -15,12 +15,12 @@
 
 *Spotiflow* is a deep learning-based, threshold-agnostic, subpixel-accurate 2D and 3D spot detection method for fluorescence microscopy. It is primarily developed for spatial transcriptomics workflows that require transcript detection in large, multiplexed FISH-images, although it can also be used to detect spot-like structures in general fluorescence microscopy images and volumes. A more detailed description of the method can be found in [the publication](https://doi.org/10.1038/s41592-025-02662-x) and [the preprint](https://doi.org/10.1101/2024.02.01.578426).
 
-![Overview](artwork/overview.png)
+<img src="artwork/overview.png">
 
 The documentation of the software can be found [here](https://weigertlab.github.io/spotiflow/).
 
 ## Installation (pip, recommended)
-Create and activate a fresh conda environment (we currently support Python 3.9 to 3.12):
+Create and activate a fresh conda environment (we currently support Python 3.9 to 3.13):
 
 ```console
 conda create -n spotiflow python=3.12
@@ -56,7 +56,7 @@ Note that the `conda-forge` Spotiflow version might be outdated w.r.t. the versi
 
 ## Usage
 
-### Training (2D images)
+### Training
 The CLI is the easiest way to train (or fine-tune) a model. To train a model, you can use the following command:
 
 ```console
@@ -67,7 +67,7 @@ where `INPUT_DIR` is the path to the directory containing the data in the format
 
 For training with the API, please check the [training example notebook](examples/1_train.ipynb). For finetuning an already pretrained model, please refer to the [finetuning example notebook](examples/3_finetune.ipynb).
 
-### Training (3D volumes)
+#### 3D models
 3D models can also be trained with the CLI by adding the `--is-3d True` flag, as shown below:
 
 ```console
@@ -85,28 +85,6 @@ spotiflow-predict PATH
 ```
 
 where PATH can be either an image or a folder. By default, the command will use the `general` pretrained model. You can specify a different model by using the `--pretrained-model` flag. Moreover, spots are saved to a subfolder `spotiflow_results` created inside the input folder (this can be changed with the `--out-dir` flag). For more information, please refer to the help message of the CLI (`$ spotiflow-predict -h`).
-
-### Inference (Docker)
-
-Alternatively to installing Spotiflow as command line tool on your operating system, you can also use it directly from our Docker container (thanks to @migueLib for the contribution!). To do so, you can use the following command:
-
-To pull the Docker container from Dockerhub use:
-``` console
-docker pull weigertlab/spotiflow:main
-```
-
-Then, run spotiflow-predict with:
-```console
-docker run -it -v [/local/input/folder]:/spotiflow/input weigertlab/spotiflow:main spotiflow-predict input/your_file.tif -o .
-```
-Where:  
-`-v`: represents the volume flag, which allows you to mount a folder from your local machine to the container.    
-`/path/to/your/data:/spotiflow`: is the path to the folder containing the image you want to analyze.
-
-Note:
-- The current implementation of Spotiflow in Docker only supports CPU inference.
-
-
 
 ### Inference (API)
 
@@ -130,6 +108,23 @@ model = Spotiflow.from_pretrained("general")
 points, details = model.predict(img) # points contains the coordinates of the detected spots, the attributes 'heatmap' and 'flow' of `details` contain the predicted full resolution heatmap and the prediction of the stereographic flow respectively (access them by `details.heatmap` or `details.flow`). Retrieved spot intensities are found in `details.intens`.
 ```
 
+### Inference (Docker)
+
+Alternatively to installing Spotiflow as a command line tool on your operating system, you can also use it directly from a Docker container (thanks to [@migueLib](https://github.com/migueLib) for the contribution!). To do so, you should:
+
+1) Pull the Docker container from Dockerhub:
+``` console
+docker pull weigertlab/spotiflow:main
+```
+
+2) Run `spotiflow-predict` in the container with:
+```console
+docker run -it -v [/local/input/folder]:/spotiflow/input weigertlab/spotiflow:main spotiflow-predict input/your_file.tif -o .
+```
+Where `-v` is the volume flag, which allows you to mount a folder from your local machine to the container. `[/local/input/folder]` should be the path to the folder containing the image(s) you want to analyze.
+
+Note that the current implementation of Spotiflow in Docker only supports CPU inference.
+
 ### Napari plugin
 Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-use UI. See [napari-spotiflow](https://github.com/weigertlab/napari-spotiflow) for more information.
 
@@ -137,7 +132,7 @@ Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-u
 [Rémy Dornier](https://github.com/rdornier) and colleagues at the [BIOP](https://github.com/BIOP) built an extension to run Spotiflow (prediction only) in QuPath. Please [check their repository](https://github.com/BIOP/qupath-extension-spotiflow) for documentation and installation instructions.
 
 ### Available pre-trained models
-We provide several pre-trained models that may be used out-of-the-box. The available models are: `general`, `hybiss`, `synth_complex`, `synth_3d` and `smfish_3d`. For more information on these pre-trained models, please refer to the article and the [documentation](https://weigertlab.github.io/spotiflow/pretrained.html).
+We provide several pre-trained models that may be used out-of-the-box. The available models are: `general`, `hybiss`, `synth_complex`, `fluo_live`, `synth_3d` and `smfish_3d`. For more information on these pre-trained models, please refer to the article and the [documentation](https://weigertlab.github.io/spotiflow/pretrained.html).
 
 ### Changing the cache directory
 The default cache directory root folder (where pre-trained models and datasets are stored) is, by default, `~/.spotiflow`. If you want to change it for your use case, you can either set the environment variable `SPOTIFLOW_CACHE_DIR` to the path you want or directly pass the desired folder as an argument (`cache_dir`) to the `Spotiflow.from_pretrained()` method (note that if the latter is chosen, the path stored in the environment variable will be ignored). 
