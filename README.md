@@ -4,7 +4,8 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/spotiflow?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=LIGHTGREY&left_text=downloads)](https://pepy.tech/projects/spotiflow)
 [![tests](https://github.com/weigertlab/spotiflow/workflows/tests/badge.svg)](https://github.com/weigertlab/spotiflow/actions)
 
-![Logo](artwork/spotiflow_logo.png)
+<img src="artwork/spotiflow_logo.png" width="350">
+
 ---
 
 
