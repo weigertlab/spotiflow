@@ -348,6 +348,33 @@ def normalize(
     mi, ma = np.percentile(y[mask], (pmin, pmax))
     return normalize_mi_ma(x, mi, ma, clip=clip)
 
+def dask_normalize_mi_ma(
+    x: da.Array,
+    mi: float,
+    ma: float,
+    clip: bool=False,
+    eps: float=1e-20,
+    dtype: np.dtype=np.float32
+) -> da.Array:
+    """
+    Normalize a Dask array using min-max normalization with the given values.
+    Adapted from csbdeep.utils.normalize_mi_ma to work with Dask array (removed numexpr).
+    """
+    if not isinstance(x, da.Array):
+        raise TypeError("Input x should be a Dask array. Please use the `normalize`/`normalize_mi_ma` function for NumPy arrays.")
+    if dtype is not None:
+        x = x.astype(dtype)
+        mi = dtype(mi) if np.isscalar(mi) else mi.astype(dtype, copy=False)
+        ma = dtype(ma) if np.isscalar(ma) else ma.astype(dtype, copy=False)
+        eps = dtype(eps)
+
+    x = (x - mi) / (ma - mi + eps)
+
+    if clip:
+        x = x.clip(0, 1)
+    return x
+
+
 
 def normalize_dask(
     x: da.Array,
@@ -355,6 +382,8 @@ def normalize_dask(
     pmax: float = 99.8,
     eps: float = 1e-20,
     max_samples: int = 1e5,
+    clip: bool = False,
+    dtype: Optional[np.dtype] = np.float32,
 ) -> da.Array:
     """
     Lazily normalizes (percentile-based) an n-dimensional Dask array with the additional option to ignore a value. The normalization is done as follows:
@@ -382,7 +411,7 @@ def normalize_dask(
         mi, ma = da.percentile(
             x.ravel()[::n_skip], (pmin, pmax), internal_method="tdigest"
         ).compute()
-    return (x - mi) / (ma - mi + eps)
+    return dask_normalize_mi_ma(x, mi, ma, clip=clip, eps=eps, dtype=dtype)
 
 
 def initialize_wandb(

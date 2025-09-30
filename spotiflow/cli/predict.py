@@ -9,13 +9,12 @@ import numpy as np
 import pandas as pd
 import psutil
 import torch
-from csbdeep.utils import normalize_mi_ma
 from dask.diagnostics import ProgressBar as DaskProgressBar
 from tqdm.auto import tqdm
 
 from .. import __version__
 from ..model import Spotiflow
-from ..utils import imread_wrapped, infer_n_tiles, str2bool
+from ..utils import dask_normalize_mi_ma, imread_wrapped, infer_n_tiles, str2bool
 from ..utils.fitting import signal_to_background
 
 log = logging.getLogger(__name__)
@@ -349,7 +348,7 @@ def main():
                         p1, p998 = np.percentile(
                             img_lowres, (1, 99.8)
                         )
-                        args.normalizer = lambda x: normalize_mi_ma(x, p1, p998)
+                        args.normalizer = lambda x: dask_normalize_mi_ma(x, p1, p998)
                         del img_lowres
                     else:
                         log.warning(
