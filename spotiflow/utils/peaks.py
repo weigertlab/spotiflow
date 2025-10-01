@@ -16,7 +16,7 @@ from ..lib.filters import c_maximum_filter_2d_float
 from ..lib.filters3d import c_maximum_filter_3d_float
 from ..lib.point_nms import c_point_nms_2d
 from ..lib.point_nms3d import c_point_nms_3d
-from ..lib.spotflow2d import c_spotflow2d, c_gaussian2d
+from ..lib.spotflow2d import c_spotflow2d, c_gaussian2d, c_gaussian2d_sum
 from ..lib.spotflow3d import c_spotflow3d, c_gaussian3d
 
 
@@ -217,10 +217,19 @@ def points_to_prob2d(points, shape,
             np.int32(shape[1]),
         )
     elif mode == "sum":
-        x = np.zeros(shape, np.float32)
-        Y, X = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), indexing="ij")
-        for p, s, v in zip(points, sigma, val):
-            x += v * np.exp(-((Y - p[0]) ** 2 + (X - p[1]) ** 2) / (2 * s ** 2))        
+        n_max_points = min(10, len(points))
+        x = c_gaussian2d_sum(
+            points.astype(np.float32, copy=False),
+            val.astype(np.float32, copy=False),
+            sigma.astype(np.float32, copy=False),
+            np.int32(shape[0]),
+            np.int32(shape[1]),
+            np.int32(n_max_points),
+        )
+        # x = np.zeros(shape, np.float32)
+        # Y, X = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), indexing="ij")
+        # for p, s, v in zip(points, sigma, val):
+        #     x += v * np.exp(-((Y - p[0]) ** 2 + (X - p[1]) ** 2) / (2 * s ** 2))        
     else:
         raise ValueError(mode)
 

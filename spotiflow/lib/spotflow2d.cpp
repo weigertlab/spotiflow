@@ -157,6 +157,107 @@ static PyObject *c_gaussian2d(PyObject *self, PyObject *args)
 }
 
 
+static PyObject *c_gaussian2d_sum(PyObject *self, PyObject *args)
+{
+
+    PyArrayObject *points = NULL;
+    PyArrayObject *probs = NULL;
+    PyArrayObject *sigmas = NULL;
+    PyArrayObject *dst = NULL;
+    int shape_y, shape_x;
+    float sigma;
+
+    int n_max_points;
+
+    if (!PyArg_ParseTuple(args, "O!O!O!iii", &PyArray_Type, &points, &PyArray_Type, &probs, &PyArray_Type, &sigmas, &shape_y, &shape_x, &n_max_points))
+        return NULL;
+
+    npy_intp *dims = PyArray_DIMS(points);
+
+    npy_intp dims_dst[2];
+    dims_dst[0] = shape_y;
+    dims_dst[1] = shape_x;
+
+    dst = (PyArrayObject *)PyArray_SimpleNew(2, dims_dst, NPY_FLOAT32);
+
+
+    // build kdtree
+
+    // build kdtree
+
+    PointCloud2D<float> cloud;
+    float query_point[2];
+    nanoflann::SearchParams params;
+    std::vector<std::pair<size_t, float>> results;
+
+    cloud.pts.resize(dims[0]);
+    for (long i = 0; i < dims[0]; i++)
+    {
+        cloud.pts[i].y = *(float *)PyArray_GETPTR2(points, i, 0);
+        cloud.pts[i].x = *(float *)PyArray_GETPTR2(points, i, 1);
+    }
+
+    // construct a kd-tree:
+    typedef nanoflann::KDTreeSingleIndexAdaptor<
+        nanoflann::L2_Simple_Adaptor<float, PointCloud2D<float>>,
+        PointCloud2D<float>, 2>
+        my_kd_tree_t;
+
+    // build the index from points
+    my_kd_tree_t index(2, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10 /* max leaf */));
+
+    index.buildIndex();
+
+
+    
+#ifdef __APPLE__
+#pragma omp parallel for
+#else
+#pragma omp parallel for schedule(dynamic)
+#endif
+    for (int i = 0; i < dims_dst[0]; i++)
+    {
+        for (int j = 0; j < dims_dst[1]; j++)
+        {
+
+            // get the closest point
+            const float query_pt[2] = {(float)j, (float)i};
+            size_t ret_index[n_max_points];
+            float out_dist_sqr;
+
+            index.knnSearch(
+                &query_pt[0], n_max_points, ret_index, &out_dist_sqr);
+
+            float val = 0;
+
+            for (int k = 0; k < n_max_points; k++)
+            {
+                // the coords of the closest point
+                const float px = cloud.pts[ret_index[k]].x;
+                const float py = cloud.pts[ret_index[k]].y;
+
+                const float y = py - i;
+                const float x = px - j;
+                const float r2 = x * x + y * y;
+
+                const float prob = *(float *)PyArray_GETPTR1(probs, ret_index[k]);
+                const float sigma = *(float *)PyArray_GETPTR1(sigmas, ret_index[k]);
+                const float sigma_denom = 2 * sigma * sigma;
+
+                // the gaussian value
+                val += prob*exp(-r2 / sigma_denom);
+
+            }
+
+            *(float *)PyArray_GETPTR2(dst, i, j) = val;
+        }
+    }
+
+    return PyArray_Return(dst);
+}
+
+
+
 static PyObject *c_spotflow2d(PyObject *self, PyObject *args)
 {
 
@@ -452,6 +553,7 @@ static PyObject *c_cluster_flow2d(PyObject *self, PyObject *args)
 static struct PyMethodDef methods[] = {
     {"c_spotflow2d", c_spotflow2d, METH_VARARGS, "spot flow"},
     {"c_gaussian2d", c_gaussian2d, METH_VARARGS, "gaussian"},
+    {"c_gaussian2d_sum", c_gaussian2d_sum, METH_VARARGS, "gaussian sum"},
     {"c_cluster_flow2d", c_cluster_flow2d, METH_VARARGS, "cluster flow"},
     {NULL, NULL, 0, NULL}
 
