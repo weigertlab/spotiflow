@@ -189,17 +189,19 @@ def points_to_prob2d(points, shape,
 
     x = np.zeros(shape, np.float32)
     assert points.ndim == 2 and points.shape[1] == 2
-    points = filter_shape(points, shape)
+    points, idx = filter_shape(points, shape, return_mask=True)
 
     if isinstance(sigma, Number):
         sigma = np.ones(len(points), np.float32) * sigma
     else: 
         sigma = np.asarray(sigma, np.float32)
+        sigma = sigma[idx]
     
     if isinstance(val, Number):
         val = np.ones(len(points), np.float32) * val
     else: 
         val = np.asarray(val, np.float32)
+        val = val[idx]
             
     if not len(points) == len(val) or not len(points) == len(sigma):
         raise ValueError("points, sigmas, and probs must have the same length")
@@ -250,7 +252,7 @@ def points_to_prob3d(points, shape,
     assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
     x = np.zeros(tuple(s//g for s, g in zip(shape, grid)), np.float32)
     assert points.ndim == 2 and points.shape[1] == ndim
-    points = filter_shape(points, shape)
+    points, idx = filter_shape(points, shape, return_mask=True)
 
     if len(points) == 0:
         return x
@@ -259,11 +261,13 @@ def points_to_prob3d(points, shape,
         sigma = np.ones(len(points), np.float32) * sigma
     else: 
         sigma = np.asarray(sigma, np.float32)
+        sigma = sigma[idx]
     
     if isinstance(val, Number):
         val = np.ones(len(points), np.float32) * val
     else: 
         val = np.asarray(val, np.float32)
+        val = val[idx]
     
 
     if mode == "max":
