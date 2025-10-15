@@ -484,7 +484,8 @@ def remove_device_id_from_device_str(device_str: str) -> str:
 def get_data(
     path: Union[Path, str],
     normalize: bool = True,
-    subfolder: tuple[str] = ("train", "val", "test"),
+    include_test: bool = False,
+    subfolder: Optional[tuple[str]] = None, # ("train", "val", "test"),
     is_3d: bool = False,
     **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -493,7 +494,8 @@ def get_data(
     Args:
         path (Union[Path, str]): Path to the data.
         normalize (bool, optional): Whether to normalize the data. Defaults to True.
-        subfolder (tuple[str], optional): Subfolders to be used. Defaults to ('train','val', 'test').
+        include_test: (bool, optional): Whether to include the test set. Defaults to False.
+        subfolder (tuple[str], optional): Subfolders to be used for non-standard datasets. Defaults to None.
     Returns:
         Tuple[np.ndarray]: A tuple of arrays with length 2*len(subfolder) corresponding to the images, centers per subfolder
     """
@@ -502,6 +504,11 @@ def get_data(
     SpotsDatasetClass = SpotsDataset if not is_3d else Spots3DDataset
 
     path = Path(path)
+
+    if subfolder is None and not include_test:
+        subfolder = ("train", "val")
+    elif subfolder is None and include_test:
+        subfolder = ("train", "val", "test")
 
     if not path.exists():
         raise FileNotFoundError(f"Given data path {path} does not exist!")
