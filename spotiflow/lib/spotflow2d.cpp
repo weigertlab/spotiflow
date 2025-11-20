@@ -222,8 +222,8 @@ static PyObject *c_gaussian2d_sum(PyObject *self, PyObject *args)
 
             // get the closest point
             const float query_pt[2] = {(float)j, (float)i};
-            size_t ret_index[n_max_points];
-            float out_dist_sqr[n_max_points];
+            size_t *ret_index = new size_t[n_max_points];
+            float *out_dist_sqr = new float[n_max_points];
 
             index.knnSearch(
                 &query_pt[0], n_max_points, ret_index, out_dist_sqr);
@@ -250,6 +250,9 @@ static PyObject *c_gaussian2d_sum(PyObject *self, PyObject *args)
             }
 
             *(float *)PyArray_GETPTR2(dst, i, j) = val;
+            
+            delete[] ret_index;
+            delete[] out_dist_sqr;
         }
     }
 
