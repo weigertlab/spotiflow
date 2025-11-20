@@ -35,6 +35,22 @@ jobs:
         name: Install Python
         with:
           python-version: '3.x'
+      
+      - name: Free up disk space (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean || true
+          df -h
+
+      - name: Free up disk space (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          sudo rm -rf /usr/local/share/boost
+          df -h
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel
