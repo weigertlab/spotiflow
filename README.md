@@ -131,6 +131,9 @@ Our napari plugin allows detecting spots in 2D and 3D directly with an easy-to-u
 ### QuPath extension
 [Rémy Dornier](https://github.com/rdornier) and colleagues at the [BIOP](https://github.com/BIOP) built an extension to run Spotiflow (prediction only) in QuPath. Please [check their repository](https://github.com/BIOP/qupath-extension-spotiflow) for documentation and installation instructions.
 
+### Fiji/TrackMate
+[Jean-Yves Tinevez](https://github.com/tinevez) integrated Spotiflow in the [v8 release](https://forum.image.sc/t/trackmate-v8-segmentation-editor-and-python-cli-integration/117737) of [TrackMate](https://imagej.net/plugins/trackmate)! To use it you must install Spotiflow in a conda environment as described above, and then follow [these instructions](https://imagej.net/plugins/trackmate/trackers/trackmate-trackastra#configure-conda-path-in-fiji) to configure TrackMate to use that conda environment.
+
 ### Available pre-trained models
 We provide several pre-trained models that may be used out-of-the-box. The available models are: `general`, `hybiss`, `synth_complex`, `fluo_live`, `synth_3d` and `smfish_3d`. For more information on these pre-trained models, please refer to the article and the [documentation](https://weigertlab.github.io/spotiflow/pretrained.html).
 
