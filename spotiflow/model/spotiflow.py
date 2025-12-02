@@ -735,6 +735,7 @@ class Spotiflow(nn.Module):
         ] = None,
         distributed_params: Optional[dict] = None,
         fit_params: bool = False,
+        use_tuned_tile_overlap: bool = False,
     ) -> Tuple[np.ndarray, SimpleNamespace]:
         """Predict spots in an image.
 
@@ -752,6 +753,7 @@ class Spotiflow(nn.Module):
             progress_bar_wrapper (Optional[callable], optional): Progress bar wrapper to use. Defaults to None.
             device (Optional[Union[torch.device, Literal["auto", "cpu", "cuda", "mps"]]], optional): computing device to use. If None, will infer from model location. If "auto", will infer from available hardware. Defaults to None.
             fit_params (bool, optional): Whether to fit the model parameters to the input image. Defaults to False.
+            use_tuned_tile_overlap (bool, optional): Whether to use tuned tile overlaps for prediction. Defaults to False. This behaviour will change in a future release.
         Returns:
             Tuple[np.ndarray, SimpleNamespace]: Tuple of (points, details). Points are the coordinates of the spots. Details is a namespace containing the spot-wise probabilities (`prob`), the heatmap (`heatmap`), the stereographic flow (`flow`), the 2D local offset vector field (`subpix`) and the spot intensities (`intens`).
         """
@@ -973,10 +975,14 @@ class Spotiflow(nn.Module):
                 actual_n_tiles = actual_n_tiles + (1,)
             elif self.config.is_3d and x.ndim == 4 and len(n_tiles) == 3:
                 actual_n_tiles = actual_n_tiles + (1,)
-            n_block_overlaps = (4, 4, 0)
-            if self.config.is_3d:
-                n_block_overlaps = (2, 2, 2, 0)
-                # n_block_overlaps = (2, 2, 2, 0)
+            if not use_tuned_tile_overlap:
+                # TODO: prev hardcoded defaults, should be changed to config-variable ones in future releases
+                if self.config.is_3d:
+                    n_block_overlaps = (2, 2, 2, 0)
+                else:
+                    n_block_overlaps = (4, 4, 0)
+            else:
+                n_block_overlaps = tuple(max(4, d//2) for d in div_by[:actual_n_dims]) + (0,)
                 
                 
             _n_tiles_progress = sum(1 for _ in tile_iterator(x, n_tiles=actual_n_tiles, block_sizes=div_by, n_block_overlaps=n_block_overlaps))
