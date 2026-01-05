@@ -86,6 +86,11 @@ jobs:
         with:
           python-version: '3.x'
 
+      - uses: actions/setup-go@v5
+        name: Install Go
+        with:
+          go-version: 'stable'
+
       - name: Free up disk space (Linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
