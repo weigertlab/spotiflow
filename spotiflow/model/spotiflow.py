@@ -860,6 +860,10 @@ class Spotiflow(nn.Module):
         corr_grid = np.asarray(self.config.grid) if self.config.is_3d else 1
         out_shape = tuple(np.asarray(img.shape[:actual_n_dims]) // corr_grid)
 
+        if np.any(corr_grid > 1):
+            min_distance = min_distance / np.min(corr_grid)
+            if verbose:
+                log.info(f"Correcting internal min_distance to {min_distance} due to grid: {self.config.grid}.")
         self.eval()
         # Predict without tiling
         if all(n <= 1 for n in n_tiles):

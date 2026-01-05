@@ -1,23 +1,23 @@
+import math
+import os
 from numbers import Number
-from typing import Literal, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
-import numpy as np
 import numpy as np
 from skimage.feature import corner_peaks, corner_subpix
 from skimage.feature.peak import (
+    _exclude_border,
     _get_excluded_border_width,
     _get_threshold,
-    _exclude_border,
 )
-import os
-from .utils import filter_shape
 
 from ..lib.filters import c_maximum_filter_2d_float
 from ..lib.filters3d import c_maximum_filter_3d_float
 from ..lib.point_nms import c_point_nms_2d
 from ..lib.point_nms3d import c_point_nms_3d
-from ..lib.spotflow2d import c_spotflow2d, c_gaussian2d, c_gaussian2d_sum
-from ..lib.spotflow3d import c_spotflow3d, c_gaussian3d
+from ..lib.spotflow2d import c_gaussian2d, c_gaussian2d_sum, c_spotflow2d
+from ..lib.spotflow3d import c_gaussian3d, c_spotflow3d
+from .utils import filter_shape
 
 
 def get_num_threads():
@@ -63,11 +63,12 @@ def nms_points_2d(
     idx = np.argsort(scores, kind="stable")[::-1]
     points = points[idx]
     scores = scores[idx]
-    
+
     points = np.ascontiguousarray(points, dtype=np.float32)
     inds = c_point_nms_2d(points, np.float32(min_distance))
     inds = idx[inds]
     return inds
+
 
 def nms_points_3d(
     points: np.ndarray, scores: np.ndarray = None, min_distance: int = 2
@@ -110,8 +111,8 @@ def nms_points_3d(
     inds = idx[inds]
     return inds
 
-def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
 
+def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     if not image.ndim == 2:
         raise ValueError("Image must be 2D")
     if not kernel_size > 0 and kernel_size % 2 == 1:
@@ -122,6 +123,7 @@ def maximum_filter_2d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     return c_maximum_filter_2d_float(
         image, np.int32(kernel_size // 2), np.int32(n_threads)
     )
+
 
 def maximum_filter_3d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     if not image.ndim == 3:
@@ -136,13 +138,20 @@ def maximum_filter_3d(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     )
 
 
-def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union[np.ndarray, float]=1., mode:str ="max", grid: Union[int, Tuple[int,int,int]]=None) -> np.ndarray:
+def points_to_prob(
+    points,
+    shape,
+    sigma: Union[np.ndarray, float] = 1.5,
+    val: Union[np.ndarray, float] = 1.0,
+    mode: str = "max",
+    grid: Union[int, Tuple[int, int, int]] = None,
+) -> np.ndarray:
     """Wrapper function for different cpp calls. Points should be in (y,x) or (z,y,x) order"""
 
-    ndim=len(shape) 
-    
+    ndim = len(shape)
+
     points = np.asarray(points)
-    
+
     if not points.shape[1] == ndim:
         raise ValueError("Wrong dimension of points!")
 
@@ -150,15 +159,13 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
         raise NotImplementedError("grid not yet implemented for 2d")
 
     if grid is None:
-        grid = (1, )*ndim
+        grid = (1,) * ndim
     elif isinstance(grid, int):
-        grid = (grid, )*ndim
+        grid = (grid,) * ndim
 
     if len(grid) != ndim:
         raise ValueError("grid must have the same dimension as shape")
-    
-    
-    
+
     if ndim == 2:
         return points_to_prob2d(points, shape=shape, sigma=sigma, val=val, mode=mode)
     elif ndim == 3:
@@ -166,24 +173,28 @@ def points_to_prob(points, shape, sigma: Union[np.ndarray, float]=1.5, val:Union
     else:
         raise ValueError("Wrong dimension of points!")
 
-def points_to_prob2d(points, shape, 
-                     sigma: Union[np.ndarray, float]=1.5,
-                     val: Union[np.ndarray, float]=1., 
-                     mode:Literal["max","sum"]="max") -> np.ndarray:
-    """ 
+
+def points_to_prob2d(
+    points,
+    shape,
+    sigma: Union[np.ndarray, float] = 1.5,
+    val: Union[np.ndarray, float] = 1.0,
+    mode: Literal["max", "sum"] = "max",
+) -> np.ndarray:
+    """
     Create a 2D probability map from a set of points
-    
+
     Parameters
     ----------
     points : np.ndarray
         Array of shape (N,2) containing the points to be filtered.
     shape : tuple
         shape of the output array
-    sigma : float or list/array of floats 
+    sigma : float or list/array of floats
         sigma of the gaussians, by default 1.5
     mode : str, optional
         mode of the filter, by default "max"
-    val : float or list/array of floats 
+    val : float or list/array of floats
         Value or array of shape (N,) containing the value at the center of each point, by default 1.
     """
 
@@ -193,19 +204,18 @@ def points_to_prob2d(points, shape,
 
     if isinstance(sigma, Number):
         sigma = np.ones(len(points), np.float32) * sigma
-    else: 
+    else:
         sigma = np.asarray(sigma, np.float32)
         sigma = sigma[idx]
-    
+
     if isinstance(val, Number):
         val = np.ones(len(points), np.float32) * val
-    else: 
+    else:
         val = np.asarray(val, np.float32)
         val = val[idx]
-            
+
     if not len(points) == len(val) or not len(points) == len(sigma):
         raise ValueError("points, sigmas, and probs must have the same length")
-            
 
     if len(points) == 0:
         return x
@@ -228,53 +238,57 @@ def points_to_prob2d(points, shape,
             np.int32(shape[1]),
             np.int32(n_max_points),
         )
-        # x = np.zeros(shape, np.float32)
-        # Y, X = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), indexing="ij")
-        # for p, s, v in zip(points, sigma, val):
-        #     x += v * np.exp(-((Y - p[0]) ** 2 + (X - p[1]) ** 2) / (2 * s ** 2))        
     else:
         raise ValueError(mode)
 
     return x
 
-def points_to_prob3d(points, shape, 
-                     sigma: Union[np.ndarray, float]=1.5,
-                     val: Union[np.ndarray, float]=1., 
-                     mode:Literal["max","sum"]="max",
-                     grid: Union[int, Tuple[int,int,int]]=None):
+
+def points_to_prob3d(
+    points,
+    shape,
+    sigma: Union[np.ndarray, float] = 1.5,
+    val: Union[np.ndarray, float] = 1.0,
+    mode: Literal["max", "sum"] = "max",
+    grid: Union[int, Tuple[int, int, int]] = None,
+):
     """points are in (z,y,x) order"""
 
-    ndim=len(shape)
-    
-    assert len(grid) == ndim and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
+    ndim = len(shape)
 
-    # TODO: needed?
-    assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
-    x = np.zeros(tuple(s//g for s, g in zip(shape, grid)), np.float32)
+    assert (
+        len(grid) == ndim
+        and all(isinstance(i, int) for i in shape)
+        and all(isinstance(i, int) for i in grid)
+    ), "shape and grid must be a 3-integer tuple"
+
+    assert all(s % g == 0 for s, g in zip(shape, grid)), (
+        "shape must be divisible by grid"
+    )
+    x = np.zeros(tuple(s // g for s, g in zip(shape, grid)), np.float32)
     assert points.ndim == 2 and points.shape[1] == ndim
     points, idx = filter_shape(points, shape, return_mask=True)
 
     if len(points) == 0:
         return x
-    
+
     if isinstance(sigma, Number):
         sigma = np.ones(len(points), np.float32) * sigma
-    else: 
+    else:
         sigma = np.asarray(sigma, np.float32)
         sigma = sigma[idx]
-    
+
     if isinstance(val, Number):
         val = np.ones(len(points), np.float32) * val
-    else: 
+    else:
         val = np.asarray(val, np.float32)
         val = val[idx]
-    
 
     if mode == "max":
         x = c_gaussian3d(
             points.astype(np.float32, copy=False),
             val.astype(np.float32, copy=False),
-            sigma.astype(np.float32, copy=False),            
+            sigma.astype(np.float32, copy=False),
             np.int32(shape[0]),
             np.int32(shape[1]),
             np.int32(shape[2]),
@@ -286,25 +300,33 @@ def points_to_prob3d(points, shape,
         x = np.zeros(shape, np.float32)
         Xs = np.stack(np.meshgrid(*(np.arange(s) for s in shape), indexing="ij"))
         for p, s, v in zip(points, sigma, val):
-            x += v * np.exp(- np.sum((Xs - p[:,None,None,None]) ** 2,axis=0) / (2 * s ** 2))        
-        
+            x += v * np.exp(
+                -np.sum((Xs - p[:, None, None, None]) ** 2, axis=0) / (2 * s**2)
+            )
+
     else:
         raise ValueError(mode)
 
     return x
 
-def points_to_flow(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]]=None):
+
+def points_to_flow(
+    points: np.ndarray,
+    shape: tuple,
+    sigma: float = 1.5,
+    grid: Union[int, Tuple[int, int, int]] = None,
+):
     """
     for each grid point in shape compute the vector d in R^N to the closest point
     and return its flow embedding onto S^(N+1)
     """
-    ndim=len(shape)
-    assert points.shape[-1] == ndim 
+    ndim = len(shape)
+    assert points.shape[-1] == ndim
     if grid is None:
-        grid = (1,)*ndim
+        grid = (1,) * ndim
     elif isinstance(grid, int):
-        grid = (grid,)*ndim
-    
+        grid = (grid,) * ndim
+
     if ndim == 2:
         return points_to_flow2d(points, shape, sigma)
     elif ndim == 3:
@@ -338,7 +360,13 @@ def points_to_flow2d(points: np.ndarray, shape: tuple, sigma: float = 1.5):
             np.float32(sigma),
         )
 
-def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid: Union[int, Tuple[int,int,int]] = (1,1,1)):
+
+def points_to_flow3d(
+    points: np.ndarray,
+    shape: tuple,
+    sigma: float = 1.5,
+    grid: Union[int, Tuple[int, int, int]] = (1, 1, 1),
+):
     """
     for each grid point in shape compute the vector d=(z,y,x) to the closest
     point and return its flow embedding (w',z',y',x') onto S^4
@@ -354,11 +382,20 @@ def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid:
     """
     if isinstance(grid, int):
         grid = (grid, grid, grid)
-    
-    assert len(shape) == 3 and len(grid) == 3 and all(isinstance(i, int) for i in shape) and all(isinstance(i, int) for i in grid), "shape and grid must be a 3-integer tuple"
-    assert all(s%g == 0 for s, g in zip(shape, grid)), "shape must be divisible by grid"
+
+    assert (
+        len(shape) == 3
+        and len(grid) == 3
+        and all(isinstance(i, int) for i in shape)
+        and all(isinstance(i, int) for i in grid)
+    ), "shape and grid must be a 3-integer tuple"
+    assert all(s % g == 0 for s, g in zip(shape, grid)), (
+        "shape must be divisible by grid"
+    )
     if len(points) == 0:
-        flow = np.zeros(tuple(s//g for s, g in zip(shape[:3], grid)) + (4,), np.float32)
+        flow = np.zeros(
+            tuple(s // g for s, g in zip(shape[:3], grid)) + (4,), np.float32
+        )
         flow[..., 0] = -1
         return flow
     else:
@@ -374,14 +411,15 @@ def points_to_flow3d(points: np.ndarray, shape: tuple, sigma: float = 1.5, grid:
         )
 
 
-def flow_to_vector(flow: np.ndarray, sigma: float, eps: float=1e-20):
-    ndim=flow.ndim-1
+def flow_to_vector(flow: np.ndarray, sigma: float, eps: float = 1e-20):
+    ndim = flow.ndim - 1
     if ndim == 2:
         return flow_to_vector_2d(flow, sigma=sigma, eps=eps)
     elif ndim == 3:
         return flow_to_vector_3d(flow, sigma=sigma, eps=eps)
     else:
         raise ValueError(f"Dimensionality of the stereographic flow should be 3 or 4!")
+
 
 def flow_to_vector_2d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     """from the 3d flow (z',y',x') compute back the 2d vector field (y,x) it corresponds to
@@ -408,14 +446,32 @@ def flow_to_vector_3d(flow: np.ndarray, sigma: float, eps: float = 1e-20):
     offsets = np.stack((z * s, y * s, x * s), axis=-1)
     return offsets
 
+
 def prob_to_points(
-    prob,
-    prob_thresh=0.5,
-    min_distance=2,
+    prob: np.ndarray,
+    prob_thresh: float = 0.5,
+    min_distance: Union[int, float] = 2,
     subpix: bool = False,
-    mode: str = "skimage",
-    exclude_border: bool = True,
+    mode: str = "fast",
+    exclude_border: bool = False,
 ):
+    """
+    Detect points from a probability map using peak detection + NMS.
+
+    Args:
+        prob (np.ndarray): Probability map from which to detect points.
+        prob_thresh (float, optional): Threshold for probability values for a pixel to be considered positive. Defaults to 0.5.
+        min_distance (Union[int, float], optional): Minimum distance between detected points. Defaults to 2.
+        subpix (bool, optional): Whether to use subpixel accuracy. Defaults to False.
+        mode (str, optional): Mode of peak detection ("fast" or "skimage"). Defaults to "fast".
+        exclude_border (bool, optional): Whether to exclude points near the border. Defaults to True.
+
+    Raises:
+        NotImplementedError: _description_
+
+    Returns:
+        _type_: _description_
+    """
     assert prob.ndim in (2, 3), "Wrong dimension of prob"
     if mode == "skimage":
         corners = corner_peaks(
@@ -444,20 +500,25 @@ def prob_to_points(
 
 def local_peaks(
     image: np.ndarray,
-    min_distance=1,
-    exclude_border=True,
-    threshold_abs=None,
-    threshold_rel=None,
-    use_score:bool=False
+    min_distance: Union[int, float] = 1,
+    exclude_border: bool = False,
+    threshold_abs: Optional[float] = None,
+    threshold_rel: Optional[float] = None,
+    use_score: bool = False,
 ):
-    if not image.ndim in [2, 3]:
-        raise ValueError("Image must be 2D")
+    if image.ndim not in (2, 3):
+        raise ValueError("Probability map must be 2D or 3D")
     max_filter_fun = maximum_filter_2d if image.ndim == 2 else maximum_filter_3d
     nms_fun = nms_points_2d if image.ndim == 2 else nms_points_3d
 
+    # cast to integer for exclude_border=True case
+    _bw_min_distance = (
+        math.ceil(min_distance) if isinstance(min_distance, float) else min_distance
+    )
+
     # make compatible with scikit-image
     # https://github.com/scikit-image/scikit-image/blob/a4e533ea2a1947f13b88219e5f2c5931ab092413/skimage/feature/peak.py#L120
-    border_width = _get_excluded_border_width(image, min_distance, exclude_border)
+    border_width = _get_excluded_border_width(image, _bw_min_distance, exclude_border)
     threshold = _get_threshold(image, threshold_abs, threshold_rel)
 
     image = image.astype(np.float32)
@@ -465,7 +526,7 @@ def local_peaks(
     if min_distance <= 0:
         mask = image > threshold
     else:
-        mask = max_filter_fun(image, 2 * min_distance + 1) == image
+        mask = max_filter_fun(image, math.ceil(2 * min_distance + 1)) == image
 
         # no peak for a trivial image
         image_is_trivial = np.all(mask)
@@ -482,24 +543,29 @@ def local_peaks(
         scores = image[mask] if mask.sum() > 0 else None
     else:
         scores = None
-        
+
     idx = nms_fun(coord, scores=scores, min_distance=min_distance)
     coord = coord[idx].copy()
     return coord
 
 
-
-def points_from_heatmap_flow(heatmap:np.ndarray, flow:np.ndarray, sigma:float, grid:tuple[int]=None, local_peak_kwargs=None):
-    """ Returns the points from the heatmap and flow field""" 
+def points_from_heatmap_flow(
+    heatmap: np.ndarray,
+    flow: np.ndarray,
+    sigma: float,
+    grid: tuple[int] = None,
+    local_peak_kwargs=None,
+):
+    """Returns the points from the heatmap and flow field"""
     ndim = heatmap.ndim
 
-    if not flow.ndim == ndim+1:
+    if not flow.ndim == ndim + 1:
         raise ValueError("Flow and heatmap must have the same dimension")
-    if not flow.shape[-1] == ndim+1:
-        raise ValueError(f"Last dimension of flow must be {ndim+1}")
-    
+    if not flow.shape[-1] == ndim + 1:
+        raise ValueError(f"Last dimension of flow must be {ndim + 1}")
+
     if grid is None:
-        grid = (1,)*ndim
+        grid = (1,) * ndim
 
     grid = np.asarray(grid)
 
@@ -507,7 +573,7 @@ def points_from_heatmap_flow(heatmap:np.ndarray, flow:np.ndarray, sigma:float, g
         local_peak_kwargs = {}
 
     points_new = local_peaks(heatmap, **local_peak_kwargs)
-    flow_reversed = flow_to_vector(flow, sigma=sigma)    
+    flow_reversed = flow_to_vector(flow, sigma=sigma)
     offsets = flow_reversed[tuple(points_new.T.astype(int))]
-    points_new = grid[None]*(points_new + offsets)
+    points_new = grid[None] * (points_new + offsets)
     return points_new
