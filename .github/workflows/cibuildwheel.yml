@@ -74,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-15]
+        os: [ubuntu-22.04, windows-2022, macos-14]
         py: [cp39, cp310, cp311, cp312, cp313]
 
     steps:
@@ -132,7 +132,6 @@ jobs:
           CIBW_BEFORE_BUILD: "pip cache purge"
           CIBW_TEST_REQUIRES: pytest pytest-cov
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
-          MACOSX_DEPLOYMENT_TARGET: "15.0"
 
       - name: Build wheels for CPython (Linux and Windows)
         if: startsWith(matrix.os, 'macos') == false
