@@ -123,8 +123,8 @@ jobs:
           tee -a $GITHUB_ENV << END
           CC=/usr/bin/clang
           CXX=/usr/bin/clang++
-          CFLAGS=${CFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include
-          CXXFLAGS=${CXXFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include
+          CFLAGS=${CFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include -fvisibility=hidden
+          CXXFLAGS=${CXXFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include -fvisibility=hidden
           LDFLAGS=${LDFLAGS} ${HOMEBREW_PREFIX}/opt/libomp/lib/libomp.a
           END
 
