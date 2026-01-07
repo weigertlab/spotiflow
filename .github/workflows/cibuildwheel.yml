@@ -131,7 +131,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_BUILD: "pip cache purge"
           CIBW_TEST_REQUIRES: pytest pytest-cov
-          CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
+          CIBW_TEST_COMMAND: "OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 pytest -v --cov=spotiflow {project}"
           MACOSX_DEPLOYMENT_TARGET: "14.0"
 
       - name: Build wheels for CPython (Linux and Windows)
