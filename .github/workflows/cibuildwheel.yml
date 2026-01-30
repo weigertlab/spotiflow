@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        py: [cp311, cp312]
+        py: [cp311, cp312, cp313, cp314]
     steps:
       - uses: actions/checkout@v4
         name: Checkout repository
@@ -110,7 +110,7 @@ jobs:
           - os: windows-latest
             python: 314
             platform_id: win_amd64
-          # macOS x86_64
+          # macOS x86_64 (py314 not supported due to missing torchvision wheels)
           - os: macos-15-intel
             python: 39
             platform_id: macosx_x86_64
@@ -125,9 +125,6 @@ jobs:
             platform_id: macosx_x86_64
           - os: macos-15-intel
             python: 313
-            platform_id: macosx_x86_64
-          - os: macos-15-intel
-            python: 314
             platform_id: macosx_x86_64
           # macOS arm64
           - os: macos-14
