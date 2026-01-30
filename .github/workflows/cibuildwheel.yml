@@ -1,8 +1,5 @@
-# adapted from:
-# - https://github.com/matplotlib/matplotlib/blob/master/.github/workflows/cibuildwheel.yml
-# - https://github.com/scikit-image/scikit-image/blob/master/.github/workflows/cibuildwheel.yml
-# - https://github.com/pypa/cibuildwheel/blob/main/examples/github-deploy.yml
-# - https://github.com/stardist/stardist/blob/master/.github/workflows/cibuildwheel.yml
+# ported and adapted from:
+# - https://github.com/stardist/stardist/blob/main/.github/workflows/cibuildwheel.yaml
 
 name: tests
 
@@ -46,12 +43,6 @@ jobs:
           sudo apt-get clean || true
           df -h
 
-      - name: Free up disk space (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          sudo rm -rf /usr/local/share/boost
-          df -h
-
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel
       - name: Build wheels for CPython (Linux)
@@ -68,114 +59,165 @@ jobs:
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
 
   build_wheels:
-    name: Build ${{ matrix.py }} wheels on ${{ matrix.os }}
+    name: Build cp${{ matrix.python }}-${{ matrix.platform_id }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels')) || github.event_name == 'pull_request'
+
+    # for conda-incubator/setup-miniconda to work
+    defaults:
+      run:
+        shell: bash -el {0}
+
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-15]
-        py: [cp39, cp310, cp311, cp312, cp313]
+        include:
+          # Linux
+          - os: ubuntu-latest
+            python: 39
+            platform_id: manylinux_x86_64
+          - os: ubuntu-latest
+            python: 310
+            platform_id: manylinux_x86_64
+          - os: ubuntu-latest
+            python: 311
+            platform_id: manylinux_x86_64
+          - os: ubuntu-latest
+            python: 312
+            platform_id: manylinux_x86_64
+          - os: ubuntu-latest
+            python: 313
+            platform_id: manylinux_x86_64
+          - os: ubuntu-latest
+            python: 314
+            platform_id: manylinux_x86_64
+          # Windows
+          - os: windows-latest
+            python: 39
+            platform_id: win_amd64
+          - os: windows-latest
+            python: 310
+            platform_id: win_amd64
+          - os: windows-latest
+            python: 311
+            platform_id: win_amd64
+          - os: windows-latest
+            python: 312
+            platform_id: win_amd64
+          - os: windows-latest
+            python: 313
+            platform_id: win_amd64
+          - os: windows-latest
+            python: 314
+            platform_id: win_amd64
+          # macOS x86_64
+          - os: macos-15-intel
+            python: 39
+            platform_id: macosx_x86_64
+          - os: macos-15-intel
+            python: 310
+            platform_id: macosx_x86_64
+          - os: macos-15-intel
+            python: 311
+            platform_id: macosx_x86_64
+          - os: macos-15-intel
+            python: 312
+            platform_id: macosx_x86_64
+          - os: macos-15-intel
+            python: 313
+            platform_id: macosx_x86_64
+          - os: macos-15-intel
+            python: 314
+            platform_id: macosx_x86_64
+          # macOS arm64
+          - os: macos-14
+            python: 39
+            platform_id: macosx_arm64
+          - os: macos-14
+            python: 310
+            platform_id: macosx_arm64
+          - os: macos-14
+            python: 311
+            platform_id: macosx_arm64
+          - os: macos-14
+            python: 312
+            platform_id: macosx_arm64
+          - os: macos-14
+            python: 313
+            platform_id: macosx_arm64
+          - os: macos-14
+            python: 314
+            platform_id: macosx_arm64
 
     steps:
-      - uses: actions/checkout@v4
-        name: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v4
-        name: Install Python
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          python-version: '3.13'
 
-      - name: Free up disk space (Linux)
-        if: startsWith(matrix.os, 'ubuntu')
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        if: ${{ startsWith(matrix.platform_id, 'macosx') }}
+        with:
+          miniforge-version: latest
+
+      - name: Build and test wheels
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean || true
-          df -h
+          set -ex
+          # follow approach of scikit-learn: https://github.com/scikit-learn/scikit-learn/blob/7f0900c265936eac9a89bba37eb19ee66208d46a/build_tools/wheels/build_wheels.sh
+          if [[ $(uname) == "Darwin" ]]; then
+            if [[ "$CIBW_BUILD" == *-macosx_arm64 ]]; then
+              # SciPy requires 12.0 on arm to prevent kernel panics
+              # https://github.com/scipy/scipy/issues/14688
+              export MACOSX_DEPLOYMENT_TARGET=12.0
+              OPENMP_URL="https://anaconda.org/conda-forge/llvm-openmp/11.1.0/download/osx-arm64/llvm-openmp-11.1.0-hf3c4609_1.tar.bz2"
+            else
+              export MACOSX_DEPLOYMENT_TARGET=10.9
+              OPENMP_URL="https://anaconda.org/conda-forge/llvm-openmp/11.1.0/download/osx-64/llvm-openmp-11.1.0-hda6cdc1_1.tar.bz2"
+            fi
+            echo MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}
 
-      - name: Free up disk space (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          sudo rm -rf /usr/local/share/boost
-          df -h
+            conda create -n build $OPENMP_URL
+            PREFIX="$HOME/miniconda3/envs/build"
+            export CC=/usr/bin/clang
+            export CXX=/usr/bin/clang++
+            export CFLAGS="$CFLAGS -I$PREFIX/include"
+            export CXXFLAGS="$CXXFLAGS -I$PREFIX/include"
+            export LDFLAGS="$LDFLAGS -Wl,-rpath,$PREFIX/lib -L$PREFIX/lib -lomp"
+          fi
 
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel
-      
-      - name: Setup macos env vars
-        run: echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> $GITHUB_ENV
-
-      # https://scikit-learn.org/stable/developers/advanced_installation.html#macos
-      - name: Setup OpenMP (macOS)
-        if: startsWith(matrix.os, 'macos')
-        shell: bash
-        run: |
-          brew config
-          #build from source should ensure the library is built for MACOSX_DEPLOYMENT_TARGET
-          brew install --build-from-source libomp
-          
-          eval `brew shellenv`
-          
-          # point to the static lib to avoid OMP error #15
-          tee -a $GITHUB_ENV << END
-          CC=/usr/bin/clang
-          CXX=/usr/bin/clang++
-          CFLAGS=${CFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include -fvisibility=hidden
-          CXXFLAGS=${CXXFLAGS} -I${HOMEBREW_PREFIX}/opt/libomp/include -fvisibility=hidden
-          LDFLAGS=${LDFLAGS} ${HOMEBREW_PREFIX}/opt/libomp/lib/libomp.a
-          END
-
-      - name: Build wheels for CPython (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
           python -m cibuildwheel --output-dir dist
         env:
-          CIBW_BUILD: "${{ matrix.py }}-*"
-          CIBW_ARCHS_MACOS: arm64
-          CIBW_BUILD_VERBOSITY: 1
-          CIBW_BEFORE_BUILD: "pip cache purge"
-          CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: pytest {project}
-          CIBW_ENVIRONMENT_MACOS: "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1"
-
-      - name: Build wheels for CPython (Linux and Windows)
-        if: startsWith(matrix.os, 'macos') == false
-        run: |
-          python -m cibuildwheel --output-dir dist
-        env:
-          # only build for specific platforms 
-          CIBW_BUILD: "${{ matrix.py }}-*{x86_64,win_amd64}"
-          CIBW_SKIP: "*musllinux*"
-
+          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
+          CIBW_ARCHS: all
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_BUILD_VERBOSITY: 1
           CIBW_TEST_REQUIRES: pytest pytest-cov
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
 
-
-      - uses: actions/upload-artifact@v4
-        name: Upload wheels
+      - name: Upload wheels
+        uses: actions/upload-artifact@v5
         with:
-          name: dist-${{matrix.os}}-${{matrix.py}}
-          path: ./dist/*.whl
+          name: cibw-wheels-cp${{ matrix.python }}-${{ matrix.platform_id }}
+          path: dist/*.whl
+
 
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
-    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels'))
     steps:
-      - uses: actions/checkout@v4
-        name: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v4
-        name: Upload sdist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v5
         with:
-          name: dist-${{matrix.os}}-${{matrix.py}}
+          name: cibw-sdist
           path: dist/*.tar.gz
 
 
@@ -183,18 +225,26 @@ jobs:
     name: Upload to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels'))
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v4
-        name: Download wheels and sdist
+      - name: Download wheels and sdist
+        uses: actions/download-artifact@v6
         with:
+          pattern: cibw-*
           path: dist
-          pattern: dist-*
           merge-multiple: true
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        name: Publish to PyPI
+      - name: Check that package version matches git tag ${{ github.ref_name }}
+        shell: bash
+        run: |
+          ls -l dist
+          test -f "dist/stardist-${{ github.ref_name }}.tar.gz"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
+          # password: ${{ secrets.TESTPYPI_API_TOKEN }}
+          # repository-url: https://test.pypi.org/legacy/
