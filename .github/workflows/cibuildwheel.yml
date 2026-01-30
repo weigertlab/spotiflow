@@ -18,7 +18,6 @@ jobs:
   build_wheels:
     name: Build cp${{ matrix.python }}-${{ matrix.platform_id }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && contains(github.ref, 'wheels')) || github.event_name == 'pull_request'
 
     # for conda-incubator/setup-miniconda to work
     defaults:
