@@ -20,7 +20,7 @@
 The documentation of the software can be found [here](https://weigertlab.github.io/spotiflow/).
 
 ## Installation (pip, recommended)
-Create and activate a fresh conda environment (we currently support Python 3.9 to 3.13):
+Create and activate a fresh conda environment (we currently support Python 3.9 to 3.14):
 
 ```console
 conda create -n spotiflow python=3.12
