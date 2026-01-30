@@ -1,5 +1,6 @@
 from spotiflow.data import SpotsDataset
 from spotiflow.model import SpotiflowModelConfig, SpotiflowTrainingConfig, Spotiflow
+from spotiflow.utils.ci import is_github_actions_running
 import lightning.pytorch as pl
 import torch
 from utils import example_data
@@ -7,7 +8,10 @@ from utils import example_data
 
 if __name__ == "__main__":
 
-    device = "cuda" if torch.cuda.is_available() else "mps"
+    if torch.backends.mps.is_available() and is_github_actions_running():
+        device = "cpu"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
     X, P = example_data(64, sigma=3, noise=0.01)
     Xv, Pv = example_data(4, sigma=3, noise=0.01)

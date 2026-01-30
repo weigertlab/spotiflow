@@ -86,7 +86,7 @@ jobs:
             platform_id: win_amd64
             run_on_main_push: true
             
-          # macOS x86_64
+          # macOS x86_64 (missing torchvision wheels for py313+)
           - os: macos-15-intel
             python: 39
             platform_id: macosx_x86_64
@@ -101,10 +101,6 @@ jobs:
             run_on_main_push: false
           - os: macos-15-intel
             python: 312
-            platform_id: macosx_x86_64
-            run_on_main_push: false
-          - os: macos-15-intel
-            python: 313
             platform_id: macosx_x86_64
             run_on_main_push: true
             

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from spotiflow.utils.ci import is_github_actions_running
 from spotiflow.model import Spotiflow, SpotiflowModelConfig
 from typing import Tuple
 
@@ -9,7 +10,7 @@ from typing import Tuple
 AVAILABLE_DEVICES = [None, "auto", "cpu"]
 if torch.cuda.is_available():
     AVAILABLE_DEVICES += ["cuda"]
-if torch.backends.mps.is_available():
+if torch.backends.mps.is_available() and not is_github_actions_running():
     AVAILABLE_DEVICES += ["mps"]
 
 AVAILABLE_DEVICES = tuple(AVAILABLE_DEVICES)
@@ -33,6 +34,10 @@ def test_predict(img_size: Tuple[int, int],
                  device: str,
                  subpix: bool,
                  ):
+    if device == "auto" and torch.backends.mps.is_available() and is_github_actions_running():
+        # ensure mps is skipped in gh actions
+        return
+
     img = np.random.randn(*img_size, in_channels).astype(np.float32)
     model_config = SpotiflowModelConfig(
         levels=2,

@@ -1,7 +1,9 @@
 
 import numpy as np
-from spotiflow.utils import points_to_prob, estimate_params
 from spotiflow.model import Spotiflow
+from spotiflow.utils import points_to_prob, estimate_params
+from spotiflow.utils.ci import is_github_actions_running
+import torch
 
 def test_fit2d(return_results: bool=False):
     np.random.seed(42)
@@ -47,4 +49,10 @@ if __name__ == "__main__":
     
     img = np.clip(200*x, 0,255).astype(np.uint8)
     
-    points, details = model.predict(img, fit_params=True)
+    # mps is not supported in GH Actions, we force cpu
+    if torch.backends.mps.is_available() and is_github_actions_running():
+        device = "cpu"
+    else:
+        device = "auto"
+
+    points, details = model.predict(img, fit_params=True, device=device)
