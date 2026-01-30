@@ -14,9 +14,9 @@ def test_flow():
     X, P = example_data(64, sigma=3, noise=0.01)
 
     model = Spotiflow.from_pretrained("hybiss")
-    p1, details1 = model.predict(X[0], subpix=False)
-    p2, details2 = model.predict(X[0], subpix=True)
-    p3, details3 = model.predict(X[0], subpix=1)
+    p1, details1 = model.predict(X[0], subpix=False, device="cpu")
+    p2, details2 = model.predict(X[0], subpix=True, device="cpu")
+    p3, details3 = model.predict(X[0], subpix=1, device="cpu")
 
     s1 = points_matching(P[0], p1)
     s2 = points_matching(P[0], p2)
