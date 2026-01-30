@@ -15,66 +15,6 @@ on:
       branches: [ "main" ]
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }} with Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
-    if: github.event_name == 'push' && contains(github.ref, 'main')
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux (subset of versions)
-          - os: ubuntu-latest
-            python: 311
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-          - os: ubuntu-latest
-            python: 312
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-          - os: ubuntu-latest
-            python: 313
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-          - os: ubuntu-latest
-            python: 314
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-    steps:
-      - uses: actions/checkout@v4
-        name: Checkout repository
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Free up disk space (Linux)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean || true
-          df -h
-
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel
-      - name: Build wheels for CPython (Linux)
-        run: |
-          python -m cibuildwheel --output-dir dist
-        env:
-          # only build for specific platforms 
-          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
-          CIBW_SKIP: "*musllinux*"
-          CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
-
-          CIBW_BUILD_VERBOSITY: 1
-          CIBW_BEFORE_BUILD: "pip cache purge"
-          CIBW_TEST_REQUIRES: pytest pytest-cov
-          CIBW_TEST_COMMAND: pytest -v {project}
-
   build_wheels:
     name: Build cp${{ matrix.python }}-${{ matrix.platform_id }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -89,102 +29,182 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # push/PR events (subset, 3 py versions for ubuntu and 1 each for windows and macos)
+          - os: ubuntu-latest
+            python: 312
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+            build_condition: reduced
+          - os: ubuntu-latest
+            python: 313
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+            build_condition: reduced
+          - os: ubuntu-latest
+            python: 314
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+            build_condition: reduced
+          - os: windows-latest
+            python: 312
+            platform_id: win_amd64
+            build_condition: reduced
+          - os: macos-14
+            python: 312
+            platform_id: macosx_arm64
+            build_condition: reduced
+          
+          # For releases and PR events (full matrix)
           # Linux
           - os: ubuntu-latest
             python: 39
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           - os: ubuntu-latest
             python: 310
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           - os: ubuntu-latest
             python: 311
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           - os: ubuntu-latest
             python: 312
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           - os: ubuntu-latest
             python: 313
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           - os: ubuntu-latest
             python: 314
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
+            build_condition: full
           # Windows
           - os: windows-latest
             python: 39
             platform_id: win_amd64
+            build_condition: full
           - os: windows-latest
             python: 310
             platform_id: win_amd64
+            build_condition: full
           - os: windows-latest
             python: 311
             platform_id: win_amd64
+            build_condition: full
           - os: windows-latest
             python: 312
             platform_id: win_amd64
+            build_condition: full
           - os: windows-latest
             python: 313
             platform_id: win_amd64
+            build_condition: full
           - os: windows-latest
             python: 314
             platform_id: win_amd64
+            build_condition: full
           # macOS x86_64 (py314 not supported due to missing torchvision wheels)
           - os: macos-15-intel
             python: 39
             platform_id: macosx_x86_64
+            build_condition: full
           - os: macos-15-intel
             python: 310
             platform_id: macosx_x86_64
+            build_condition: full
           - os: macos-15-intel
             python: 311
             platform_id: macosx_x86_64
+            build_condition: full
           - os: macos-15-intel
             python: 312
             platform_id: macosx_x86_64
+            build_condition: full
           - os: macos-15-intel
             python: 313
             platform_id: macosx_x86_64
+            build_condition: full
           # macOS arm64
           - os: macos-14
             python: 39
             platform_id: macosx_arm64
+            build_condition: full
           - os: macos-14
             python: 310
             platform_id: macosx_arm64
+            build_condition: full
           - os: macos-14
             python: 311
             platform_id: macosx_arm64
+            build_condition: full
           - os: macos-14
             python: 312
             platform_id: macosx_arm64
+            build_condition: full
           - os: macos-14
             python: 313
             platform_id: macosx_arm64
+            build_condition: full
           - os: macos-14
             python: 314
             platform_id: macosx_arm64
+            build_condition: full
 
     steps:
+      # skip based on event type and build condition
+      - name: Skip build check
+        id: skip_check
+        run: |
+          SKIP=false
+          
+          # run reduced builds for pushes to main
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != *"wheels"* ]]; then
+            if [[ "${{ matrix.build_condition }}" == "full" ]]; then
+              SKIP=true
+            fi
+          fi
+          
+          # run full builds for releases and PRs
+          if [[ ("${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "pull_request") && "${{ matrix.build_condition }}" == "reduced" ]]; then
+            SKIP=true
+          fi
+          
+          # run full builds for pushes to wheels branch
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == *"wheels"* && "${{ matrix.build_condition }}" == "reduced" ]]; then
+            SKIP=true
+          fi
+          
+          echo "skip=$SKIP" >> $GITHUB_OUTPUT
+          if [[ "$SKIP" == "true" ]]; then
+            echo "Skipping build for ${{ matrix.build_condition }} on ${{ github.event_name }}"
+          fi
+
       - name: Checkout repository
+        if: steps.skip_check.outputs.skip != 'true'
         uses: actions/checkout@v5
 
       - name: Setup Python
+        if: steps.skip_check.outputs.skip != 'true'
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
-        if: ${{ startsWith(matrix.platform_id, 'macosx') }}
+        if: ${{ steps.skip_check.outputs.skip != 'true' && startsWith(matrix.platform_id, 'macosx') }}
         with:
           miniforge-version: latest
 
       - name: Build and test wheels
+        if: steps.skip_check.outputs.skip != 'true'
         run: |
           set -ex
           # follow approach of scikit-learn: https://github.com/scikit-learn/scikit-learn/blob/7f0900c265936eac9a89bba37eb19ee66208d46a/build_tools/wheels/build_wheels.sh
@@ -219,6 +239,7 @@ jobs:
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
 
       - name: Upload wheels
+        if: steps.skip_check.outputs.skip != 'true'
         uses: actions/upload-artifact@v5
         with:
           name: cibw-wheels-cp${{ matrix.python }}-${{ matrix.platform_id }}
