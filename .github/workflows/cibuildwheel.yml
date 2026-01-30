@@ -16,22 +16,38 @@ on:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }} with Python ${{ matrix.py }}
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && contains(github.ref, 'main')
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
-        py: [cp311, cp312, cp313, cp314]
+        include:
+          # Linux (subset of versions)
+          - os: ubuntu-latest
+            python: 311
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+          - os: ubuntu-latest
+            python: 312
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+          - os: ubuntu-latest
+            python: 313
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
+          - os: ubuntu-latest
+            python: 314
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
     steps:
       - uses: actions/checkout@v4
         name: Checkout repository
 
-      - uses: actions/setup-python@v4
-        name: Install Python
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          python-version: '3.13'
 
       - name: Free up disk space (Linux)
         if: startsWith(matrix.os, 'ubuntu')
@@ -50,13 +66,14 @@ jobs:
           python -m cibuildwheel --output-dir dist
         env:
           # only build for specific platforms 
-          CIBW_BUILD: "${{ matrix.py }}-*{x86_64,win_amd64}"
+          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_SKIP: "*musllinux*"
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
 
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_BUILD: "pip cache purge"
           CIBW_TEST_REQUIRES: pytest pytest-cov
-          CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
+          CIBW_TEST_COMMAND: pytest -v {project}
 
   build_wheels:
     name: Build cp${{ matrix.python }}-${{ matrix.platform_id }} on ${{ matrix.os }}
@@ -76,21 +93,27 @@ jobs:
           - os: ubuntu-latest
             python: 39
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           - os: ubuntu-latest
             python: 310
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           - os: ubuntu-latest
             python: 311
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           - os: ubuntu-latest
             python: 312
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           - os: ubuntu-latest
             python: 313
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           - os: ubuntu-latest
             python: 314
             platform_id: manylinux_x86_64
+            manylinux_image: manylinux_2_28
           # Windows
           - os: windows-latest
             python: 39
@@ -190,7 +213,7 @@ jobs:
         env:
           CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_ARCHS: all
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux_image }}
           CIBW_BUILD_VERBOSITY: 1
           CIBW_TEST_REQUIRES: pytest pytest-cov
           CIBW_TEST_COMMAND: pytest -v --cov=spotiflow {project}
