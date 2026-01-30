@@ -85,24 +85,25 @@ jobs:
             python: 314
             platform_id: win_amd64
             run_on_main_push: true
-            
-          # macOS x86_64 (missing torchvision wheels for py313+)
-          - os: macos-15-intel
-            python: 39
-            platform_id: macosx_x86_64
-            run_on_main_push: false
-          - os: macos-15-intel
-            python: 310
-            platform_id: macosx_x86_64
-            run_on_main_push: false
-          - os: macos-15-intel
-            python: 311
-            platform_id: macosx_x86_64
-            run_on_main_push: false
-          - os: macos-15-intel
-            python: 312
-            platform_id: macosx_x86_64
-            run_on_main_push: true
+          
+          # FIXME 
+          # # macOS x86_64 (missing torchvision wheels for py313+)
+          # - os: macos-15-intel
+          #   python: 39
+          #   platform_id: macosx_x86_64
+          #   run_on_main_push: false
+          # - os: macos-15-intel
+          #   python: 310
+          #   platform_id: macosx_x86_64
+          #   run_on_main_push: false
+          # - os: macos-15-intel
+          #   python: 311
+          #   platform_id: macosx_x86_64
+          #   run_on_main_push: false
+          # - os: macos-15-intel
+          #   python: 312
+          #   platform_id: macosx_x86_64
+          #   run_on_main_push: true
             
           # macOS arm64            
           - os: macos-14
@@ -244,7 +245,7 @@ jobs:
         shell: bash
         run: |
           ls -l dist
-          test -f "dist/stardist-${{ github.ref_name }}.tar.gz"
+          test -f "dist/spotiflow-${{ github.ref_name }}.tar.gz"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -252,5 +253,3 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           verbose: true
-          # password: ${{ secrets.TESTPYPI_API_TOKEN }}
-          # repository-url: https://test.pypi.org/legacy/
