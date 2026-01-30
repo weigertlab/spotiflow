@@ -28,134 +28,111 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # push/PR events (subset, 3 py versions for ubuntu and 1 each for windows and macos)
-          - os: ubuntu-latest
-            python: 312
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-            build_condition: reduced
-          - os: ubuntu-latest
-            python: 313
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-            build_condition: reduced
-          - os: ubuntu-latest
-            python: 314
-            platform_id: manylinux_x86_64
-            manylinux_image: manylinux_2_28
-            build_condition: reduced
-          - os: windows-latest
-            python: 312
-            platform_id: win_amd64
-            build_condition: reduced
-          - os: macos-14
-            python: 312
-            platform_id: macosx_arm64
-            build_condition: reduced
-          
-          # For releases and PR events (full matrix)
           # Linux
           - os: ubuntu-latest
             python: 39
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: false
           - os: ubuntu-latest
             python: 310
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: false
           - os: ubuntu-latest
             python: 311
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: false
           - os: ubuntu-latest
             python: 312
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: true
           - os: ubuntu-latest
             python: 313
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: true
           - os: ubuntu-latest
             python: 314
             platform_id: manylinux_x86_64
             manylinux_image: manylinux_2_28
-            build_condition: full
+            run_on_main_push: true
+            
           # Windows
           - os: windows-latest
             python: 39
             platform_id: win_amd64
-            build_condition: full
+            run_on_main_push: false
           - os: windows-latest
             python: 310
             platform_id: win_amd64
-            build_condition: full
+            run_on_main_push: false
           - os: windows-latest
             python: 311
             platform_id: win_amd64
-            build_condition: full
+            run_on_main_push: false
           - os: windows-latest
             python: 312
             platform_id: win_amd64
-            build_condition: full
+            run_on_main_push: false
           - os: windows-latest
             python: 313
             platform_id: win_amd64
-            build_condition: full
+            run_on_main_push: false
           - os: windows-latest
             python: 314
             platform_id: win_amd64
-            build_condition: full
-          # macOS x86_64 (py314 not supported due to missing torchvision wheels)
+            run_on_main_push: true
+            
+          # macOS x86_64
           - os: macos-15-intel
             python: 39
             platform_id: macosx_x86_64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-15-intel
             python: 310
             platform_id: macosx_x86_64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-15-intel
             python: 311
             platform_id: macosx_x86_64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-15-intel
             python: 312
             platform_id: macosx_x86_64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-15-intel
             python: 313
             platform_id: macosx_x86_64
-            build_condition: full
-          # macOS arm64
+            run_on_main_push: true
+            
+          # macOS arm64            
           - os: macos-14
             python: 39
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-14
             python: 310
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-14
             python: 311
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-14
             python: 312
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-14
             python: 313
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: false
           - os: macos-14
             python: 314
             platform_id: macosx_arm64
-            build_condition: full
+            run_on_main_push: true
 
     steps:
       # skip based on event type and build condition
@@ -164,26 +141,18 @@ jobs:
         run: |
           SKIP=false
           
-          # run reduced builds for pushes to main
+          # pushes to main
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" != *"wheels"* ]]; then
-            if [[ "${{ matrix.build_condition }}" == "full" ]]; then
+            if [[ "${{ matrix.run_on_main_push }}" == "false" ]]; then
               SKIP=true
             fi
           fi
-          
-          # run full builds for releases and PRs
-          if [[ ("${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "pull_request") && "${{ matrix.build_condition }}" == "reduced" ]]; then
-            SKIP=true
-          fi
-          
-          # run full builds for pushes to wheels branch
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == *"wheels"* && "${{ matrix.build_condition }}" == "reduced" ]]; then
-            SKIP=true
-          fi
-          
+
           echo "skip=$SKIP" >> $GITHUB_OUTPUT
           if [[ "$SKIP" == "true" ]]; then
-            echo "Skipping build for ${{ matrix.build_condition }} on ${{ github.event_name }}"
+            echo "Skipping low priority build for ${{ matrix.os }} Python ${{ matrix.python }} on push event"
+          else
+            echo "Running build for ${{ matrix.os }} Python ${{ matrix.python }} (run_on_main_push: ${{ matrix.run_on_main_push }})"
           fi
 
       - name: Checkout repository
