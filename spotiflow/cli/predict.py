@@ -3,6 +3,7 @@ import logging
 import sys
 from itertools import chain
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import dask.array as da
 import numpy as np
@@ -16,6 +17,7 @@ from .. import __version__
 from ..model import Spotiflow
 from ..utils import dask_normalize_mi_ma, imread_wrapped, infer_n_tiles, str2bool
 from ..utils.fitting import signal_to_background
+from ..utils.utils import _is_url, _suffix
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -27,7 +29,8 @@ console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
 
-ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg", "zarr")
+ALLOWED_EXTENSIONS = ("tif", "tiff", "png", "jpg", "jpeg", "zarr", "ims")
+URL_ALLOWED_EXTENSIONS = ("zarr", "ims")
 
 
 # Argument parser
@@ -42,8 +45,8 @@ def get_args():
     )
     required.add_argument(
         "data_path",
-        type=Path,
-        help="Path to image file or directory of image files. If a directory, will process all images in the directory.",
+        type=str,
+        help="Path to image file or directory of image files. If a directory, will process all images in the directory. May also be a remote URL (http(s)/s3/gs) pointing to a .ims or .zarr file.",
     )
     required.add_argument(
         "-pm",
@@ -188,11 +191,23 @@ def get_args():
         "This is only relevant for multi-channel images. If None, will use all channels. Defaults to None.",
     )
     predict.add_argument(
+        "-ax",
+        "--axis-order",
+        type=str,
+        required=False,
+        default="channel-last",
+        choices=["channel-last", "channel-first"],
+        help="Axis order of the input image. 'channel-last' assumes (Z)YX(C), "
+        "'channel-first' assumes (C)(Z)YX. Only relevant for multi-channel images "
+        "and ignored for .ims inputs (channels are always read separately). "
+        "Defaults to 'channel-last'.",
+    )
+    predict.add_argument(
         "-zc",
         "--zarr-component",
         type=str,
         default=None,
-        help="Zarr component to predict on, if necessary. Defaults to None."
+        help="Zarr component to predict on, if necessary. Defaults to None.",
     )
     predict.add_argument(
         "-zcl",
@@ -200,6 +215,13 @@ def get_args():
         type=str,
         default=None,
         help="Zarr component to use for computing the normalization percentiles, if necessary. Pass a lower resolution component to massively speed up the computation. Defaults to None.",
+    )
+    predict.add_argument(
+        "-fl",
+        "--force-lazy",
+        action="store_true",
+        required=False,
+        help="Force lazy loading with Dask for all images, even those that would fit in memory. Defaults to False.",
     )
 
     utils = parser.add_argument_group(
@@ -223,6 +245,13 @@ def _check_valid_input_shape(shape, config):
     return (
         len(shape) == ndim or len(shape) == ndim + 1 and shape[-1] == config.in_channels
     )
+
+
+def _stem(fname):
+    """Return the output stem for a file path or remote URL."""
+    if _is_url(fname):
+        return Path(urlsplit(str(fname)).path).stem
+    return fname.stem
 
 
 def main():
@@ -257,18 +286,28 @@ def main():
     # Set out_dir
     out_dir = args.out_dir
 
-    # Check if data_path is a file or directory
-    # If it's a file , check if it is a valid image file
-    if args.data_path.is_file() or args.data_path.suffix == ".zarr":
-        assert args.data_path.suffix[1:] in ALLOWED_EXTENSIONS, (
-            f"File {args.data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
-        )
+    # Ifremote URL, only .ims/.zarr are supported and it is a single input
+    if _is_url(args.data_path):
+        assert (
+            _suffix(args.data_path)[1:] in URL_ALLOWED_EXTENSIONS
+        ), f"URL {args.data_path} is not a valid remote image. Allowed remote extensions are: {URL_ALLOWED_EXTENSIONS}"
         image_files = [args.data_path]
         if out_dir is None:
-            out_dir = args.data_path.parent / "spotiflow_results"
+            out_dir = Path.cwd() / "spotiflow_results"
+
+    # If it's a file, check if it is a valid image file
+    elif Path(args.data_path).is_file() or _suffix(args.data_path) == ".zarr":
+        data_path = Path(args.data_path)
+        assert (
+            data_path.suffix[1:] in ALLOWED_EXTENSIONS
+        ), f"File {data_path} is not a valid image file. Allowed extensions are: {ALLOWED_EXTENSIONS}"
+        image_files = [data_path]
+        if out_dir is None:
+            out_dir = data_path.parent / "spotiflow_results"
 
     # If directory, get all image files in the directory
-    elif args.data_path.is_dir():
+    elif Path(args.data_path).is_dir():
+        args.data_path = Path(args.data_path)
         image_files = sorted(
             tuple(
                 chain(
@@ -296,7 +335,7 @@ def main():
     images = []
 
     for f in image_files:
-        img = imread_wrapped(f, args.channels, args.zarr_component)
+        img = imread_wrapped(f, args.channels, args.zarr_component, args.axis_order)
         if model.config.in_channels == 1:
             if isinstance(img, da.Array):
                 img = da.squeeze(img)
@@ -327,29 +366,31 @@ def main():
         if isinstance(img, da.Array):
             _available_mem = psutil.virtual_memory().available
 
-            if img.nbytes < _available_mem / 2:
+            if not args.force_lazy and img.nbytes < _available_mem / 2:
                 log.info(f"Bringing Zarr in-memory (~{img.nbytes/1e9:.2f} GB)...")
-                with DaskProgressBar(minimum=1.):
+                with DaskProgressBar(minimum=1.0):
                     img = img.compute()
             else:
-                log.warning(
-                    f"Zarr is too large to bring in-memory (~{img.nbytes/1e9:.2f} GB). Will process it as a Dask array."
-                )
+                if not args.force_lazy:
+                    log.warning(
+                        f"Zarr is too large to bring in-memory (~{img.nbytes/1e9:.2f} GB). Will process it as a Dask array."
+                    )
                 if args.normalizer == "auto" and args.zarr_component_lowres is not None:
                     log.info(
                         "Trying to compute normalization percentiles on lower resolution image."
                     )
                     img_lowres = imread_wrapped(
-                        fname, args.channels, args.zarr_component_lowres
+                        fname, args.channels, args.zarr_component_lowres, args.axis_order
                     )
                     if img_lowres.nbytes < _available_mem / 2:
-                        with DaskProgressBar(minimum=1.):
+                        with DaskProgressBar(minimum=1.0):
                             img_lowres = img_lowres.compute()
-                        p1, p998 = np.percentile(
-                            img_lowres, (1, 99.8)
-                        )
+                        p1, p998 = np.percentile(img_lowres, (1, 99.8))
                         args.normalizer = lambda x: dask_normalize_mi_ma(x, p1, p998)
                         del img_lowres
+                        log.info(
+                            "Normalization percentiles computed."
+                        )
                     else:
                         log.warning(
                             "Given low-resolution Zarr component is too large to bring in-memory. Will compute normalization percentiles on the full resolution image. This will be slower."
@@ -374,13 +415,14 @@ def main():
             verbose=args.verbose,
             device=args.device,
             fit_params=args.estimate_params,
+            # use_tuned_tile_overlap=model.config.is_3d,
         )
         csv_columns = ("y", "x")
         if spots.shape[1] == 3:
             csv_columns = ("z",) + csv_columns
         df = pd.DataFrame(np.round(spots, 4), columns=csv_columns)
 
-        if not _is_spotiflow_input_dask: # Details are not computed for Dask arrays
+        if not _is_spotiflow_input_dask:  # Details are not computed for Dask arrays
             if model.config.in_channels == 1:
                 df["intensity"] = np.round(details.intens, 2)
             df["probability"] = np.round(details.prob, 3)
@@ -390,7 +432,7 @@ def main():
                 df["intens_B"] = np.round(details.fit_params.intens_B, 3)
                 df["snb"] = np.round(signal_to_background(details.fit_params), 3)
 
-        df.to_csv(out_dir / f"{fname.stem.replace('.ome', '')}.csv", index=False)
+        df.to_csv(out_dir / f"{_stem(fname).replace('.ome', '')}.csv", index=False)
     return 0
 
 

@@ -5,9 +5,12 @@ import sys
 from itertools import product
 from pathlib import Path
 from typing import Optional, Sequence, Tuple, Union
+from urllib.parse import urlsplit
 
 import dask
 import dask.array as da
+import fsspec
+import h5py
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -26,13 +29,109 @@ formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
 
-def imread_wrapped(fname, channels=None, zarr_component=None):
-    """Note that multi-channel images have to have the channels in the last dimension."""
+_REMOTE_SCHEMES = ("http", "https", "s3", "gs", "gcs")
+
+
+def _is_url(fname: Union[str, Path]) -> bool:
+    """Return whether ``fname`` is a remote URL (http(s), s3, gs, gcs)."""
+    return urlsplit(str(fname)).scheme in _REMOTE_SCHEMES
+
+
+def _suffix(fname: Union[str, Path]) -> str:
+    """Return the lowercased file suffix, robust to remote URLs."""
+    if _is_url(fname):
+        return Path(urlsplit(str(fname)).path).suffix.lower()
+    return Path(fname).suffix.lower()
+
+
+def imread_ims(
+    fname: Union[str, Path],
+    channels: Optional[Sequence[int]] = None,
+    resolution_level: int = 0,
+    timepoint: int = 0,
+) -> da.Array:
+    """Lazily read an Imaris (.ims) file as a chunked dask array.
+
+    An Imaris file is an HDF5 container with a resolution pyramid laid out as
+    ``DataSet/ResolutionLevel {l}/TimePoint {t}/Channel {c}/Data``, where each
+    channel is a separate ``(Z, Y, X)`` dataset. The requested channels are
+    stacked along the last axis to match the layout Spotiflow expects.
+
+    Args:
+        fname: Path or remote URL to the ``.ims`` file.
+        channels: Channel indices to load. If ``None``, loads all channels in order.
+        resolution_level: Pyramid level to read (0 is full resolution).
+        timepoint: Timepoint index to read.
+
+    Returns:
+        Lazy dask array, shape ``(Z, Y, X, C)``, chunked to match the on-disk
+        HDF5 chunks.
+    """
+    if _is_url(fname):
+        store = fsspec.open(str(fname), mode="rb").open()
+        f = h5py.File(store, "r")
+    else:
+        f = h5py.File(fname, "r")
+
+    grp_path = f"DataSet/ResolutionLevel {resolution_level}/TimePoint {timepoint}"
+    if grp_path not in f:
+        levels = sorted(
+            k for k in f.get("DataSet", {}) if k.startswith("ResolutionLevel")
+        )
+        raise ValueError(
+            f"Could not find '{grp_path}' in {fname}. Available resolution levels: {levels}"
+        )
+    grp = f[grp_path]
+
+    available = sorted(
+        (int(k.split(" ")[1]) for k in grp if k.startswith("Channel")),
+    )
+    if channels is None:
+        chans = available
+    else:
+        missing = [c for c in channels if c not in available]
+        if missing:
+            raise ValueError(
+                f"Some of the requested channels {channels} are not present in the image {fname}. Available channels: {available}"
+            )
+        chans = list(channels)
+
+    arrs = [
+        da.from_array(grp[f"Channel {c}/Data"], chunks=grp[f"Channel {c}/Data"].chunks)
+        for c in chans
+    ]
+    stacked_arr = da.stack(arrs, axis=-1)
+    print("Data loaded completely. Dask array shape:", stacked_arr.shape)
+    return stacked_arr
+
+
+def imread_wrapped(fname, channels=None, zarr_component=None, axis_order="channel-last"):
+    """Read an image into the (Z)YX(C) layout Spotiflow expects.
+
+    Multi-channel images are assumed to have the channels in the last dimension
+    unless ``axis_order='channel-first'`` is given, in which case the leading
+    axis is moved to the last position. The ``axis_order`` argument is ignored
+    for ``.ims`` inputs, whose channels are always read separately.
+    """
+    if axis_order not in ("channel-last", "channel-first"):
+        raise ValueError(
+            f"Invalid axis_order {axis_order!r}. Expected 'channel-last' or 'channel-first'."
+        )
     try:
-        if fname.suffix == ".zarr":
+        suffix = _suffix(fname)
+        if suffix == ".ims":
+            return imread_ims(
+                fname, channels, resolution_level=int(zarr_component or 0)
+            )
+        if suffix == ".zarr":
             img = da.from_zarr(fname, component=zarr_component)
+        elif _is_url(fname):
+            raise ValueError("Remote URLs are only supported for .ims and .zarr inputs")
         else:
             img = imread(fname)
+        if axis_order == "channel-first":
+            _moveaxis = da.moveaxis if isinstance(img, da.Array) else np.moveaxis
+            img = _moveaxis(img, 0, -1)
         if channels is not None:
             if any(c >= img.shape[-1] for c in channels):
                 raise ValueError(
@@ -221,9 +320,9 @@ def multiscale_decimate(
     else:
         if len(decimate) == 2 and y.ndim == 3:  # Multichannel image
             decimate = (1, *decimate)
-    assert y.ndim == len(decimate), (
-        f"decimate {decimate} and y.ndim {y.ndim} do not match"
-    )
+    assert y.ndim == len(
+        decimate
+    ), f"decimate {decimate} and y.ndim {y.ndim} do not match"
     if decimate == (1, 1) or decimate == (1, 1, 1):
         return y
 
@@ -292,9 +391,11 @@ def center_crop(
         raise ValueError(f"shape of x {x.shape} is smaller than final shape {shape}")
     diff = np.array(x.shape[: len(shape)]) - np.array(shape)
     ss = tuple(
-        slice(int(np.ceil(d / 2)), s - d + int(np.ceil(d / 2)))
-        if d > 0
-        else slice(None)
+        (
+            slice(int(np.ceil(d / 2)), s - d + int(np.ceil(d / 2)))
+            if d > 0
+            else slice(None)
+        )
         for d, s in zip(diff, x.shape)
     )
     return x[ss]
@@ -348,20 +449,23 @@ def normalize(
     mi, ma = np.percentile(y[mask], (pmin, pmax))
     return normalize_mi_ma(x, mi, ma, clip=clip)
 
+
 def dask_normalize_mi_ma(
     x: da.Array,
     mi: float,
     ma: float,
-    clip: bool=False,
-    eps: float=1e-20,
-    dtype: np.dtype=np.float32
+    clip: bool = False,
+    eps: float = 1e-20,
+    dtype: np.dtype = np.float32,
 ) -> da.Array:
     """
     Normalize a Dask array using min-max normalization with the given values.
     Adapted from csbdeep.utils.normalize_mi_ma to work with Dask array (removed numexpr).
     """
     if not isinstance(x, da.Array):
-        raise TypeError("Input x should be a Dask array. Please use the `normalize`/`normalize_mi_ma` function for NumPy arrays.")
+        raise TypeError(
+            "Input x should be a Dask array. Please use the `normalize`/`normalize_mi_ma` function for NumPy arrays."
+        )
     if dtype is not None:
         x = x.astype(dtype)
         mi = dtype(mi) if np.isscalar(mi) else mi.astype(dtype, copy=False)
@@ -373,7 +477,6 @@ def dask_normalize_mi_ma(
     if clip:
         x = x.clip(0, 1)
     return x
-
 
 
 def normalize_dask(
@@ -485,7 +588,7 @@ def get_data(
     path: Union[Path, str],
     normalize: bool = True,
     include_test: bool = False,
-    subfolder: Optional[tuple[str]] = None, # ("train", "val", "test"),
+    subfolder: Optional[tuple[str]] = None,  # ("train", "val", "test"),
     is_3d: bool = False,
     **kwargs,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -677,9 +780,9 @@ def read_npz_dataset(fname: Union[Path, str]) -> Tuple[np.ndarray, ...]:
 
     expected_keys = ["x_train", "y_train", "x_valid", "y_valid", "x_test", "y_test"]
     data = np.load(fname, allow_pickle=True)
-    assert set(expected_keys).issubset(data.files), (
-        f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
-    )
+    assert set(expected_keys).issubset(
+        data.files
+    ), f"Given .npz file {fname} does not contain the expected keys {expected_keys}!"
     ret_data = [None] * len(expected_keys)
     for i, key in enumerate(expected_keys):
         if key.startswith("x"):
@@ -706,9 +809,9 @@ def spline_interp_points_2d(
         np.ndarray: array of shape (N,C) containing intensities for each spot
     """
     assert img.ndim in (2, 3), "Expected YX or YXC image for interpolating intensities."
-    assert pts.shape[1] == 2, (
-        "Point coordinates to be interpolated should be an (N,2) array"
-    )
+    assert (
+        pts.shape[1] == 2
+    ), "Point coordinates to be interpolated should be an (N,2) array"
 
     if pts.shape[0] == 0:
         if img.ndim == 2:
@@ -758,9 +861,9 @@ def spline_interp_points_3d(
         3,
         4,
     ), "Expected ZYX or ZYXC image for interpolating intensities."
-    assert pts.shape[1] == 3, (
-        "Point coordinates to be interpolated should be an (N,3) array"
-    )
+    assert (
+        pts.shape[1] == 3
+    ), "Point coordinates to be interpolated should be an (N,3) array"
 
     if pts.shape[0] == 0:
         if img.ndim == 3:
